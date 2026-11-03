@@ -1,0 +1,10 @@
+# Pesquisa no painel da página: D11, D12 e D13
+
+Este ajuste local completa três comportamentos do painel de pesquisa montado na própria página, sobre a implementação já existente de presets, coleta limitada e cálculos de observações locais.
+
+- Adicionar o segundo critério a partir de “Ordem da coleta” escolhe views como primeiro critério e um segundo critério distinto. Direções continuam editáveis e remover o segundo restaura os empates estáveis do primeiro.
+- A amostra tem páginas de até 100 cards. A seleção e a ordenação abrangem todos os itens elegíveis antes de paginar; nenhuma página limita o conjunto de dados. Lista, grade e barra lateral exibem a mesma página. O contador informa os intervalos e os botões permitem alcançar todos os itens da amostra conhecida. A coleta explícita continua limitada a 500 itens, 30 rolagens e 60 segundos; navegar entre páginas não inicia coleta.
+- JSON, CSV e Markdown incluem toda a amostra filtrada, inclusive itens em outras páginas. Observações da API oficial continuam excluídas dessa pesquisa e dos cálculos derivados.
+- “Manual” desmarca o preset ativo e preserva os filtros efetivos e o modo de outlier para edição. O resumo expõe os limites efetivos, inclusive limites exclusivos de inscritos e publicação. As datas exibem os instantes UTC aplicados, com milissegundos; limites de datas sem horário usam início ou fim de dia conforme a regra existente. Atualizar a amostra ou o progresso não recalcula a janela de um preset ou range já aplicado.
+
+As regressões de navegador usam o módulo real com um coletor e observações locais de fixture: percorrem 500 itens ordenados, exportam uma amostra de 235 itens a partir da última página, verificam fonte excluída, empates, alteração de filtros, layouts, Manual e estabilidade dos limites UTC. Todas as requisições fora do documento e bundle da fixture são bloqueadas; nenhuma operação remota nova foi adicionada. Isso valida a implementação local e suas fixtures, sem afirmar validação de runtime em uma sessão real do YouTube.
