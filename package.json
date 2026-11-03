@@ -1,0 +1,29 @@
+{
+  "name": "prevlev",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Ferramentas independentes para YouTube e YouTube Studio",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src server tests scripts",
+    "test": "vitest run",
+    "test:ui": "playwright test",
+    "check": "npm run typecheck && npm run lint && npm test && npm run build",
+    "server": "node --env-file-if-exists=.env server/index.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@playwright/test": "^1.56.1",
+    "@types/chrome": "^0.1.27",
+    "@types/jsdom": "^30.0.0",
+    "@types/node": "^24.10.0",
+    "esbuild": "^0.25.12",
+    "eslint": "^9.39.1",
+    "jsdom": "^27.1.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.3",
+    "vitest": "^4.0.7"
+  }
+}

@@ -1,0 +1,566 @@
+{
+  "version": "0.1.0",
+  "scope": "Implementação independente; não há declaração de paridade completa com Nexlev 3.12.6.",
+  "statusDefinitions": {
+    "implemented": "Disponível no escopo limitado descrito, sem afirmar cobertura global.",
+    "partial": "Parte funcional entregue, com diferença ou lacuna material explícita.",
+    "configuration_required": "Adaptador entregue; depende de infraestrutura/provedor configurado pelo operador."
+  },
+  "features": [
+    {
+      "id": 1,
+      "name": "Verificar monetização",
+      "status": "partial",
+      "execution": "local",
+      "boundary": "Marcadores de anúncio/música do vídeo aberto; resultado de baixa confiança, sem confirmar YPP, receita ou canal inteiro.",
+      "source": ["src/core/metrics.ts", "src/content/index.ts"],
+      "tests": ["tests/core.test.ts"],
+      "verificationStatus": "fixture_coverage_only",
+      "installedExtensionVerification": "blocked_by_environment_policy"
+    },
+    {
+      "id": 2,
+      "name": "Ocultar Shorts",
+      "status": "implemented",
+      "execution": "local",
+      "boundary": "Oculta cards e prateleiras reconhecidos no DOM, incluindo atualizações de página.",
+      "source": ["src/content/index.ts"],
+      "tests": ["tests/content-runtime.test.ts"],
+      "verificationStatus": "fixture_coverage_only",
+      "installedExtensionVerification": "blocked_by_environment_policy"
+    },
+    {
+      "id": 3,
+      "name": "Ordenar vídeos do canal por popularidade/VPH",
+      "status": "implemented",
+      "execution": "local",
+      "boundary": "Ordena somente os cards carregados; VPH médio desde a publicação, sem busca completa do canal.",
+      "source": [
+        "src/content/youtube.ts",
+        "src/content/index.ts",
+        "src/core/metrics.ts"
+      ],
+      "tests": ["tests/content-youtube.test.ts", "tests/core.test.ts"],
+      "verificationStatus": "fixture_coverage_only",
+      "installedExtensionVerification": "blocked_by_environment_policy"
+    },
+    {
+      "id": 4,
+      "name": "Analytics de Shorts",
+      "status": "partial",
+      "execution": "local",
+      "boundary": "Identifica e filtra Shorts, calcula métricas da amostra; não produz relatório completo de todos os Shorts do canal.",
+      "source": ["src/core/metrics.ts", "src/ui/workspace.ts"],
+      "tests": ["tests/core.test.ts", "tests/content-youtube.test.ts"],
+      "verificationStatus": "fixture_coverage_only",
+      "installedExtensionVerification": "blocked_by_environment_policy"
+    },
+    {
+      "id": 5,
+      "name": "Calculadora de lucro líquido",
+      "status": "implemented",
+      "execution": "local",
+      "boundary": "Receita menos custo por vídeo vezes quantidade; usa valor informado ou receita visível reconhecida no Studio.",
+      "source": [
+        "src/core/metrics.ts",
+        "src/content/studio.ts",
+        "src/ui/workspace.ts"
+      ],
+      "tests": ["tests/core.test.ts", "tests/studio.test.ts"],
+      "verificationStatus": "fixture_coverage_only",
+      "installedExtensionVerification": "blocked_by_environment_policy"
+    },
+    {
+      "id": 6,
+      "name": "Insights extras no resumo do Studio",
+      "status": "partial",
+      "execution": "local",
+      "boundary": "Lê cards visíveis reconhecidos. A integração com API privada Studio não foi implementada.",
+      "source": ["src/content/studio.ts"],
+      "tests": ["tests/studio.test.ts"],
+      "verificationStatus": "fixture_coverage_only",
+      "installedExtensionVerification": "blocked_by_environment_policy"
+    },
+    {
+      "id": 7,
+      "name": "Analytics com períodos personalizados",
+      "status": "partial",
+      "execution": "local",
+      "boundary": "Preenche dois campos nativos de data em seletor já aberto; o usuário revisa e aplica no Studio. Layouts desconhecidos são recusados.",
+      "source": ["src/content/studio.ts"],
+      "tests": ["tests/studio.test.ts"],
+      "verificationStatus": "fixture_coverage_only",
+      "installedExtensionVerification": "blocked_by_environment_policy"
+    },
+    {
+      "id": 8,
+      "name": "Filtrar/copiar comentários",
+      "status": "implemented",
+      "execution": "local",
+      "boundary": "Filtra e copia comentários já carregados; sem percorrer todos os comentários do canal.",
+      "source": [
+        "src/core/metrics.ts",
+        "src/content/youtube.ts",
+        "src/ui/workspace.ts"
+      ],
+      "tests": ["tests/core.test.ts", "tests/content-youtube.test.ts"],
+      "verificationStatus": "fixture_coverage_only",
+      "installedExtensionVerification": "blocked_by_environment_policy"
+    },
+    {
+      "id": 9,
+      "name": "Copiar título/ID do vídeo",
+      "status": "implemented",
+      "execution": "local",
+      "boundary": "Lê título e ID disponíveis e copia para a área de transferência.",
+      "source": ["src/content/index.ts", "src/ui/workspace.ts"],
+      "tests": ["tests/content-youtube.test.ts", "tests/core.test.ts"],
+      "verificationStatus": "fixture_coverage_only",
+      "installedExtensionVerification": "blocked_by_environment_policy"
+    },
+    {
+      "id": 10,
+      "name": "Ferramentas da timeline",
+      "status": "partial",
+      "execution": "local",
+      "boundary": "Captura frame atual e permite trabalhar com transcrição aberta; sem reprodução completa de controles adicionais de timeline. Canvas pode ser bloqueado pela origem da mídia.",
+      "source": ["src/core/media.ts", "src/content/index.ts"],
+      "tests": ["tests/media.test.ts"],
+      "verificationStatus": "fixture_coverage_only",
+      "installedExtensionVerification": "blocked_by_environment_policy"
+    },
+    {
+      "id": 11,
+      "name": "Comprimir thumbnails",
+      "status": "implemented",
+      "execution": "local",
+      "boundary": "Redimensiona proporcionalmente e codifica JPEG/WebP/PNG no navegador; saída não é garantidamente menor que arquivo já otimizado.",
+      "source": ["src/core/media.ts", "src/ui/workspace.ts"],
+      "tests": ["tests/media.test.ts"],
+      "verificationStatus": "fixture_coverage_only",
+      "installedExtensionVerification": "blocked_by_environment_policy"
+    },
+    {
+      "id": 12,
+      "name": "Prévia de thumbnail e título",
+      "status": "implemented",
+      "execution": "local",
+      "boundary": "Composição local de imagem, título e canal; não realiza teste A/B com audiência.",
+      "source": ["src/core/media.ts", "src/ui/workspace.ts"],
+      "tests": ["tests/media.test.ts"],
+      "verificationStatus": "fixture_coverage_only",
+      "installedExtensionVerification": "blocked_by_environment_policy"
+    },
+    {
+      "id": 13,
+      "name": "Baixar/copiar thumbnails",
+      "status": "implemented",
+      "execution": "YouTube + local",
+      "boundary": "Baixa thumbnails do CDN público do YouTube e copia a imagem pela interface; clipboard depende do suporte/permissão do navegador.",
+      "source": ["src/core/media.ts", "src/ui/workspace.ts"],
+      "tests": ["tests/media.test.ts"],
+      "verificationStatus": "fixture_coverage_only",
+      "installedExtensionVerification": "blocked_by_environment_policy"
+    },
+    {
+      "id": 14,
+      "name": "Screenshot de card de vídeo",
+      "status": "implemented",
+      "execution": "local",
+      "boundary": "Captura e recorta somente card inteiramente visível na aba selecionada.",
+      "source": [
+        "src/background.ts",
+        "src/content/index.ts",
+        "src/core/media.ts"
+      ],
+      "tests": ["tests/media.test.ts", "tests/background.test.ts"],
+      "verificationStatus": "fixture_coverage_only",
+      "installedExtensionVerification": "blocked_by_environment_policy"
+    },
+    {
+      "id": 15,
+      "name": "Screenshot de analytics",
+      "status": "partial",
+      "execution": "local",
+      "boundary": "Recorta área visível reconhecida e oculta campos por seletores. É necessário conferir a imagem antes de compartilhar; não garante anonimização completa.",
+      "source": [
+        "src/content/studio.ts",
+        "src/content/index.ts",
+        "src/core/media.ts"
+      ],
+      "tests": [
+        "tests/studio.test.ts",
+        "tests/media.test.ts",
+        "tests/background.test.ts"
+      ],
+      "verificationStatus": "fixture_coverage_only",
+      "installedExtensionVerification": "blocked_by_environment_policy"
+    },
+    {
+      "id": 16,
+      "name": "Screenshot de desempenho do último vídeo",
+      "status": "partial",
+      "execution": "local",
+      "boundary": "Captura card reconhecido inteiramente visível no Studio; mudanças de layout podem impedir a captura.",
+      "source": ["src/content/index.ts", "src/core/media.ts"],
+      "tests": ["tests/media.test.ts", "tests/background.test.ts"],
+      "verificationStatus": "fixture_coverage_only",
+      "installedExtensionVerification": "blocked_by_environment_policy"
+    },
+    {
+      "id": 17,
+      "name": "Inserir anúncios mid-roll",
+      "status": "partial",
+      "execution": "local",
+      "boundary": "Planeja posições uniformes ou próximas a silêncios detectados de um arquivo de áudio local via AudioContext/PCM. O arquivo não é enviado. Adaptador preenche intervalos já abertos; não cria intervalos, extrai áudio do YouTube nem salva o vídeo.",
+      "source": [
+        "src/core/midroll.ts",
+        "src/content/studio.ts",
+        "src/ui/workspace.ts"
+      ],
+      "tests": [
+        "tests/core.test.ts",
+        "tests/studio.test.ts",
+        "tests/studio-flow.test.ts"
+      ],
+      "verificationStatus": "fixture_coverage_only",
+      "installedExtensionVerification": "blocked_by_environment_policy"
+    },
+    {
+      "id": 18,
+      "name": "Pular etapa de monetização",
+      "status": "partial",
+      "execution": "local",
+      "boundary": "Avança uma etapa somente após escolha existente e confirmação. Não ativa monetização nem responde adequação de anúncios.",
+      "source": ["src/content/studio.ts"],
+      "tests": ["tests/studio.test.ts", "tests/studio-flow.test.ts"],
+      "verificationStatus": "fixture_coverage_only",
+      "installedExtensionVerification": "blocked_by_environment_policy"
+    },
+    {
+      "id": 19,
+      "name": "Dar/remover corações em lote",
+      "status": "implemented",
+      "execution": "local",
+      "boundary": "Prévia explícita, confirmação, limite de 50, expiração e cancelamento para controles reconhecidos dos comentários visíveis. Cliques enviados precisam de conferência.",
+      "source": ["src/content/studio.ts", "src/ui/workspace.ts"],
+      "tests": [
+        "tests/studio.test.ts",
+        "tests/studio-flow.test.ts",
+        "tests/browser/studio-ui.spec.ts"
+      ],
+      "verificationStatus": "fixture_coverage_only",
+      "installedExtensionVerification": "blocked_by_environment_policy"
+    },
+    {
+      "id": 20,
+      "name": "Mostrar inscritos",
+      "status": "partial",
+      "execution": "local",
+      "boundary": "Lê inscritos nos cards ou, por ação explícita, consulta páginas públicas de até 10 canais no YouTube, sem credenciais. Páginas sem contagem ou layouts não reconhecidos permanecem desconhecidos. Não usa cache Nexlev.",
+      "source": [
+        "src/content/youtube.ts",
+        "src/content/index.ts",
+        "src/core/enrichment.ts"
+      ],
+      "tests": ["tests/content-youtube.test.ts", "tests/enrichment.test.ts"],
+      "verificationStatus": "fixture_coverage_only",
+      "installedExtensionVerification": "blocked_by_environment_policy"
+    },
+    {
+      "id": 21,
+      "name": "Outlier score",
+      "status": "implemented",
+      "execution": "local",
+      "boundary": "Compara views com mediana de pelo menos três outros vídeos comparáveis da amostra, excluindo o alvo; não representa todo o canal.",
+      "source": ["src/core/metrics.ts", "src/content/index.ts"],
+      "tests": ["tests/core.test.ts"],
+      "verificationStatus": "fixture_coverage_only",
+      "installedExtensionVerification": "blocked_by_environment_policy"
+    },
+    {
+      "id": 22,
+      "name": "Visualizações por hora",
+      "status": "implemented",
+      "execution": "local",
+      "boundary": "Média acumulada desde publicação. Datas relativas são aproximadas e ausência de data/views impede o cálculo; não mede as últimas 60 minutos.",
+      "source": ["src/core/metrics.ts", "src/core/parse.ts"],
+      "tests": ["tests/core.test.ts"],
+      "verificationStatus": "fixture_coverage_only",
+      "installedExtensionVerification": "blocked_by_environment_policy"
+    },
+    {
+      "id": 23,
+      "name": "Filtro do feed de inscrições",
+      "status": "implemented",
+      "execution": "local",
+      "boundary": "Filtra e ordena somente cards já carregados por texto, formato e views; sem enriquecimento externo.",
+      "source": ["src/content/index.ts", "src/content/youtube.ts"],
+      "tests": [
+        "tests/content-youtube.test.ts",
+        "tests/content-runtime.test.ts"
+      ],
+      "verificationStatus": "fixture_coverage_only",
+      "installedExtensionVerification": "blocked_by_environment_policy"
+    },
+    {
+      "id": 24,
+      "name": "Filtro da página inicial",
+      "status": "implemented",
+      "execution": "local",
+      "boundary": "Mesma filtragem sobre cards carregados na Home, sem enviar observações ou canais a terceiros.",
+      "source": ["src/content/index.ts", "src/content/youtube.ts"],
+      "tests": [
+        "tests/content-youtube.test.ts",
+        "tests/content-runtime.test.ts"
+      ],
+      "verificationStatus": "fixture_coverage_only",
+      "installedExtensionVerification": "blocked_by_environment_policy"
+    },
+    {
+      "id": 25,
+      "name": "Filtro da busca",
+      "status": "partial",
+      "execution": "local",
+      "boundary": "Filtra resultados já carregados; não cria pesquisa ampliada em servidor nem busca catálogo completo.",
+      "source": ["src/content/youtube.ts", "src/content/index.ts"],
+      "tests": ["tests/content-youtube.test.ts"],
+      "verificationStatus": "fixture_coverage_only",
+      "installedExtensionVerification": "blocked_by_environment_policy"
+    },
+    {
+      "id": 26,
+      "name": "Filtro da página de canal",
+      "status": "partial",
+      "execution": "local",
+      "boundary": "Filtra vídeos já carregados; sem obter coleção completa de vídeos por serviço remoto.",
+      "source": ["src/content/youtube.ts", "src/content/index.ts"],
+      "tests": ["tests/content-youtube.test.ts"],
+      "verificationStatus": "fixture_coverage_only",
+      "installedExtensionVerification": "blocked_by_environment_policy"
+    },
+    {
+      "id": 27,
+      "name": "Vídeos destacados do canal",
+      "status": "partial",
+      "execution": "local",
+      "boundary": "Ordenação por recentes ou views no espaço de trabalho sobre a amostra coletada; sem painel de descoberta completa.",
+      "source": ["src/core/metrics.ts", "src/ui/workspace.ts"],
+      "tests": ["tests/core.test.ts"],
+      "verificationStatus": "fixture_coverage_only",
+      "installedExtensionVerification": "blocked_by_environment_policy"
+    },
+    {
+      "id": 28,
+      "name": "Análise de termos de pesquisa",
+      "status": "partial",
+      "execution": "backend próprio",
+      "boundary": "Backend calcula termos frequentes e estatísticas da amostra enviada. Exige configurar servidor e não mede o mercado inteiro.",
+      "source": ["server/analysis.mjs", "src/ui/workspace.ts"],
+      "tests": ["tests/backend.test.ts"],
+      "verificationStatus": "fixture_coverage_only",
+      "installedExtensionVerification": "blocked_by_environment_policy"
+    },
+    {
+      "id": 29,
+      "name": "Transcrição e ações de IA",
+      "status": "partial",
+      "execution": "local + backend próprio",
+      "boundary": "Coleta transcrição visível, importa XML/json3/segmentos e exporta texto/VTT/Markdown. Resumo, tópicos e roteiro exigem backend e provedor de IA configurados; texto editado não recebe timestamps inventados.",
+      "source": [
+        "src/core/transcript.ts",
+        "src/content/youtube.ts",
+        "server/ai.mjs",
+        "src/ui/workspace.ts"
+      ],
+      "tests": [
+        "tests/core.test.ts",
+        "tests/content-youtube.test.ts",
+        "tests/backend.test.ts"
+      ],
+      "verificationStatus": "fixture_coverage_only",
+      "installedExtensionVerification": "blocked_by_environment_policy"
+    },
+    {
+      "id": 30,
+      "name": "Swipe File",
+      "status": "implemented",
+      "execution": "local",
+      "boundary": "Biblioteca independente com pastas por nome, referências, importação/exportação JSON e exclusão. Armazenamento neste perfil Chrome, sem sincronização de nuvem.",
+      "source": ["src/shared/storage.ts", "src/ui/workspace.ts"],
+      "tests": ["tests/browser/ui.spec.ts"],
+      "verificationStatus": "fixture_coverage_only",
+      "installedExtensionVerification": "blocked_by_environment_policy"
+    },
+    {
+      "id": 31,
+      "name": "Encontrar vídeos semelhantes",
+      "status": "partial",
+      "execution": "backend próprio",
+      "boundary": "Similaridade lexical Jaccard entre títulos da amostra enviada; sem descoberta global ou comparação visual.",
+      "source": ["server/analysis.mjs"],
+      "tests": ["tests/backend.test.ts"],
+      "verificationStatus": "fixture_coverage_only",
+      "installedExtensionVerification": "blocked_by_environment_policy"
+    },
+    {
+      "id": 32,
+      "name": "Encontrar canais semelhantes",
+      "status": "partial",
+      "execution": "backend próprio",
+      "boundary": "Agrupa e compara palavras de títulos dos canais presentes na amostra; não descobre canais externos.",
+      "source": ["server/analysis.mjs"],
+      "tests": ["tests/backend.test.ts"],
+      "verificationStatus": "fixture_coverage_only",
+      "installedExtensionVerification": "blocked_by_environment_policy"
+    },
+    {
+      "id": 33,
+      "name": "Visão geral de nichos",
+      "status": "partial",
+      "execution": "backend próprio",
+      "boundary": "Termos e estatísticas reais dos vídeos enviados; sem saturação real do nicho ou base global.",
+      "source": ["server/analysis.mjs"],
+      "tests": ["tests/backend.test.ts"],
+      "verificationStatus": "fixture_coverage_only",
+      "installedExtensionVerification": "blocked_by_environment_policy"
+    },
+    {
+      "id": 34,
+      "name": "Analytics de canais",
+      "status": "partial",
+      "execution": "backend próprio",
+      "boundary": "Agrega views, formatos e cobertura observada; receita, geografia e dados privados ficam desconhecidos.",
+      "source": ["server/analysis.mjs"],
+      "tests": ["tests/backend.test.ts"],
+      "verificationStatus": "fixture_coverage_only",
+      "installedExtensionVerification": "blocked_by_environment_policy"
+    },
+    {
+      "id": 35,
+      "name": "Relatório detalhado de canal",
+      "status": "partial",
+      "execution": "backend próprio",
+      "boundary": "Relatório de amostra e principais vídeos conhecidos; sem enriquecimento, dados financeiros ou cobertura completa.",
+      "source": ["server/analysis.mjs"],
+      "tests": ["tests/backend.test.ts"],
+      "verificationStatus": "fixture_coverage_only",
+      "installedExtensionVerification": "blocked_by_environment_policy"
+    },
+    {
+      "id": 36,
+      "name": "Histórico de views/RPM",
+      "status": "partial",
+      "execution": "backend próprio",
+      "boundary": "Grava e consulta observações fornecidas após configuração de DATA_DIR. Não recupera passado nem estima RPM/receita.",
+      "source": ["server/analysis.mjs", "src/ui/workspace.ts"],
+      "tests": ["tests/backend.test.ts"],
+      "verificationStatus": "fixture_coverage_only",
+      "installedExtensionVerification": "blocked_by_environment_policy"
+    },
+    {
+      "id": 37,
+      "name": "Análise de patrocínios",
+      "status": "partial",
+      "execution": "backend próprio",
+      "boundary": "Detecta marcadores textuais de divulgação comercial no texto enviado. Não comprova contrato nem estima receita.",
+      "source": ["server/analysis.mjs"],
+      "tests": ["tests/backend.test.ts"],
+      "verificationStatus": "fixture_coverage_only",
+      "installedExtensionVerification": "blocked_by_environment_policy"
+    },
+    {
+      "id": 38,
+      "name": "Analytics combinado de canais",
+      "status": "partial",
+      "execution": "backend próprio",
+      "boundary": "Agrupa estatísticas dos canais da amostra; não agrega relatórios privados de contas conectadas.",
+      "source": ["server/analysis.mjs"],
+      "tests": ["tests/backend.test.ts"],
+      "verificationStatus": "fixture_coverage_only",
+      "installedExtensionVerification": "blocked_by_environment_policy"
+    },
+    {
+      "id": 39,
+      "name": "Análise de comentários com IA",
+      "status": "configuration_required",
+      "execution": "backend próprio + IA",
+      "boundary": "Contrato e adaptador implementados; precisa configurar origem, modelo e credencial no servidor. Sem configuração retorna not_configured; sem consumo pago nos testes.",
+      "source": ["server/ai.mjs", "server/index.mjs", "src/ui/workspace.ts"],
+      "tests": ["tests/backend.test.ts"],
+      "verificationStatus": "fixture_coverage_only",
+      "installedExtensionVerification": "blocked_by_environment_policy"
+    },
+    {
+      "id": 40,
+      "name": "Geração de thumbnails com IA",
+      "status": "configuration_required",
+      "execution": "backend próprio + IA",
+      "boundary": "Contrato e adaptador de geração implementados; precisa modelo de imagem e provedor próprios. Sem configuração retorna not_configured, sem resultado simulado.",
+      "source": ["server/ai.mjs", "src/ui/workspace.ts"],
+      "tests": ["tests/backend.test.ts"],
+      "verificationStatus": "fixture_coverage_only",
+      "installedExtensionVerification": "blocked_by_environment_policy"
+    }
+  ],
+  "extras": [
+    {
+      "name": "Nexlev MCP no ChatGPT/Claude",
+      "status": "not_implemented",
+      "boundary": "Nenhum MCP Nexlev ou substituto de MCP publicado."
+    },
+    {
+      "name": "Guia visual ChatGPT/Claude",
+      "status": "not_implemented",
+      "boundary": "A extensão atua somente em YouTube/Studio."
+    },
+    {
+      "name": "Contador de cota",
+      "status": "not_implemented",
+      "boundary": "Sem plano comercial ou cota externa; backend tem limite local de requisições."
+    },
+    {
+      "name": "Atalhos de serviços web Nexlev",
+      "status": "not_implemented",
+      "boundary": "Nenhum atalho abre serviços Nexlev."
+    },
+    {
+      "name": "Exportar CSV/JSON/Markdown",
+      "status": "implemented",
+      "boundary": "Arquivos gerados no navegador a partir dos dados disponíveis."
+    },
+    {
+      "name": "Telemetria/sincronização Nexlev",
+      "status": "not_implemented",
+      "boundary": "Não há envio automático de coleta para servidores Nexlev."
+    }
+  ],
+  "verification": {
+    "productStatusIsParityClaim": false,
+    "featureStatusMeaning": "Estado de implementação no escopo da boundary; não confirma paridade, cobertura completa do YouTube ou êxito em extensão instalada.",
+    "fixtureScope": "Testes unitários, DOM e contratos usam fixtures. Testes HTTP usam servidor próprio em loopback; provedores de IA são simulados somente nos testes.",
+    "browserUi": {
+      "status": "passed",
+      "tests": 4,
+      "sources": [
+        "tests/browser/ui.spec.ts",
+        "tests/browser/studio-ui.spec.ts"
+      ],
+      "scope": "UI renderizada em Chromium com fixture das APIs Chrome, canvas real para compressão/prévia e integração dos bundles próprios workspace.js/content.js através de transporte Chrome simulado. Nos testes Studio todas as URLs são interceptadas; não há instalação de extensão, conta real ou contato com YouTube."
+    },
+    "installedExtension": {
+      "status": "blocked_by_environment_policy",
+      "testsSkipped": 2,
+      "source": "tests/browser/extension.spec.ts",
+      "reason": "Política gerenciada /etc/chromium: ExtensionInstallBlocklist=[*]. Nenhuma tentativa de contornar a política. Os testes foram explicitamente ignorados, não aprovados."
+    },
+    "liveYouTubeOrStudioAccount": {
+      "status": "not_performed",
+      "reason": "Nenhuma conta ou canal real foi utilizado."
+    },
+    "liveAiProvider": {
+      "status": "not_performed",
+      "reason": "Nenhuma chamada a provedor pago; configuração real continua necessária."
+    }
+  }
+}

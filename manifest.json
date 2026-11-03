@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "minimum_chrome_version": "120",
+  "name": "Prevlev",
+  "version": "0.1.0",
+  "description": "Pesquisa e ferramentas locais para YouTube e Studio, com backend próprio opcional.",
+  "permissions": ["storage", "activeTab", "clipboardWrite"],
+  "host_permissions": [
+    "https://www.youtube.com/*",
+    "https://studio.youtube.com/*",
+    "https://i.ytimg.com/*"
+  ],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
+  "action": { "default_popup": "popup.html", "default_title": "Abrir Prevlev" },
+  "options_page": "workspace.html",
+  "background": { "service_worker": "background.js", "type": "module" },
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/*", "https://studio.youtube.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}

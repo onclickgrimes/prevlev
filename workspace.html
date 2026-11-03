@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Prevlev · Espaço de trabalho</title>
+    <link rel="stylesheet" href="ui.css" />
+  </head>
+  <body>
+    <div class="app">
+      <aside>
+        <a class="brand" href="workspace.html"
+          ><span class="mark">P</span><strong>Prevlev</strong></a
+        >
+        <div class="sidebar-label">ESPAÇO DE TRABALHO</div>
+        <nav aria-label="Ferramentas">
+          <button data-page="research" class="active">◈ &nbsp; Pesquisa</button
+          ><button data-page="images">▧ &nbsp; Imagens</button
+          ><button data-page="transcript">≋ &nbsp; Transcrição</button
+          ><button data-page="comments">☷ &nbsp; Comentários</button
+          ><button data-page="studio">▥ &nbsp; Studio</button
+          ><button data-page="swipe">▣ &nbsp; Swipe File</button
+          ><button data-page="remote">✧ &nbsp; Análises</button
+          ><button data-page="connection">⚙ &nbsp; Conexão</button>
+        </nav>
+        <div class="sidebar-footer">
+          <span class="local-dot"></span> Processamento local
+          <p>
+            Seus dados ficam aqui até você solicitar uma análise no seu backend.
+          </p>
+          <span class="pill">VERSÃO 0.1 · INDEPENDENTE</span>
+        </div>
+      </aside>
+      <main>
+        <header>
+          <div>
+            <div class="eyebrow">PREVLEV / FERRAMENTAS PARA CRIADORES</div>
+            <h1 id="page-title">Pesquisa</h1>
+          </div>
+          <div class="header-actions">
+            <select id="tab-select" aria-label="Aba YouTube"></select
+            ><button id="scan" class="primary">↻ Coletar aba</button>
+          </div>
+        </header>
+        <div id="notice" role="status" aria-live="polite">
+          Abra o YouTube e colete os vídeos carregados para começar.
+        </div>
+        <section id="research" class="page">
+          <div class="hero">
+            <div>
+              <span class="eyebrow">DADOS QUE VOCÊ PODE INSPECIONAR</span>
+              <h2>Encontre o próximo<br />ponto de partida.</h2>
+              <p>
+                Compare os vídeos carregados no YouTube, organize referências e
+                exporte sua pesquisa.
+              </p>
+            </div>
+            <div class="hero-art">
+              <div class="art-bar"></div>
+              <div class="art-bar"></div>
+              <div class="art-bar"></div>
+              <div class="art-bar"></div>
+              <span>↗</span>
+            </div>
+          </div>
+          <div id="metrics" class="metrics"></div>
+          <div class="card">
+            <div class="row">
+              <h2>
+                Vídeos coletados <span id="video-count" class="muted"></span>
+              </h2>
+              <div>
+                <button id="enrich">Consultar inscritos no YouTube</button
+                ><button id="export-json">JSON</button
+                ><button id="export-csv">CSV</button>
+              </div>
+            </div>
+            <div class="filters">
+              <input
+                id="video-filter"
+                placeholder="Filtrar por título ou canal"
+                aria-label="Filtrar vídeos"
+              /><select id="sort">
+                <option value="views">Mais visualizações</option>
+                <option value="vph">Maior VPH estimado</option>
+                <option value="date">Mais recentes</option>
+                <option value="title">Título</option></select
+              ><select id="short-filter">
+                <option value="all">Todos os formatos</option>
+                <option value="shorts">Só Shorts</option>
+                <option value="long">Só vídeos longos</option></select
+              ><input
+                id="min-views"
+                type="number"
+                min="0"
+                placeholder="Views mínimas"
+                aria-label="Views mínimas"
+              />
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>VÍDEO</th>
+                    <th>VIEWS</th>
+                    <th>VPH MÉDIO*</th>
+                    <th>OUTLIER*</th>
+                    <th>INSCRITOS</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="video-rows"></tbody>
+              </table>
+            </div>
+            <p class="footnote">
+              * VPH = views desde publicação ÷ horas de vida. Outlier usa a
+              mediana desta amostra, sem histórico do canal. Ausências aparecem
+              como —.
+            </p>
+          </div>
+          <div class="card">
+            <h2>Vídeo atual</h2>
+            <p id="current-video" class="muted">Nenhum vídeo selecionado.</p>
+            <div class="actions">
+              <button id="copy-title">Copiar título / ID</button
+              ><button id="monetization">Inferir monetização</button
+              ><button id="frame">Capturar frame</button
+              ><button id="card-shot">Capturar card</button>
+            </div>
+            <pre id="video-result"></pre>
+          </div>
+        </section>
+        <section id="images" class="page" hidden>
+          <div class="section-intro">
+            <h2>Uma boa ideia começa no enquadramento.</h2>
+            <p>
+              Comprima imagens e veja o título junto da thumbnail. Tudo no
+              navegador.
+            </p>
+          </div>
+          <div class="grid two">
+            <div class="card">
+              <h2>Comprimir e preparar</h2>
+              <label class="drop"
+                >Escolher imagem<input
+                  type="file"
+                  id="image-file"
+                  accept="image/png,image/jpeg,image/webp"
+              /></label>
+              <div class="form-grid">
+                <label
+                  >Largura máxima<input
+                    id="image-width"
+                    type="number"
+                    value="1280"
+                    min="1"
+                    max="8192" /></label
+                ><label
+                  >Qualidade JPEG<input
+                    id="image-quality"
+                    type="number"
+                    value="85"
+                    min="10"
+                    max="100"
+                /></label>
+              </div>
+              <label
+                >Título da prévia<input
+                  id="preview-title"
+                  placeholder="O título do seu próximo vídeo" /></label
+              ><label
+                >Canal<input id="preview-channel" value="Seu canal"
+              /></label>
+              <div class="actions">
+                <button id="compress" class="primary">Comprimir e baixar</button
+                ><button id="image-preview">Gerar prévia</button>
+              </div>
+              <p id="image-info" class="muted"></p>
+            </div>
+            <div class="card">
+              <h2>Prévia</h2>
+              <div id="image-preview-empty" class="empty">
+                Sua composição aparece aqui.
+              </div>
+              <img
+                id="image-output"
+                alt="Prévia de thumbnail e título"
+                hidden
+              />
+              <p class="footnote">
+                Simulação visual local. Não é teste A/B com audiência.
+              </p>
+            </div>
+          </div>
+          <div class="card">
+            <h2>Thumbnail do vídeo</h2>
+            <label
+              >ID ou URL do YouTube<input
+                id="thumbnail-id"
+                placeholder="https://www.youtube.com/watch?v=..." /></label
+            ><button id="download-thumbnail">
+              Baixar melhor imagem disponível</button
+            ><button id="copy-thumbnail">Copiar thumbnail</button>
+          </div>
+        </section>
+        <section id="transcript" class="page" hidden>
+          <div class="card">
+            <h2>Transcrição visível no YouTube</h2>
+            <p class="muted">
+              Abra “Mostrar transcrição” no vídeo e colete a aba. Você também
+              pode importar um arquivo JSON/XML de legendas ou colar o texto.
+            </p>
+            <input
+              id="transcript-file"
+              type="file"
+              accept=".json,.xml,.txt,.vtt"
+            /><textarea
+              id="transcript-text"
+              rows="14"
+              placeholder="A transcrição coletada aparece aqui. Texto colado não ganha timestamps inventados."
+            ></textarea>
+            <div class="actions">
+              <button id="transcript-copy">Copiar texto</button
+              ><button id="transcript-txt">Baixar TXT</button
+              ><button id="transcript-vtt">Baixar VTT</button
+              ><button id="transcript-md">Baixar Markdown</button>
+            </div>
+            <div class="actions">
+              <button data-ai="transcript-summary">Resumir no backend</button
+              ><button data-ai="transcript-topics">Extrair tópicos</button
+              ><button data-ai="transcript-script">Gerar roteiro</button>
+            </div>
+            <pre id="transcript-result"></pre>
+          </div>
+        </section>
+        <section id="comments" class="page" hidden>
+          <div class="card">
+            <h2>Comentários carregados</h2>
+            <div class="filters">
+              <input
+                id="comment-filter"
+                placeholder="Texto ou autor"
+                aria-label="Filtrar comentários"
+              /><input
+                id="comment-likes"
+                type="number"
+                min="0"
+                placeholder="Curtidas mínimas"
+                aria-label="Curtidas mínimas"
+              /><label class="toggle"
+                ><input type="checkbox" id="comment-questions" /> Só
+                perguntas</label
+              >
+            </div>
+            <div class="actions">
+              <button id="comments-copy">Copiar filtrados</button
+              ><button id="comments-export">Exportar CSV</button
+              ><button id="comments-ai">Analisar com IA no backend</button>
+            </div>
+            <div id="comment-list"></div>
+            <p class="footnote">
+              Amostra limitada aos comentários presentes no DOM. A coleta não
+              percorre o canal.
+            </p>
+          </div>
+        </section>
+        <section id="studio" class="page" hidden>
+          <div class="grid two">
+            <div class="card">
+              <h2>Lucro líquido estimado</h2>
+              <p class="muted">
+                Informe os valores ou use a receita que estiver visível no
+                Studio.
+              </p>
+              <label
+                >Receita<input
+                  id="revenue"
+                  type="number"
+                  step="0.01"
+                  min="0" /></label
+              ><label
+                >Custo por vídeo<input
+                  id="cost"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value="0" /></label
+              ><label
+                >Quantidade de vídeos<input
+                  id="video-total"
+                  type="number"
+                  min="0"
+                  value="1" /></label
+              ><button id="profit">Calcular</button
+              ><output id="profit-output"></output>
+            </div>
+            <div class="card">
+              <h2>Período personalizado</h2>
+              <p class="muted">
+                Abra os Analytics do Studio na aba selecionada. O adaptador
+                preenche os controles encontrados e pode falhar se a interface
+                mudar.
+              </p>
+              <label>Início<input id="period-start" type="date" /></label
+              ><label>Fim<input id="period-end" type="date" /></label
+              ><button id="period">Preencher período aberto</button>
+              <h3>Captura de analytics</h3>
+              <label class="toggle"
+                ><input id="redact" type="checkbox" checked /> Ocultar métricas
+                sensíveis na imagem</label
+              ><button id="analytics-shot">Capturar analytics</button
+              ><button id="latest-shot">Capturar último vídeo</button>
+            </div>
+          </div>
+          <div class="card">
+            <h2>Ações assistidas no Studio</h2>
+            <p class="muted">
+              Revise a prévia antes de confirmar. A extensão só opera controles
+              reconhecidos na aba selecionada. Cancele a qualquer momento.
+            </p>
+            <select id="studio-action">
+              <option value="hearts-add">
+                Dar coração aos comentários visíveis
+              </option>
+              <option value="hearts-remove">
+                Remover corações dos comentários visíveis
+              </option>
+              <option value="skip-monetization">
+                Avançar etapa de monetização
+              </option>
+              <option value="midrolls">
+                Preencher intervalos de mid-roll abertos
+              </option>
+            </select>
+            <div class="form-grid">
+              <label
+                >Limite de ações<input
+                  id="action-limit"
+                  type="number"
+                  value="10"
+                  min="1"
+                  max="50" /></label
+              ><label
+                >Duração do vídeo (segundos)<input
+                  id="duration"
+                  type="number"
+                  min="0"
+                  placeholder="600" /></label
+              ><label
+                >Intervalo mid-roll (segundos)<input
+                  id="interval"
+                  type="number"
+                  value="180"
+                  min="60"
+              /></label>
+            </div>
+            <label
+              >Áudio local opcional para detectar silêncios<input
+                id="midroll-audio"
+                type="file"
+                accept="audio/*" /></label
+            ><button id="audio-analyze">Analisar silêncios localmente</button>
+            <p id="audio-info" class="muted"></p>
+            <button id="studio-preview">Preparar prévia</button>
+            <pre id="studio-plan"></pre>
+            <div class="actions">
+              <button id="studio-confirm" class="primary" disabled>
+                Confirmar a prévia</button
+              ><button id="studio-cancel">Cancelar</button>
+            </div>
+            <p class="footnote">
+              Não ativa monetização nem envia adequação de anúncios
+              automaticamente ao carregar a página. Seletores não reconhecidos
+              interrompem a operação.
+            </p>
+          </div>
+        </section>
+        <section id="swipe" class="page" hidden>
+          <div class="card">
+            <div class="row">
+              <div>
+                <h2>Swipe File local</h2>
+                <p class="muted">
+                  Referências guardadas neste perfil do Chrome. Exporte para
+                  fazer backup.
+                </p>
+              </div>
+              <button id="swipe-export">Exportar biblioteca</button>
+            </div>
+            <div class="form-grid">
+              <label>Pasta<input id="swipe-folder" value="Referências" /></label
+              ><label>Título<input id="swipe-title" /></label
+              ><label>URL<input id="swipe-url" type="url" /></label>
+            </div>
+            <div class="actions">
+              <button id="swipe-add" class="primary">Salvar referência</button
+              ><label class="import-label"
+                >Importar JSON<input
+                  id="swipe-import"
+                  type="file"
+                  accept=".json"
+              /></label>
+            </div>
+            <div id="swipe-list"></div>
+          </div>
+        </section>
+        <section id="remote" class="page" hidden>
+          <div class="section-intro">
+            <h2>Seu backend, seus dados.</h2>
+            <p>
+              As análises usam a amostra coletada. IA e geração de imagem exigem
+              um provedor configurado por você.
+            </p>
+          </div>
+          <div class="card">
+            <label
+              >Análise<select id="remote-feature">
+                <option value="similar-videos">
+                  Vídeos semelhantes na amostra
+                </option>
+                <option value="similar-channels">
+                  Canais semelhantes na amostra
+                </option>
+                <option value="niche">Visão de nicho da amostra</option>
+                <option value="channel-analytics">
+                  Analytics de canais da amostra
+                </option>
+                <option value="channel-report">Relatório de canal</option>
+                <option value="combined-analytics">
+                  Comparar canais da amostra
+                </option>
+                <option value="search-analysis">
+                  Analisar termo na amostra
+                </option>
+                <option value="view-history">
+                  Registrar / consultar observações de views
+                </option>
+                <option value="sponsorships">
+                  Examinar menções de patrocínio no texto
+                </option>
+                <option value="comment-analysis">
+                  Analisar comentários com IA
+                </option>
+                <option value="thumbnail-generation">
+                  Gerar thumbnail com IA
+                </option>
+              </select></label
+            ><label
+              >Consulta, briefing ou texto para análise<textarea
+                id="remote-query"
+                rows="5"
+                placeholder="Defina um termo, briefing ou cole o texto a examinar"
+              ></textarea></label
+            ><button id="remote-run" class="primary">
+              Enviar ao meu backend
+            </button>
+            <p class="footnote">
+              O envio é manual. Inclui os dados necessários à análise escolhida:
+              amostra, comentários filtrados, texto ou briefing. Sem
+              configuração, a função indica “não configurado”.
+            </p>
+            <div id="remote-images"></div>
+            <pre id="remote-result"></pre>
+          </div>
+        </section>
+        <section id="connection" class="page" hidden>
+          <div class="card narrow">
+            <h2>Conectar backend próprio</h2>
+            <p class="muted">
+              Deixe vazio para usar as ferramentas locais. Nenhum serviço Nexlev
+              é acessado.
+            </p>
+            <label
+              >Origem do backend<input
+                id="backend-url"
+                type="url"
+                placeholder="http://127.0.0.1:8787" /></label
+            ><label
+              >Token do seu backend<input
+                id="backend-token"
+                type="password"
+                autocomplete="off"
+            /></label>
+            <div class="actions">
+              <button id="save-settings" class="primary">
+                Salvar conexão e conceder acesso</button
+              ><button id="clear-connection">Desconectar</button>
+            </div>
+            <p class="footnote">
+              Token armazenado no perfil local da extensão. Use um token
+              exclusivo do Prevlev; chaves do provedor de IA ficam apenas no
+              servidor.
+            </p>
+            <h3>Dados deste navegador</h3>
+            <button id="clear-data">Apagar coleta e biblioteca locais</button>
+          </div>
+        </section>
+        <footer>
+          PREVLEV · Ferramentas independentes · Cobertura parcial documentada no
+          repositório
+        </footer>
+      </main>
+    </div>
+    <script src="workspace.js"></script>
+  </body>
+</html>
