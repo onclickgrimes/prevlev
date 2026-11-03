@@ -1389,6 +1389,7 @@ on("clear-data", async () => {
     )
   )
     return;
+  invalidateStudioComposition('Dados apagados: captura pendente descartada.');
   aiUsage.clear();
   swipeTools.invalidatePendingOperations();
   swipeSync.invalidate();
@@ -1508,7 +1509,7 @@ chrome.tabs.onUpdated?.addListener((tabId,change)=>{
   imageTabRevision++;imageTools.invalidateContext();studioOverview.invalidateContext();studioCaptureObserved=undefined;invalidateStudioComposition("A aba selecionada navegou. Declare novamente o contexto e faça outra captura.");
 });
 chrome.tabs.onRemoved?.addListener(tabId=>{if(tabId===Number(value("tab-select"))){metadataRequestRevision++;profitTools.invalidateContext();imageTabRevision++;imageTools.invalidateContext();studioOverview.invalidateContext();studioCaptureObserved=undefined;invalidateStudioComposition("A aba foi fechada. Selecione outra origem.");}});
-window.addEventListener("pagehide",()=>{metadataRequestRevision++;transcriptImportRevision++;profitTools.invalidateContext();});
+window.addEventListener("pagehide",()=>{metadataRequestRevision++;transcriptImportRevision++;profitTools.invalidateContext();invalidateStudioComposition('Painel suspenso: captura pendente descartada.');});
 const remoteImages = mountRemoteImages($("remote-images"));
 initCollectionTools({targetTab,snapshot:()=>snapshot,notice,adopt:async(next)=>{snapshot=next;nicheTools.invalidate(); cardComposer.invalidateSnapshot(); channelReport.invalidate();adoptTranscript(next.transcript);await chrome.storage.local.set({snapshot});render();}});
 initSponsorshipTools();

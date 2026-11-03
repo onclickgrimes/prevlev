@@ -3,7 +3,7 @@ import {readFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {existsSync} from 'node:fs';
 let browser:Browser,context:BrowserContext,page:Page;
-type State={messages:Record<string,unknown>[];writes:number;tabUrl:string;holdCapture:boolean;finishCapture?:()=>void;holdMeasurement?:boolean;finishMeasurement?:()=>void;holdMetadata?:boolean;finishMetadata?:()=>void;copied?:string;finishImport?:()=>void};
+type State={messages:Record<string,unknown>[];writes:number;tabUrl:string;holdCapture:boolean;finishCapture?:()=>void;holdMeasurement?:boolean;finishMeasurement?:()=>void;holdMetadata?:boolean;finishMetadata?:()=>void;copied?:string;finishImport?:()=>void;holdRemove?:boolean;finishRemove?:()=>void};
 type Fixture=Window&{__gapState:State};
 test.beforeAll(async()=>{browser=await chromium.launch({executablePath:existsSync('/usr/bin/chromium')?'/usr/bin/chromium':undefined,headless:true,args:['--no-sandbox']});});
 test.afterAll(async()=>{await browser?.close();});
@@ -35,11 +35,24 @@ test.beforeEach(async()=>{
       if(message.type==='STUDIO_PREVIEW')return {status:'ready',id:'plan-fixture'};
       if(message.type==='CAPTURE_CARD'){if(state.holdMeasurement)await new Promise<void>(resolve=>{state.finishMeasurement=resolve;});return {status:'ok',captureStamp:'validated-fixture'};}
       return {status:'ok',snapshot:frozen};
-    }},storage:{local:{get:async(key:string)=>({[key]:store[key]}),set:async(value:Record<string,unknown>)=>{state.writes++;Object.assign(store,value);},remove:async(keys:string[])=>keys.forEach(key=>delete store[key])}},permissions:{request:async()=>true,remove:async()=>true}}});
+    }},storage:{local:{get:async(key:string)=>({[key]:store[key]}),set:async(value:Record<string,unknown>)=>{state.writes++;Object.assign(store,value);},remove:async(keys:string[])=>{if(state.holdRemove)await new Promise<void>(resolve=>{state.finishRemove=resolve;});keys.forEach(key=>delete store[key]);}}},permissions:{request:async()=>true,remove:async()=>true}}});
   });
   page=await context.newPage();await page.goto('http://localhost:9401/workspace.html');await expect(page.locator('#video-rows')).toContainText('Vídeo congelado A');
 });
 test.afterEach(async()=>{await context.close();});
+for(const reason of ['pagehide','clear-data'] as const)test(`pending native capture cannot offer or download after ${reason} while storage is still waiting`,async()=>{
+  const downloads:string[]=[];page.on('download',download=>downloads.push(download.suggestedFilename()));
+  await page.evaluate(()=>{(window as unknown as Fixture).__gapState.holdCapture=true;});await page.locator('#card-shot').click();
+  await expect.poll(()=>page.evaluate(()=>!!(window as unknown as Fixture).__gapState.finishCapture)).toBe(true);
+  if(reason==='pagehide')await page.evaluate(()=>dispatchEvent(new PageTransitionEvent('pagehide',{persisted:true})));
+  else{
+    await page.evaluate(()=>{(window as unknown as Fixture).__gapState.holdRemove=true;});page.once('dialog',dialog=>{void dialog.accept();});
+    await page.locator('[data-page="connection"]').click();await page.locator('#clear-data').click();await expect.poll(()=>page.evaluate(()=>!!(window as unknown as Fixture).__gapState.finishRemove)).toBe(true);
+  }
+  await page.evaluate(async()=>{(window as unknown as Fixture).__gapState.finishCapture!();await new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())));});
+  expect(downloads).toEqual([]);await expect(page.locator('.captured-asset')).toHaveAttribute('hidden','');
+  if(reason==='clear-data'){await page.evaluate(()=>(window as unknown as Fixture).__gapState.finishRemove!());await expect(page.locator('#notice')).toContainText('Dados locais apagados');}
+});
 test('strict caption imports preserve prior input and discard a late file after an edit is undone',async()=>{
   await page.locator('[data-page="transcript"]').click();await page.locator('#transcript-text').fill('Texto anterior');
   await page.locator('#transcript-file').setInputFiles({name:'mixed.vtt',mimeType:'text/vtt',buffer:Buffer.from('WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nVálido\n\n00:00:04.000 --> 00:00:03.000\nInválido')});
