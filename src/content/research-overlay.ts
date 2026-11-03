@@ -7,6 +7,7 @@ import { researchLabels } from "../ui/research";
 import { toCsv } from "../core/export";
 import { downloadBlob } from "../core/media";
 import { videoIdFromUrl } from "../core/parse";
+import { mountVideoActions, type VideoActions } from "../ui/video-actions";
 
 export interface ResearchOverlayDeps { getVideos: () => VideoRecord[]; getFilter: () => CardFilter; setFilter: (filter: CardFilter) => void; getUrl: () => string; collector: CollectionController; getMetrics?: () => boolean; setMetrics?: (enabled: boolean) => void }
 const PAGE_SIZE = 100;
@@ -23,6 +24,9 @@ export function mountResearchOverlay(container: HTMLElement, deps: ResearchOverl
   container.append(shell);
   const get = <T extends HTMLElement = HTMLElement>(id: string) => shell.querySelector<T>(`#prevlev-research-${id}`)!;
   let state: CollectionState = deps.collector.status(), secondEnabled = false, activePreset = "", disposed = false, pageIndex = 0, filterSignature = "";
+  let actionEpoch = 0;
+  const itemActions: VideoActions[] = [];
+  const disposeItemActions = () => { actionEpoch++; for (const action of itemActions.splice(0)) action.dispose(); };
   const selected = () => { const filter = { ...deps.getFilter(), surface: researchSurface(deps.getUrl()) }; const baseline = deps.getVideos(); return { filter, baseline, rows: selectResearchVideos(baseline, filter) }; };
   const status = (text: string) => { get("status").textContent = text; };
   const commit = (filter: CardFilter) => { try { deps.setFilter({ ...filter, surface: researchSurface(deps.getUrl()) }); pageIndex = 0; refresh(); } catch (error) { status(error instanceof Error ? error.message : "Não foi possível aplicar o filtro."); } };
@@ -33,6 +37,7 @@ export function mountResearchOverlay(container: HTMLElement, deps: ResearchOverl
   }
   function refresh(): void {
     if (disposed) return;
+    disposeItemActions();
     const filter = deps.getFilter(), surface = researchSurface(deps.getUrl());
     const signature = JSON.stringify([deps.getUrl(), filter]);
     if (signature !== filterSignature) { filterSignature = signature; pageIndex = 0; }
@@ -64,12 +69,20 @@ export function mountResearchOverlay(container: HTMLElement, deps: ResearchOverl
       get("count").textContent = `${sample.rows.length} correspondem / ${sample.baseline.length} observados · mostrando ${sample.rows.length ? start + 1 : 0}–${end}`;
       get("page").textContent = `Página ${pageIndex + 1} de ${pages}`;
       get<HTMLButtonElement>("previous").disabled = pageIndex === 0; get<HTMLButtonElement>("next").disabled = pageIndex === pages - 1;
-      const list = get("results"); list.replaceChildren();
+      const list = get("results"), contextUrl = deps.getUrl(), revision = actionEpoch; list.replaceChildren();
       for (const video of sample.rows.slice(start, end)) {
-        const card = document.createElement("article"), id = videoIdFromUrl(video.url), title = document.createElement(id ? "a" : "strong"); title.textContent = video.title;
+        const card = document.createElement("article"), id = videoIdFromUrl(video.url), title = document.createElement(id ? "a" : "strong"); title.textContent = video.title; title.dataset.prevlevResearchVideoTitle = "";
         if (title instanceof HTMLAnchorElement && id) { title.href = `https://www.youtube.com/watch?v=${id}`; title.target = "_blank"; title.rel = "noopener noreferrer"; }
         const detail = document.createElement("small"), comparison = researchComparison(video, sample.baseline, sample.filter.comparisonMode);
         detail.textContent = `${video.channel ?? "Canal desconhecido"} · ${video.views ?? "?"} views · outlier ${comparison.score?.toFixed(2) ?? "?"}× (${comparison.referenceCount} observações)`; detail.title = describeResearchComparison(comparison, sample.filter.comparisonMode); card.append(title, detail); list.append(card);
+        itemActions.push(mountVideoActions(card, {
+          video: { ...video },
+          notice: message => status(message),
+          isCurrent: captured => {
+            if (disposed || revision !== actionEpoch || deps.getUrl() !== contextUrl) return false;
+            return selected().rows.some(current => current.id === captured.id && current.url === captured.url && current.title === captured.title && current.source === captured.source);
+          },
+        }));
       }
       if (!sample.rows.length) { const paragraph = document.createElement("p"); paragraph.textContent = "Nenhum item reconhecido corresponde aos filtros."; list.append(paragraph); }
       for (const id of ["json", "csv", "md"]) get<HTMLButtonElement>(id).disabled = state.phase === "running" || !sample.rows.length;
@@ -99,6 +112,6 @@ export function mountResearchOverlay(container: HTMLElement, deps: ResearchOverl
   for (const format of ["json", "csv", "md"] as const) get(format).addEventListener("click", () => { try { const sample = selected(); if (state.phase === "running") throw new Error("Aguarde ou cancele a coleta antes de exportar."); const rows = researchRows(sample.rows, sample.baseline, sample.filter); const content = format === "json" ? JSON.stringify({ source: "local-observations", url: deps.getUrl(), filter: sample.filter, count: sample.rows.length, videos: sample.rows, comparisons: rows }, null, 2) : format === "csv" ? toCsv(rows) : researchMarkdown(sample.rows, sample.baseline, sample.filter); downloadBlob(new Blob([content], { type: format === "json" ? "application/json" : format === "csv" ? "text/csv;charset=utf-8" : "text/markdown;charset=utf-8" }), `prevlev-pesquisa-local.${format}`); } catch (error) { status(error instanceof Error ? error.message : "Não foi possível exportar."); } });
   const unsubscribe = deps.collector.subscribe(value => { state = value; refresh(); });
   refresh();
-  return { refresh, dispose: () => { disposed = true; unsubscribe(); shell.remove(); } };
+  return { refresh, dispose: () => { if (disposed) return; disposed = true; disposeItemActions(); unsubscribe(); shell.remove(); } };
 }
 function option(value: string, text: string): HTMLOptionElement { const option = document.createElement("option"); option.value = value; option.textContent = text; return option; }

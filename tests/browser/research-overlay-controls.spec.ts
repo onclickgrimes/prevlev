@@ -45,7 +45,7 @@ test.beforeEach(async () => {
 test.afterEach(async () => { expect(unexpected).toEqual([]); expect(await page.evaluate(() => (window as unknown as FixtureWindow).startCalls)).toBe(0); await context.close(); });
 async function filter(): Promise<CardFilter> { return page.evaluate(() => (window as unknown as FixtureWindow).filter); }
 async function setFilter(value: unknown) { await page.evaluate(value => (window as unknown as FixtureWindow).setFilter(value), value); }
-const titles = () => page.locator("#prevlev-research-results article a").allTextContents();
+const titles = () => page.locator("#prevlev-research-results article > [data-prevlev-research-video-title]").allTextContents();
 
 test("adding a second criterion from collection order creates two distinct, editable criteria and removal restores stable ties", async () => {
   await page.locator("#prevlev-research-add").click();
