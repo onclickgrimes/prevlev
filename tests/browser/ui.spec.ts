@@ -239,3 +239,24 @@ test("clearing the workspace removes selected card composition metadata", async 
   await expect(page.locator("#card-compose-provenance")).not.toContainText("abcdefghijk");
   await page.close();
 });
+
+test("workspace shows a manual daily report without reading cumulative collection views", async () => {
+  const page = await context.newPage();
+  await page.goto("http://localhost:9393/workspace.html");
+  await page.locator("#scan").click();
+  await page.locator('[data-page="daily-observations"]').click();
+  const form = page.locator("#daily-form");
+  await form.locator('[name="channelId"]').fill("meu_canal");
+  await form.locator('[name="date"]').fill("2020-01-01");
+  await form.locator('[name="timeZone"]').fill("UTC");
+  await form.locator('[name="completion"]').selectOption("complete");
+  await form.locator('[name="videos"]').fill("abcdefghijk,0\nlmnopqrstuv,");
+  await form.locator('[type="submit"]').click();
+  await expect(page.locator("#daily-result")).toContainText("abcdefghijk: 0");
+  await expect(page.locator("#daily-result")).toContainText("lmnopqrstuv: desconhecido");
+  await expect(page.locator("#daily-result")).not.toContainText("12.000");
+  await expect(page.locator("#daily-result")).toContainText("fornecido pelo usuário");
+  await form.locator('[type="reset"]').click();
+  await expect(page.locator("#daily-result")).toBeHidden();
+  await page.close();
+});

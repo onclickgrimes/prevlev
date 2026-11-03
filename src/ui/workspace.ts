@@ -50,6 +50,7 @@ import { initImageTools } from "./images";
 import { initSponsorshipTools } from "./sponsorships";
 import { initCollectionTools } from "./collection";
 import { initNicheTools } from "./niche";
+import { mountDailyObservations } from "./daily-observations";
 import { initCardCompositionTools } from "./card-composition";
 import { initVisualSimilarityTools } from "./visual-similarity";
 import { initStudioOverview } from "./studio-overview";
@@ -1268,6 +1269,7 @@ on("clear-data", async () => {
 const getRedactionCategories = initCaptureOptions();
 const midrollTools = mountMidrollTools(document, invalidateStudioPreview);
 const studioOverview = initStudioOverview({snapshot:()=>snapshot});
+mountDailyObservations($("daily-observations"));
 const nicheTools = initNicheTools({snapshot:()=>snapshot});
 const cardComposer = initCardCompositionTools({snapshot:()=>snapshot});
 initVisualSimilarityTools();

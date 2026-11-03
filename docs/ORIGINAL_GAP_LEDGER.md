@@ -24,6 +24,10 @@ O compositor local de D17 gera uma ilustração de card ou Short a partir de ima
 
 A referência local de outlier informa modo, denominador, contagem, método, procedência e exclusões em relatórios e exportações. Presets preservam o modo escolhido. A referência continua parcial e não substitui média real de um catálogo completo; formatos desconhecidos formam grupo próprio e observações repetidas podem contar.
 
+## Marco v0.6.3
+
+Em D27 há um relatório diário manual, em memória, de contagens declaradas pelo usuário para um canal e um período comum. Não integra Studio nem presume que a amostra inclua todos os vídeos; desconhecidos e conflitos são exibidos. Dias completos em fusos fora de UTC usam uma espera conservadora para alterações históricas de fuso.
+
 ## D01 · P0
 
 Referência informada: módulos `6buNu`. Recursos: 10, 29.

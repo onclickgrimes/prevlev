@@ -1,4 +1,4 @@
-# Cobertura dos 40 recursos · v0.6.2
+# Cobertura dos 40 recursos · v0.6.3
 
 Implementação independente; não há declaração de paridade completa com Nexlev 3.12.6.
 

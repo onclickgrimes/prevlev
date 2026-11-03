@@ -1,3 +1,9 @@
+# Validação da versão 0.6.3
+
+Em 3 de novembro de 2026, typecheck, lint e build passaram com **466 testes automatizados em 43 arquivos**. O relatório diário e a integração do workspace passaram em **6 testes direcionados de navegador**. A suíte completa anterior, da v0.6.2, teve 89 aprovados e dois ignorados pela política de extensões do Chromium; não foi repetida integralmente nesta alteração localizada.
+
+O relatório usa dados declarados, não consulta Studio nem salva os valores. Testes cobrem valores desconhecidos e zero, conflitos, fuso e datas civis inexistentes ou repetidas; o limite conservador de dia completo está descrito na interface. Nenhum serviço, conta ou dado real foi acessado. ZIP verificado com CRC e hashes de nove arquivos internos; SHA-256: `7df6ab1bee05fb4be87ec3871760c1fd5f93e0ab8e36a4ca4f8a733cb5f21770`.
+
 # Validação da versão 0.6.2
 
 Em 3 de novembro de 2026, typecheck, lint e build passaram com **458 testes automatizados em 42 arquivos**. A suíte integral do navegador no build final teve **89 aprovados e dois ignorados** pela política gerenciada que bloqueia a extensão instalada. Uma primeira rodada identificou uma expectativa para a redação antiga de um relatório; após atualização da expectativa, a suíte foi repetida integralmente e aprovada. Nenhuma conta, serviço Omni, geração paga ou API YouTube real foi acessada.
