@@ -284,6 +284,9 @@ function renderVideos() {
   renderMetrics(videos);
   body.replaceChildren();
   $("video-count").textContent = `(${videos.length})`;
+  const mode = readVideoFilter().comparisonMode ?? "sample-median";
+  const excludedApi = snapshot.videos.filter(video => video.source === "youtube-data-api").length;
+  $("outlier-details").textContent = `Modo selecionado: ${mode}. Amostra: ${snapshot.videos.length} registros recebidos, ${videos.length} incluídos; ${excludedApi} da API oficial e ${snapshot.videos.length - excludedApi - videos.length} pelos filtros excluídos. Referências: observações carregadas elegíveis antes dos filtros. O alvo é excluído por ID; outras observações repetidas podem ser contadas. O denominador é a referência da amostra, não a referência completa do canal. Valores desconhecidos aparecem como desconhecido.${videos.length ? "" : " Exportações sem linhas não incluem esses totais; consulte este resumo."}`;
   for (const video of videos) {
     const row = element("tr"),
       title = element("td"),
@@ -296,7 +299,7 @@ function renderVideos() {
     for (const val of [
       compact(video.views),
       compact(lifetimeVph(video)),
-      (() => { const comparison = researchComparison(video, snapshot.videos, readVideoFilter().comparisonMode); return `${comparison.score?.toFixed(1).concat("×") ?? "—"} (${comparison.referenceCount} refs)`; })(),
+      (() => { const comparison = researchComparison(video, snapshot.videos, readVideoFilter().comparisonMode); return `${comparison.score?.toFixed(1).concat("×") ?? "desconhecido"} · método previsto ${comparison.method} · denominador ${comparison.reference === undefined ? "desconhecido" : String(comparison.reference)} · ${comparison.referenceCount} candidatos (${comparison.positiveReferenceCount} positivas) · origem ${comparison.provenance}`; })(),
       compact(video.subscribers),
       video.durationSeconds === undefined
         ? "—"
@@ -423,28 +426,49 @@ on("clear-page-filter", async () => {
     "Filtros da aba YouTube removidos. A preferência Ocultar Shorts continua ativa se selecionada.",
   );
 });
+function workspaceExportRows() {
+  const mode = readVideoFilter().comparisonMode ?? "sample-median";
+  const excludedApi = snapshot.videos.filter(video => video.source === "youtube-data-api").length;
+  const videos = visibleVideos();
+  return videos.map(video => {
+    const comparison = researchComparison(video, snapshot.videos, mode);
+    return {
+      ...video,
+      vph: lifetimeVph(video),
+      outlier: comparison.score ?? null,
+      outlier_status: comparison.score === undefined ? "desconhecido" : "conhecido",
+      outlier_reference_count: comparison.referenceCount,
+      outlier_comparison_mode: mode,
+      outlier_method: comparison.method,
+      outlier_reference_status: comparison.reference === undefined ? "desconhecido" : comparison.reference === 0 ? "zero" : "conhecido",
+      observation_source: video.source ?? "desconhecido",
+      outlier_target_exclusion: "same-video-id",
+      outlier_count_unit: "observations",
+      outlier_reference: comparison.reference ?? "desconhecido",
+      outlier_positive_reference_count: comparison.positiveReferenceCount,
+      outlier_provenance: comparison.provenance,
+      outlier_limitation: comparison.limitation,
+      sample_input_count: snapshot.videos.length,
+      sample_included_count: videos.length,
+      excluded_api_count: excludedApi,
+      excluded_by_filter_count: snapshot.videos.length - excludedApi - videos.length,
+    };
+  });
+}
 on("export-json", () =>
   textFile(
-    JSON.stringify(visibleVideos(), null, 2),
+    JSON.stringify(workspaceExportRows(), null, 2),
     "prevlev-videos.json",
     "application/json",
   ),
 );
-on("export-csv", () =>
-  textFile(
-    toCsv(
-      visibleVideos().map((v) => ({
-        ...v,
-        vph: lifetimeVph(v),
-        outlier: researchComparison(v, snapshot.videos, readVideoFilter().comparisonMode).score,
-        outlier_reference_count: researchComparison(v, snapshot.videos, readVideoFilter().comparisonMode).referenceCount,
-        outlier_comparison_mode: readVideoFilter().comparisonMode,
-      })),
-    ),
-    "prevlev-videos.csv",
-    "text/csv",
-  ),
-);
+on("export-csv", () => {
+  const rows = workspaceExportRows();
+  const columns = rows.length ? [...new Set(rows.flatMap(row => Object.keys(row)))] : [
+    "id", "title", "url", "channel", "channelId", "channelUrl", "views", "publishedAt", "durationSeconds", "subscribers", "isShort", "thumbnail", "source", "observedAt", "vph", "outlier", "outlier_status", "outlier_reference_count", "outlier_comparison_mode", "outlier_method", "outlier_reference_status", "observation_source", "outlier_target_exclusion", "outlier_count_unit", "outlier_reference", "outlier_positive_reference_count", "outlier_provenance", "outlier_limitation", "sample_input_count", "sample_included_count", "excluded_api_count", "excluded_by_filter_count",
+  ];
+  textFile(toCsv(rows, columns), "prevlev-videos.csv", "text/csv");
+});
 on("copy-title", async () => {
   const result = await tabMessage<{metadata:{title:string;id?:string;url:string}}>("GET_CURRENT_METADATA");
   if (!result.metadata) throw new Error("A aba selecionada não devolveu metadados atuais.");

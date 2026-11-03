@@ -864,7 +864,14 @@
         "implementable_now",
         "real_runtime_blocked"
       ],
-      "auditDisposition": "has_implementable_work"
+      "auditDisposition": "has_implementable_work",
+      "checkpointV05": {
+        "status": "partial_scope_fixture_tested",
+        "scope": "Sincronização manual opcional com backend pessoal, revisão e conflitos; sem nuvem multiusuário.",
+        "tests": [
+          "tests/browser/swipe-sync.spec.ts"
+        ]
+      }
     },
     {
       "id": 31,
@@ -2882,7 +2889,11 @@
         "CRUD/sync pessoal explícito usa token/origem existentes e revisão para detectar conflitos, sem upload ao abrir.",
         "Identidades/paths/bytes/mimes são limitados; erros incertos não repetem escritas e fonte API não entra nos ativos derivados.",
         "Hospedagem/identidade multiusuário continua separada em EC03, sem afirmar que só falta configurar algo quando a rota ainda não existe."
-      ]
+      ],
+      "checkpointV05": {
+        "state": "partial_scope_fixture_tested",
+        "scope": "Sincronização pessoal manual entregue e testada em fixtures; runtime real pendente."
+      }
     },
     {
       "id": "AF07",
@@ -3060,7 +3071,7 @@
       "state": "external_decision_required",
       "summary": "Hospedagem e identidade para sincronização multiusuário.",
       "target": "domínio/backend acessível, identidade/isolamento, armazenamento e política de retenção/backup",
-      "reason": "O backend atual é pessoal. Destino de hospedagem e mecanismo de contas/isolamento não foram escolhidos ou autorizados. Isso não impede AF06 (sync pessoal própria) de ser implementado.",
+      "reason": "O backend atual é pessoal. Destino de hospedagem e mecanismo de contas/isolamento não foram escolhidos ou autorizados. AF06 já oferece sincronização pessoal manual, sem hospedagem ou isolamento multiusuário.",
       "nextAction": "Escolher esses destinos/limites antes de hospedar ou criar recursos; não executar deploy/contas automaticamente.",
       "acceptance": [
         "Isolamento e conflitos têm testes; titular aprova um destino concreto. Nenhuma alegação de cloud antes da operação real."

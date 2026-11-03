@@ -1,7 +1,7 @@
 import type { VideoRecord } from "../shared/types";
 import { groupChannelIdentities as channelGroups } from "./observations";
 import { lifetimeVph, median as coreMedian, validateVideoFilter } from "./metrics";
-import { selectResearchVideos, researchComparison, validateResearchFilter, type ResearchFilter } from "./research";
+import { selectResearchVideos, researchComparison, validateResearchFilter, type ResearchComparisonMode, type ResearchFilter } from "./research";
 
 export type VideoSource = "youtube-dom" | "public-page" | "user-provided" | "youtube-data-api";
 type LocalVideo = VideoRecord & { source?: VideoSource; observedAt?: string };
@@ -11,6 +11,7 @@ export interface AnalyticsVideo {
   id: string; title: string; url: string; channel?: string; views?: number;
   publishedAt?: string; durationSeconds?: number; format: "short" | "long" | "unknown";
   lifetimeVph?: number; outlierScore?: number; outlierReferenceCount?: number; outlierMethod?: string; source?: VideoSource;
+  outlierStatus: "known" | "unknown"; outlierComparisonMode: ResearchComparisonMode; outlierReference: number | null; outlierPositiveReferenceCount: number; outlierProvenance: string; outlierLimitation: string;
 }
 export interface ChannelAnalytics {
   key: string; label: string; videoCount: number; knownViews: number; missingViews: number;
@@ -72,7 +73,7 @@ export function buildAnalyticsReport(videos: readonly LocalVideo[], options: Ana
     const format = video.isShort === true ? "short" : video.isShort === false ? "long" : "unknown";
     formats[format]++;
     const comparison = researchComparison(video, baseline, filter.comparisonMode);
-    rows.push({ id: video.id, title: video.title, url: video.url, channel: video.channel, views: video.views, publishedAt: video.publishedAt, durationSeconds: video.durationSeconds, format, lifetimeVph: lifetimeVph(video, now), outlierScore: comparison.score, outlierReferenceCount: comparison.referenceCount, outlierMethod: comparison.method, source });
+    rows.push({ id: video.id, title: video.title, url: video.url, channel: video.channel, views: video.views, publishedAt: video.publishedAt, durationSeconds: video.durationSeconds, format, lifetimeVph: lifetimeVph(video, now), outlierScore: comparison.score, outlierReferenceCount: comparison.referenceCount, outlierMethod: comparison.method, source, outlierStatus: comparison.score === undefined ? "unknown" : "known", outlierComparisonMode: filter.comparisonMode ?? "sample-median", outlierReference: comparison.reference ?? null, outlierPositiveReferenceCount: comparison.positiveReferenceCount, outlierProvenance: comparison.provenance, outlierLimitation: comparison.limitation });
   }
   const knownDates = included.filter(video => video.publishedAt !== undefined).length;
   const channels: ChannelAnalytics[] = [...channelBuckets].map(([key, group]) => {
@@ -90,7 +91,8 @@ export function buildAnalyticsReport(videos: readonly LocalVideo[], options: Ana
     "A amostra contém somente vídeos carregados ou fornecidos; não representa o catálogo completo de um canal nem tráfego oficial.",
     "Visualizações são contadores observados, não visualizações recebidas no período selecionado; as datas filtram a publicação dos vídeos.",
     "VPH é a média de visualizações desde a publicação, não a contagem dos últimos 60 minutos. Datas relativas coletadas podem ser aproximadas.",
-    filter.comparisonMode === "sample-channel-reference" ? "Outlier alternativo usa a média da amostra completa do canal conhecido anterior aos filtros, mínimo de 3 referências. Shorts usam mediana dos positivos com pelo menos 10 referências positivas; abaixo disso usam média. Não equivale à referência do canal completo nem ao índice proprietário." : "Outlier padrão usa mediana da amostra completa anterior aos filtros, com pelo menos três referências do mesmo formato; alvo sem identidade usa a amostra geral. Não equivale ao índice proprietário.",
+    filter.comparisonMode === "sample-channel-reference" ? "Outlier alternativo usa a média da amostra completa do canal conhecido anterior aos filtros, mínimo de 3 referências. Shorts usam mediana dos positivos com pelo menos 10 referências positivas; abaixo disso usam média. Não equivale à referência do canal completo nem ao índice proprietário." : "Outlier padrão usa mediana das referências elegíveis da amostra anterior aos filtros, com pelo menos três referências elegíveis. Não equivale ao índice proprietário.",
+    "A comparação agrupa Shorts, não Shorts e formato desconhecido separadamente; vídeos com formato desconhecido são comparados entre si, sem inferir seu formato.",
     "Meses de publicação usam UTC. Intervalos são lacunas entre datas distintas da amostra combinada, sem interpolar publicações ausentes nem prever frequência futura de um canal.",
     "Receita, RPM, lucro, geografia e monetização não são conhecidos por estes dados e não são estimados neste relatório.",
   ];
@@ -169,12 +171,12 @@ export function deriveHistoryTrend(records: readonly HistoryObservation[], now =
 
 /** One row per included video; undefined fields stay empty when passed to toCsv. */
 export function reportRows(report: AnalyticsReport): Record<string, unknown>[] {
-  return report.videos.map(video => ({ video_id: video.id, title: video.title, url: video.url, channel: video.channel, source: video.source, format: video.format, observed_views: video.views, published_at: video.publishedAt, duration_seconds: video.durationSeconds, lifetime_average_vph: video.lifetimeVph, sample_outlier: video.outlierScore, outlier_reference_count: video.outlierReferenceCount, outlier_method: video.outlierMethod }));
+  return report.videos.map(video => ({ video_id: video.id, title: video.title, url: video.url, channel: video.channel, source: video.source, format: video.format, observed_views: video.views, published_at: video.publishedAt, duration_seconds: video.durationSeconds, lifetime_average_vph: video.lifetimeVph, sample_outlier: video.outlierScore, outlier_reference_count: video.outlierReferenceCount, outlier_method: video.outlierMethod, outlier_status: video.outlierStatus, outlier_comparison_mode: video.outlierComparisonMode, outlier_reference: video.outlierReference ?? "desconhecido", outlier_positive_reference_count: video.outlierPositiveReferenceCount, outlier_provenance: video.outlierProvenance, outlier_limitation: video.outlierLimitation, sample_input_count: report.scope.inputCount, sample_included_count: report.scope.includedCount, excluded_api_count: report.scope.excludedApiCount, excluded_duplicate_count: report.scope.excludedDuplicateCount, excluded_by_filter_count: report.scope.excludedByFilterCount }));
 }
 
 export function reportMarkdown(report: AnalyticsReport): string {
   const value = (number: number | undefined) => number === undefined ? "desconhecido" : String(number);
-  return ["# Relatório local Prevlev", "", `Gerado em ${report.generatedAt}. Amostra incluída: ${report.scope.includedCount}/${report.scope.inputCount} vídeos.`, "", `Visualizações conhecidas: ${value(report.totals.knownViews)}. Média: ${value(report.totals.meanViews)}. Mediana: ${value(report.totals.medianViews)}.`, `VPH médio desde publicação: ${value(report.totals.meanLifetimeVph)}. Intervalo mediano observado entre publicações: ${value(report.medianPublishGapDays)} dias.`, "", "| Vídeo | Canal | Views observadas | VPH médio histórico |", "| --- | --- | --- | --- |", ...report.topVideos.map(video => `| ${markdown(video.title)} | ${markdown(video.channel ?? "desconhecido")} | ${value(video.views)} | ${value(video.lifetimeVph)} |`), "", "## Limites dos dados", "", ...report.limitations.map(limitation => `- ${markdown(limitation)}`), ""].join("\n");
+  return ["# Relatório local Prevlev", "", `Gerado em ${report.generatedAt}. Amostra incluída: ${report.scope.includedCount}/${report.scope.inputCount} vídeos.`, "", `Visualizações conhecidas: ${value(report.totals.knownViews)}. Média: ${value(report.totals.meanViews)}. Mediana: ${value(report.totals.medianViews)}.`, `VPH médio desde publicação: ${value(report.totals.meanLifetimeVph)}. Intervalo mediano observado entre publicações: ${value(report.medianPublishGapDays)} dias.`, "", `Modo de comparação: ${report.scope.filter?.comparisonMode ?? "sample-median"}. Excluídos: ${report.scope.excludedApiCount} API oficial, ${report.scope.excludedDuplicateCount} duplicatas e ${report.scope.excludedByFilterCount} por filtros.`, "", `Vídeos por views observadas: até 20 de ${report.scope.includedCount} incluídos; ${report.scope.includedCount - report.topVideos.length} fora desta tabela.`, "", "| Vídeo | Canal | Views observadas | VPH médio histórico | Outlier | Método previsto | Denominador | Referências candidatas | Referências positivas | Procedência |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |", ...report.topVideos.map(video => `| ${markdown(video.title)} | ${markdown(video.channel ?? "desconhecido")} | ${value(video.views)} | ${value(video.lifetimeVph)} | ${value(video.outlierScore)} | ${markdown(video.outlierMethod ?? "desconhecido")} | ${value(video.outlierReference ?? undefined)} | ${value(video.outlierReferenceCount)} | ${video.outlierPositiveReferenceCount} | ${markdown(video.outlierProvenance)} |`), "", "## Limites dos dados", "", ...report.limitations.map(limitation => `- ${markdown(limitation)}`), ""].join("\n");
 }
 
 function knownCount(value: number | undefined): number | undefined { return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined; }

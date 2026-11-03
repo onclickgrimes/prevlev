@@ -1,5 +1,5 @@
 {
-  "version": "0.6.1",
+  "version": "0.6.2",
   "scope": "Implementação independente; não há declaração de paridade completa com Nexlev 3.12.6. As entradas descrevem a base v0.4; consulte GAP_AUDIT e ORIGINAL_GAP_LEDGER para diferenças posteriores e limites.",
   "statusDefinitions": {
     "implemented": "Disponível no escopo local descrito, com evidência em fixtures; não significa validação em extensão instalada ou paridade completa.",
@@ -630,13 +630,14 @@
       "name": "Swipe File",
       "status": "implemented",
       "execution": "local",
-      "boundary": "Biblioteca independente com pastas por nome, referências, importação/exportação JSON e exclusão. Armazenamento neste perfil Chrome, sem sincronização de nuvem.",
+      "boundary": "Biblioteca local com pastas, tags, busca e importação/exportação; sincronização manual opcional com backend pessoal e revisão de conflitos. Hospedagem e isolamento multiusuário não implementados.",
       "source": [
         "src/shared/storage.ts",
         "src/ui/workspace.ts"
       ],
       "tests": [
-        "tests/browser/ui.spec.ts"
+        "tests/browser/ui.spec.ts",
+        "tests/browser/swipe-sync.spec.ts"
       ],
       "verificationStatus": "fixture_coverage_only",
       "installedExtensionVerification": "blocked_by_environment_policy",
@@ -1022,7 +1023,7 @@
       "Financeiro: receita/RPM/geografia/contratos não disponíveis não são inventados.",
       "Fonte oficial opcional: ativar explicitamente e fornecer chave existente autorizada no servidor. Isso não habilita métricas derivadas, dados privados ou cobertura integral.",
       "Histórico: iniciar backend pessoal com DATA_DIR e registrar observações por ação explícita; MCP: iniciar/conectar manualmente processo stdio se desejado.",
-      "Nuvem: sincronização e autenticação/isolamento multiusuário não implementados."
+      "Nuvem multiusuário: hospedagem, autenticação e isolamento não implementados; sincronização pessoal manual disponível."
     ]
   },
   "omniProvidersIntegration": {

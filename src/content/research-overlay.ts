@@ -1,7 +1,7 @@
 import type { VideoRecord } from "../shared/types";
 import type { CardFilter } from "./youtube";
 import type { CollectionController, CollectionState } from "./collection";
-import { researchPresets, researchPreset, researchSurface, selectResearchVideos, researchComparison, researchRows, researchMarkdown, type ResearchSortKey } from "../core/research";
+import { researchPresets, researchPreset, researchSurface, selectResearchVideos, researchComparison, describeResearchComparison, researchRows, researchMarkdown, type ResearchSortKey } from "../core/research";
 import { researchLabels } from "../ui/research";
 import { toCsv } from "../core/export";
 import { downloadBlob } from "../core/media";
@@ -54,7 +54,7 @@ export function mountResearchOverlay(container: HTMLElement, deps: ResearchOverl
         const card = document.createElement("article"), id = videoIdFromUrl(video.url), title = document.createElement(id ? "a" : "strong"); title.textContent = video.title;
         if (title instanceof HTMLAnchorElement && id) { title.href = `https://www.youtube.com/watch?v=${id}`; title.target = "_blank"; title.rel = "noopener noreferrer"; }
         const detail = document.createElement("small"), comparison = researchComparison(video, sample.baseline, sample.filter.comparisonMode);
-        detail.textContent = `${video.channel ?? "Canal desconhecido"} · ${video.views ?? "?"} views · outlier ${comparison.score?.toFixed(2) ?? "?"}× (${comparison.referenceCount} refs)`; detail.title = comparison.limitation; card.append(title, detail); list.append(card);
+        detail.textContent = `${video.channel ?? "Canal desconhecido"} · ${video.views ?? "?"} views · outlier ${comparison.score?.toFixed(2) ?? "?"}× (${comparison.referenceCount} observações)`; detail.title = describeResearchComparison(comparison, sample.filter.comparisonMode); card.append(title, detail); list.append(card);
       }
       if (!sample.rows.length) { const paragraph = document.createElement("p"); paragraph.textContent = "Nenhum item reconhecido corresponde aos filtros."; list.append(paragraph); }
       for (const id of ["json", "csv", "md"]) get<HTMLButtonElement>(id).disabled = state.phase === "running" || !sample.rows.length;
@@ -63,7 +63,7 @@ export function mountResearchOverlay(container: HTMLElement, deps: ResearchOverl
     const progress = get<HTMLProgressElement>("progress"); progress.max = state.maxItems || 1; progress.value = state.collectedCount;
     get("collection").textContent = `${state.collectedCount} IDs observados · ${state.steps} rolagens · ${state.reason}`;
   }
-  get("preset").addEventListener("change", () => { const id = get<HTMLSelectElement>("preset").value; if (!id) return; try { const preset = researchPreset(id, researchSurface(deps.getUrl())); activePreset = id; commit({ ...preset.filter, sort: preset.filter.criteria?.[0].key ?? "default" }); } catch (error) { status(error instanceof Error ? error.message : "Atalho indisponível."); } });
+  get("preset").addEventListener("change", () => { const id = get<HTMLSelectElement>("preset").value; if (!id) return; try { const preset = researchPreset(id, researchSurface(deps.getUrl())); activePreset = id; commit({ ...preset.filter, comparisonMode: deps.getFilter().comparisonMode, sort: preset.filter.criteria?.[0].key ?? "default" }); } catch (error) { status(error instanceof Error ? error.message : "Atalho indisponível."); } });
   for (const id of ["first", "first-direction", "second", "second-direction", "priority", "comparison", "hide-feed", "hide-search"]) get(id).addEventListener("change", applyControls);
   get("add").addEventListener("click", () => { secondEnabled = true; get("second-row").hidden = false; get("add").hidden = true; applyControls(); });
   get("remove").addEventListener("click", () => { secondEnabled = false; applyControls(); });
@@ -74,7 +74,7 @@ export function mountResearchOverlay(container: HTMLElement, deps: ResearchOverl
   for (const id of ["after", "before"]) get(id).addEventListener("change", () => { activePreset = ""; const value = get<HTMLInputElement>(id).value; commit({ ...deps.getFilter(), [id === "after" ? "publishedAfter" : "publishedBefore"]: value ? `${value}Z` : undefined, ...(id === "before" ? { publishedBeforeExclusive: undefined } : {}) }); });
   get("load").addEventListener("click", () => { try { deps.collector.start({ kind: "videos", maxItems: Number(get<HTMLInputElement>("limit").value), maxSteps: 30, timeoutMs: 60000 }); status("Coleta por rolagem iniciada explicitamente. A amostra continua parcial."); } catch (error) { status(error instanceof Error ? error.message : "Não foi possível iniciar a coleta."); } });
   get("cancel").addEventListener("click", () => { deps.collector.cancel(); });
-  for (const format of ["json", "csv", "md"] as const) get(format).addEventListener("click", () => { try { const sample = selected(); if (state.phase === "running") throw new Error("Aguarde ou cancele a coleta antes de exportar."); const content = format === "json" ? JSON.stringify({ source: "local-observations", url: deps.getUrl(), filter: sample.filter, count: sample.rows.length, videos: sample.rows }, null, 2) : format === "csv" ? toCsv(researchRows(sample.rows, sample.baseline, sample.filter)) : researchMarkdown(sample.rows, sample.baseline, sample.filter); downloadBlob(new Blob([content], { type: format === "json" ? "application/json" : format === "csv" ? "text/csv;charset=utf-8" : "text/markdown;charset=utf-8" }), `prevlev-pesquisa-local.${format}`); } catch (error) { status(error instanceof Error ? error.message : "Não foi possível exportar."); } });
+  for (const format of ["json", "csv", "md"] as const) get(format).addEventListener("click", () => { try { const sample = selected(); if (state.phase === "running") throw new Error("Aguarde ou cancele a coleta antes de exportar."); const rows = researchRows(sample.rows, sample.baseline, sample.filter); const content = format === "json" ? JSON.stringify({ source: "local-observations", url: deps.getUrl(), filter: sample.filter, count: sample.rows.length, videos: sample.rows, comparisons: rows }, null, 2) : format === "csv" ? toCsv(rows) : researchMarkdown(sample.rows, sample.baseline, sample.filter); downloadBlob(new Blob([content], { type: format === "json" ? "application/json" : format === "csv" ? "text/csv;charset=utf-8" : "text/markdown;charset=utf-8" }), `prevlev-pesquisa-local.${format}`); } catch (error) { status(error instanceof Error ? error.message : "Não foi possível exportar."); } });
   const unsubscribe = deps.collector.subscribe(value => { state = value; refresh(); });
   refresh();
   return { refresh, dispose: () => { disposed = true; unsubscribe(); shell.remove(); } };

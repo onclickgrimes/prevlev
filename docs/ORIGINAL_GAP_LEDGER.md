@@ -20,6 +20,10 @@ Esses recursos não estabelecem paridade com a referência relatada, acesso à b
 
 O compositor local de D17 gera uma ilustração de card ou Short a partir de imagem fornecida e metadados explícitos ou de vídeo da coleta. Oferece fundos claros, escuros, personalizados ou transparentes e PNG em 1×/2×. Não recompõe automaticamente cada card da página nem replica a captura do original; a diferença permanece parcial.
 
+## Marco v0.6.2
+
+A referência local de outlier informa modo, denominador, contagem, método, procedência e exclusões em relatórios e exportações. Presets preservam o modo escolhido. A referência continua parcial e não substitui média real de um catálogo completo; formatos desconhecidos formam grupo próprio e observações repetidas podem contar.
+
 ## D01 · P0
 
 Referência informada: módulos `6buNu`. Recursos: 10, 29.

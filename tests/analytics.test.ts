@@ -153,6 +153,39 @@ describe("local observation analytics", () => {
     expect(rows[1].observed_views).toBe(0);
     expect(toCsv(rows)).toContain("'=SUM(1)");
   });
+  it("exports the selected method, actual denominator, reference provenance and exclusions", () => {
+    const target = video("target", { title: "keep", views: 1000, channelId: "same", isShort: false });
+    const peers = [100, 100, 1000].map((views, index) => video(`peer-${index}`, { views, channelId: "same", isShort: false }));
+    const api = video("api", { views: 1, channelId: "same", isShort: false, source: "youtube-data-api" });
+    const report = buildAnalyticsReport([target, ...peers, api], { now, filter: { query: "keep", comparisonMode: "sample-channel-reference" } });
+    expect(report.videos[0]).toMatchObject({ outlierScore: 2.5, outlierStatus: "known", outlierComparisonMode: "sample-channel-reference", outlierMethod: "sample-channel-mean", outlierReference: 400, outlierReferenceCount: 3, outlierPositiveReferenceCount: 3, outlierProvenance: "loaded-observations" });
+    expect(reportRows(report)[0]).toMatchObject({ outlier_comparison_mode: "sample-channel-reference", outlier_method: "sample-channel-mean", outlier_reference: 400, outlier_reference_count: 3, outlier_positive_reference_count: 3, excluded_api_count: 1, excluded_by_filter_count: 3 });
+    expect(reportMarkdown(report)).toContain("sample-channel-reference");
+    expect(reportMarkdown(report)).toContain("sample-channel-mean | 400 | 3 | 3 | loaded-observations");
+    expect(JSON.stringify(report)).toContain('"excludedApiCount":1');
+    const unknown = buildAnalyticsReport([target], { now });
+    expect(unknown.videos[0]).toMatchObject({ outlierStatus: "unknown", outlierComparisonMode: "sample-median", outlierReference: null, outlierReferenceCount: 0 });
+    expect(reportRows(unknown)[0].outlier_reference).toBe("desconhecido");
+    expect(reportMarkdown(unknown)).toContain("desconhecido");
+  });
+  it("reports unknown formats as a separate comparison group", () => {
+    const target = video("target", { views: 1000, channelId: "same" });
+    const peers = [100, 200, 300].map((views, index) => video(`unknown-${index}`, { views, channelId: "same" }));
+    const knownFormat = video("known-format", { views: 1, channelId: "same", isShort: false });
+    const report = buildAnalyticsReport([target, ...peers, knownFormat], { now });
+    expect(report.videos.find(row => row.id === "target")).toMatchObject({ format: "unknown", outlierReference: 200, outlierReferenceCount: 3, outlierScore: 5 });
+    expect(report.limitations.join(" ")).toContain("vídeos com formato desconhecido são comparados entre si");
+    expect(reportMarkdown(report)).toContain("formato desconhecido são comparados entre si");
+  });
+  it("labels the Markdown top-20 table and discloses omitted videos", () => {
+    const report = buildAnalyticsReport(Array.from({ length: 21 }, (_, index) => video(`video-${index}`, { views: index })), { now });
+    const markdown = reportMarkdown(report);
+    expect(report.videos).toHaveLength(21);
+    expect(report.topVideos).toHaveLength(20);
+    expect(markdown).toContain("até 20 de 21 incluídos; 1 fora desta tabela");
+    expect(markdown).not.toContain("| video-0 |");
+    expect(markdown).toContain("| video-20 |");
+  });
   it("keeps every derived value finite or unknown even when finite input counters overflow sums or ratios", () => {
     const report = buildAnalyticsReport([video("large-a", { views: 1e308, durationSeconds: 1e308, channel: "large", publishedAt: "2026-01-01" }), video("large-b", { views: 1e308, durationSeconds: 1e308, channel: "large", publishedAt: "2026-01-01" })], { now });
     expect(report.totals.knownViews).toBeUndefined();

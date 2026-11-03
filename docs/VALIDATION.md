@@ -1,3 +1,9 @@
+# Validação da versão 0.6.2
+
+Em 3 de novembro de 2026, typecheck, lint e build passaram com **458 testes automatizados em 42 arquivos**. A suíte integral do navegador no build final teve **89 aprovados e dois ignorados** pela política gerenciada que bloqueia a extensão instalada. Uma primeira rodada identificou uma expectativa para a redação antiga de um relatório; após atualização da expectativa, a suíte foi repetida integralmente e aprovada. Nenhuma conta, serviço Omni, geração paga ou API YouTube real foi acessada.
+
+As verificações incluem modos e bases de outlier, exclusão da API oficial, preservação do modo ao selecionar presets, formato desconhecido, duplicatas na amostra, denominadores desconhecidos, truncamento do relatório e exportação CSV com campos ausentes na primeira linha. As diferenças da referência original seguem parcialmente implementadas, sem média global inventada. ZIP verificado por CRC e hashes dos nove arquivos internos; SHA-256: `fc7877c0e7186870b22b7bd4c858bcaadaebd8843d628c80e6fec9986f268f7a`.
+
 # Validação da versão 0.6.1
 
 Em 3 de novembro de 2026, typecheck, lint e build passaram, com **451 testes automatizados em 41 arquivos**. O compositor e o workspace passaram em **8 testes direcionados de navegador**, cobrindo PNG real, formatos, transparência, escala, limpeza após alterar a coleta e limitação de decodificação concorrente. A rodada completa anterior da v0.6.0 teve 83 aprovados e dois testes de extensão instalada ignorados pela política gerenciada do Chromium; a v0.6.1 não repetiu essa rodada completa.

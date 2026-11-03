@@ -1,4 +1,4 @@
-# Prevlev · v0.6.1
+# Prevlev · v0.6.2
 
 Extensão Chrome Manifest V3 independente para pesquisar vídeos, preparar imagens e operar ferramentas assistidas no YouTube/Studio. O núcleo funciona no navegador; análises de amostra e IA usam um backend próprio opcional.
 
@@ -54,7 +54,7 @@ A coleta considera o conteúdo carregado na página: não percorre automaticamen
 - Backend opcional com similaridade lexical e integração ao OmniProviders existente, com seleção explícita de provedor/modelo.
 - MCP local por stdio, desativado por padrão, com cinco ferramentas de análise e leitura do histórico, sem rede ou geração.
 
-VPH é a média de views desde a publicação, e não as visualizações da última hora. Outlier usa pelo menos três outros vídeos comparáveis da amostra. Quando há identidade de canal conhecida, não mistura canais ou referências sem identidade; quando o alvo não tem identidade, a referência é a amostra informada. Marcadores de anúncios não confirmam que um criador recebe receita. Não são produzidos valores de RPM, geografia ou receita de canais a partir de dados ausentes.
+A comparação de outlier identifica modo, denominador, número de observações e método; a amostra pode conter observações repetidas e formatos desconhecidos em grupo próprio. O modo alternativo é aproximação local, não média completa do canal. VPH é a média de views desde a publicação, e não as visualizações da última hora. Outlier usa pelo menos três outros vídeos comparáveis da amostra. Quando há identidade de canal conhecida, não mistura canais ou referências sem identidade; quando o alvo não tem identidade, a referência é a amostra informada. Marcadores de anúncios não confirmam que um criador recebe receita. Não são produzidos valores de RPM, geografia ou receita de canais a partir de dados ausentes.
 
 O enriquecimento de inscritos é manual: consulta páginas públicas do YouTube de até dez canais por ação, sem credenciais, preservando como desconhecidas as contagens ausentes. A análise de silêncios para mid-roll usa um arquivo WAV local escolhido pelo usuário; o arquivo não é enviado ao backend.
 
@@ -121,7 +121,7 @@ Capturas ativam a aba e medem o alvo antes e depois de capturar. Mudanças detec
 
 ## Pendências além do runtime
 
-Usar IA exige conectar o backend ao Omni existente e selecionar um modelo compatível. A pesquisa oficial exige a chave existente do operador e opt-in; seu runtime real permanece não verificado. O MCP exige iniciar e configurar manualmente um cliente local. Descoberta global por similaridade/nicho, insights privados do Studio, dados financeiros indisponíveis, sincronização em nuvem e autenticação multiusuário continuam pendentes. Configurar uma URL não cria essas fontes ou integrações.
+Usar IA exige conectar o backend ao Omni existente e selecionar um modelo compatível. A pesquisa oficial exige a chave existente do operador e opt-in; seu runtime real permanece não verificado. O MCP exige iniciar e configurar manualmente um cliente local. Descoberta global por similaridade/nicho, insights privados do Studio, dados financeiros indisponíveis, hospedagem e autenticação/isolamento multiusuário continuam pendentes. Configurar uma URL não cria essas fontes ou integrações.
 
 ## Método e limites da reconstrução
 

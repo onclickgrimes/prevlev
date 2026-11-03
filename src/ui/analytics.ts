@@ -17,7 +17,7 @@ export function initAnalyticsTools(deps: { snapshot: () => PageSnapshot; filter:
       <div class="row"><button id="analytics-export-json" disabled>Exportar JSON</button><button id="analytics-export-csv" disabled>Exportar CSV</button><button id="analytics-export-markdown" disabled>Exportar Markdown</button></div>
     </div>
     <div id="analytics-result" hidden>
-      <div class="card"><h3>Amostra e procedência</h3><p id="analytics-scope"></p><p id="analytics-provenance"></p><p id="analytics-filter-summary"></p></div>
+      <div class="card"><h3>Amostra e procedência</h3><p id="analytics-scope"></p><p id="analytics-provenance"></p><p id="analytics-filter-summary"></p><p id="analytics-comparison"></p></div>
       <div id="analytics-totals" class="metrics"></div>
       <div class="grid two"><div class="card"><h3>Cobertura dos dados incluídos</h3><div class="table-wrap"><table><thead><tr><th>Dado</th><th>Conhecidos</th><th>Desconhecidos</th></tr></thead><tbody id="analytics-coverage"></tbody></table></div></div>
       <div class="card"><h3>Formatos observados</h3><div id="analytics-formats"></div><p>Duração isolada não determina se um vídeo é Short. Formato não informado permanece desconhecido.</p></div></div>
@@ -66,6 +66,7 @@ export function initAnalyticsTools(deps: { snapshot: () => PageSnapshot; filter:
     const names: Record<string, string> = { "youtube-dom": "página YouTube", "public-page": "página pública", "user-provided": "fornecido pelo usuário", "youtube-data-api": "API oficial", unspecified: "origem não declarada" };
     get("provenance").textContent = `Origem dos vídeos incluídos: ${Object.entries(current.provenance).map(([key, count]) => `${names[key] ?? key}: ${count}`).join(" · ")}.`;
     get("filter-summary").textContent = source.value === "filtered" ? `Filtros da pesquisa aplicados: ${describeResearchFilter(scope.filter ?? {})}` : "Toda a coleção elegível, após excluir dados da API oficial e duplicatas. Campos ausentes permanecem desconhecidos.";
+    get("comparison").textContent = `Modo de outlier: ${scope.filter?.comparisonMode ?? "sample-median"}. A referência usa vídeos elegíveis e deduplicados antes dos filtros, excluindo o alvo por ID; não representa o catálogo completo do canal.`;
     const cards: [string, number | undefined, string][] = [
       ["Views conhecidas", current.totals.knownViews, "Soma dos contadores disponíveis"],
       ["Média de views", current.totals.meanViews, "Somente contadores conhecidos"],
@@ -87,7 +88,7 @@ export function initAnalyticsTools(deps: { snapshot: () => PageSnapshot; filter:
     get("months").replaceChildren(...current.publicationMonths.map(month => row([month.month, number(month.videoCount), number(month.totalViews), number(month.missingViews), number(month.totalDurationSeconds), number(month.missingDurationCount)])));
     if (!current.publicationMonths.length) get("months").append(emptyRow("Nenhuma data válida de publicação na amostra incluída.", 6));
     get("top").replaceChildren(...current.topVideos.map(video => {
-      const videoRow = row(["", video.channel ?? "desconhecido", video.format === "short" ? "Short" : video.format === "long" ? "Não Short" : "desconhecido", number(video.views), number(video.lifetimeVph), `${video.outlierScore === undefined ? "desconhecido" : `${number(video.outlierScore)}×`} (${video.outlierReferenceCount ?? 0} refs)`]);
+      const videoRow = row(["", video.channel ?? "desconhecido", video.format === "short" ? "Short" : video.format === "long" ? "Não Short" : "desconhecido", number(video.views), number(video.lifetimeVph), `${video.outlierScore === undefined ? "desconhecido" : `${number(video.outlierScore)}×`} · método previsto ${video.outlierMethod ?? "desconhecido"} · denominador ${number(video.outlierReference ?? undefined)} · ${number(video.outlierReferenceCount)} candidatos (${number(video.outlierPositiveReferenceCount)} positivos) · origem ${video.outlierProvenance}`]);
       const id = videoIdFromUrl(video.url);
       const title = id ? element("a", video.title) : element("span", video.title);
       if (title instanceof HTMLAnchorElement && id) { title.href = `https://www.youtube.com/watch?v=${id}`; title.target = "_blank"; title.rel = "noopener noreferrer"; }

@@ -106,3 +106,32 @@ test("filtered analytics preserves full outlier reference, validates ranges and 
   await expect(page.locator("#analytics-export-json")).toBeDisabled();
   expect(requests).toEqual([]);
 });
+
+
+test("workspace CSV includes fields from later rows and identifies empty exports", async () => {
+  await page.locator("#research-enhancements summary").click();
+  await page.locator("#research-sort-primary").selectOption("title");
+  await page.locator("#research-direction-primary").selectOption("desc");
+  await expect(page.locator("#video-rows tr").first()).toContainText("Unknown unsafe link");
+  let waiting = page.waitForEvent("download");
+  await page.locator("#export-csv").click();
+  let download = await waiting;
+  const csv = await readFile((await download.path())!, "utf8");
+  const [header, first] = csv.split(/\r?\n/);
+  expect(first).toContain('"unknown"');
+  for (const key of ["views", "source", "isShort", "durationSeconds"]) expect(header).toContain(`"${key}"`);
+  expect(csv).toContain('"1000"');
+  await page.locator("#video-filter").fill("no such video fixture");
+  await expect(page.locator("#outlier-details")).toContainText("Exportações sem linhas não incluem esses totais");
+  await expect(page.locator("#outlier-details")).toContainText("1 da API oficial");
+  waiting = page.waitForEvent("download");
+  await page.locator("#export-json").click();
+  download = await waiting;
+  expect(JSON.parse(await readFile((await download.path())!, "utf8"))).toEqual([]);
+  waiting = page.waitForEvent("download");
+  await page.locator("#export-csv").click();
+  download = await waiting;
+  const emptyCsv = await readFile((await download.path())!, "utf8");
+  expect(emptyCsv).toContain('"excluded_api_count"');
+  expect(emptyCsv.trim().split(/\r?\n/)).toHaveLength(1);
+});

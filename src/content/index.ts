@@ -4,7 +4,7 @@ import {
   lifetimeVph,
   inferMonetization,
 } from "../core/metrics";
-import {sortResearchVideos,researchSurface,researchComparison} from '../core/research';
+import {sortResearchVideos,researchSurface,researchComparison,describeResearchComparison} from '../core/research';
 import { captureFrame } from "../core/media";
 import {
   readYouTubeSnapshot,
@@ -219,7 +219,7 @@ function apply(): void {
       const label = `Prevlev · ${video.subscribers === undefined ? "inscritos indisponíveis" : `${number(video.subscribers)} inscritos`} · ${vph === undefined ? "VPH indisponível" : `${number(vph)} VPH médio`} · ${outlier === undefined ? "outlier indisponível" : `${outlier.toFixed(1)}× outlier aproximado da amostra`}`;
       if (badge.textContent !== label) badge.textContent = label;
       badge.title =
-        `VPH médio desde a publicação; não mede a última hora. ${comparison.limitation} Método: ${comparison.method}; ${comparison.referenceCount} referências observadas.`;
+        `VPH médio desde a publicação; não mede a última hora. ${describeResearchComparison(comparison, effectiveFilter.comparisonMode)}`;
     }
     for (const element of document.querySelectorAll<HTMLElement>(
       "ytd-rich-shelf-renderer[is-shorts],ytd-reel-shelf-renderer,ytm-shorts-lockup-view-model",

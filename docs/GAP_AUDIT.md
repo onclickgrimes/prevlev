@@ -142,9 +142,9 @@ Aceite:
 - Pastas/itens podem ser organizados com identidade estável, ativos de imagem limitados e referência à origem.
 - Captura/thumbnail só é salva por ação explícita; backup preserva metadados/ativos e import valida limites/formato.
 
-### AF06 · Sincronização manual com o próprio backend pessoal pode ser implementada antes de exigir uma nuvem multiusuário.
+### AF06 · Sincronização manual com o backend pessoal (implementada em fixtures).
 
-Categoria: `implementable_now`. Estado: `open`. Recursos: 30.
+Categoria histórica: `implementable_now`. Estado atual: `partial_scope_fixture_tested`; sincronização pessoal manual implementada, runtime real pendente. Recursos: 30.
 
 Código: [index.mjs](../server/index.mjs) (`protected routes`), [storage.ts](../src/shared/storage.ts), [workspace.ts](../src/ui/workspace.ts) (`Swipe File`).
 
@@ -282,7 +282,7 @@ Categoria: `external_credential_or_decision`. Estado: `external_decision_require
 
 Alvo: domínio/backend acessível, identidade/isolamento, armazenamento e política de retenção/backup.
 
-Motivo: O backend atual é pessoal. Destino de hospedagem e mecanismo de contas/isolamento não foram escolhidos ou autorizados. Isso não impede AF06 (sync pessoal própria) de ser implementado.
+Motivo: O backend atual é pessoal. Destino de hospedagem e mecanismo de contas/isolamento não foram escolhidos ou autorizados. AF06 já oferece sincronização pessoal manual, sem hospedagem ou isolamento multiusuário.
 
 Próxima ação: Escolher esses destinos/limites antes de hospedar ou criar recursos; não executar deploy/contas automaticamente.
 

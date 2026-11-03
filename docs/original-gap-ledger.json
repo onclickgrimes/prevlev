@@ -1805,6 +1805,16 @@
         ],
         "runtime": "pending_installed_extension_and_live_service_validation",
         "note": "Escopo independente em amostras/controles reconhecidos; não declara equivalência completa à referência."
+      },
+      "checkpointV062": {
+        "status": "partial_scope_fixture_tested",
+        "note": "Modo e base locais são explícitos; não existe fonte de média completa de canal. Formato desconhecido fica em grupo próprio, observações repetidas podem contar.",
+        "tests": [
+          "tests/research-provenance.test.ts",
+          "tests/analytics.test.ts",
+          "tests/browser/analytics.spec.ts"
+        ],
+        "runtime": "pending_installed_extension_and_live_service_validation"
       }
     }
   ],

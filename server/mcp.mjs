@@ -48,7 +48,7 @@ export function createPrevlevMcpServer(config={},dependencies={}) {
   if(!Number.isInteger(historyMaxRecords)||historyMaxRecords<1||historyMaxRecords>5000) throw new Error('HISTORY_MAX_RECORDS deve ficar entre 1 e 5000.');
   const analyze=dependencies.analyzeDataset??analyzeDataset;
   const read=dependencies.readHistory??readHistory;
-  const server=new McpServer({name:'prevlev-local',version:'0.6.1'},{capabilities:{tools:{}},maxToolInputElements:15000});
+  const server=new McpServer({name:'prevlev-local',version:'0.6.2'},{capabilities:{tools:{}},maxToolInputElements:15000});
   server.registerTool('prevlev_capabilities',{
     title:'Escopo local do Prevlev',description:'Lista as ferramentas locais disponíveis e seus limites. Não testa serviços nem inicia consultas externas.',inputSchema:z.object({}).strict(),annotations:READ_ONLY,
   },async()=>result({status:'ok',source:'prevlev:mcp',data:{transport:'stdio',readOnly:true,network:false,ai:false,channelMutations:false,tools:TOOL_NAMES,features:FEATURES,limits:{videos:500,textCharacters:100000,historyRecords:500,outputBytes:MAX_OUTPUT_BYTES},excludedSources:['youtube-data-api']},limitations:['Análises usam somente os dados locais enviados; não representam o catálogo inteiro do YouTube.','Histórico depende de observações locais já existentes; este servidor não cria nem altera registros.','Dados identificados como YouTube Data API não são usados em métricas derivadas.']}));
