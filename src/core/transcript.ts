@@ -6,12 +6,16 @@ export const TRANSCRIPT_ROW_SELECTOR = 'ytd-transcript-segment-renderer,transcri
 export interface TranscriptTimingOptions {playerEndSeconds?:number;estimateFinalSeconds?:number;}
 export type TranscriptAiFeature = 'transcript-summary' | 'transcript-topics' | 'transcript-script';
 export interface TranscriptAiProvenance {model?:string;origin?:string;backendOrigin?:string;}
+export interface TranscriptInputSource {
+  kind:'observed-page'|'imported-file'|'edited-text';fileName?:string;importedAt?:string;
+  videoAssociation:'observed'|'user-declared'|'none';
+}
 export interface TranscriptAiResult {
   feature:TranscriptAiFeature;text:string;generated:true;source:string|null;
   model:string|null;requestedModel:string|null;origin:string|null;backendOrigin:string|null;receivedAt:string;
-  context:{videoUrl:string|null;videoId:string|null;inputKind:'timed-transcript'|'plain-text';inputCharacters:number;segmentCount:number;};
+  context:{videoUrl:string|null;videoId:string|null;inputKind:'timed-transcript'|'plain-text';inputCharacters:number;segmentCount:number;inputSource?:TranscriptInputSource;};
 }
-export interface TranscriptMetadata {title?:string;videoUrl?:string;videoId?:string;exportedAt?:string;aiResults?:readonly TranscriptAiResult[];}
+export interface TranscriptMetadata {title?:string;videoUrl?:string|null;videoId?:string|null;exportedAt?:string;aiResults?:readonly TranscriptAiResult[];inputSource?:TranscriptInputSource;}
 export interface TimedTranscriptSegment extends TranscriptSegment {end:number|null;endBasis:'provided-duration'|'next-segment'|'player-end'|'estimated-opt-in'|'unknown';}
 const numeric=(value:unknown):number|undefined=>typeof value==='number'&&Number.isFinite(value)&&value>=0?value:typeof value==='string'&&/^\d+(?:\.\d+)?$/.test(value.trim())?Number(value):undefined;
 function captionTime(value:string):number|undefined {const parts=value.trim().replace(',','.').split(':');if(parts.length<2||parts.length>3||!parts.every((part,index)=>index===parts.length-1?/^\d{1,2}(?:\.\d{1,9})?$/.test(part):/^\d+$/.test(part))||parts.slice(1).some(part=>Number(part)>=60))return undefined;return parts.reduce((total,part)=>total*60+Number(part),0);}
@@ -179,7 +183,9 @@ export function transcriptMarkdown(
   plainText?:string,
 ): string {
   const report=transcriptExport(segments,{...metadata,title},{},plainText);
-  const header=`# ${markdownText(title)}\n\n${metadata?`Vídeo: ${markdownText(report.videoUrl??'não informado')}\n\nExportado em: ${report.exportedAt}\n\n`:''}`;
+  const source=report.inputSource;
+  const provenance=source?`Origem do texto: ${markdownText(source.kind)}\n\nAssociação ao vídeo: ${markdownText(source.videoAssociation)}${source.videoAssociation==='none'?' (nenhuma associação declarada; URL, ID e título do vídeo permanecem desconhecidos)':source.videoAssociation==='user-declared'?' (declaração do usuário; não verificada pela importação)':' (página observada)'}\n\n${source.fileName?`Arquivo de origem: ${markdownText(source.fileName)}\n\n`:''}${source.importedAt?`Importado em: ${source.importedAt}\n\n`:''}`:'';
+  const header=`# ${markdownText(report.title)}\n\n${metadata?`Vídeo: ${markdownText(report.videoUrl??'não informado')}\n\n${source?`ID do vídeo: ${markdownText(report.videoId??'não informado')}\n\n`:''}Exportado em: ${report.exportedAt}\n\n`:''}${provenance}`;
   const original=segments.length?segments.map(segment=>`- **${timestamp(segment.start)}** ${markdownText(segment.text)}`).join('\n'):plainText?`## Transcrição sem timestamps\n\n${fencedText(plainText)}`:'';
   const generated=(report.aiResults??[]).map(result=>`## ${AI_LABELS[result.feature]} · gerado por IA\n\nFonte: ${markdownText(result.source??'desconhecida')}\n\nModelo confirmado: ${markdownText(result.model??'desconhecido')}\n\nModelo solicitado: ${markdownText(result.requestedModel??'desconhecido')}\n\nOrigem do provedor: ${markdownText(result.origin??'desconhecida')}\n\nBackend: ${markdownText(result.backendOrigin??'desconhecido')}\n\nRecebido nesta sessão em: ${result.receivedAt}\n\nContexto: ${result.context.inputCharacters} caracteres, ${result.context.segmentCount} segmentos; ${result.context.inputKind==='timed-transcript'?'transcrição com horários conhecidos':'texto sem horários conhecidos'}. O conteúdo gerado não recebe timestamps da transcrição.\n\n${fencedText(result.text)}`).join('\n\n');
   return `${header}${original}${generated?`\n\n${generated}`:''}\n`;
@@ -204,7 +210,34 @@ function validate(segments: TranscriptSegment[]): TranscriptSegment[] {
 export const transcriptTimestamp=timestamp;
 export function resolveTranscriptEnds(segments:readonly TranscriptSegment[],options:TranscriptTimingOptions={}):TimedTranscriptSegment[] {const sorted=validate([...segments]);if(options.playerEndSeconds!==undefined&&(!Number.isFinite(options.playerEndSeconds)||options.playerEndSeconds<=0))throw new Error('Duração real do player inválida.');if(options.estimateFinalSeconds!==undefined&&(!Number.isFinite(options.estimateFinalSeconds)||options.estimateFinalSeconds<=0||options.estimateFinalSeconds>300))throw new Error('A estimativa explícita deve ficar entre 0 e 300 segundos.');return sorted.map((segment,index)=>{const next=sorted.slice(index+1).find(other=>other.start>segment.start)?.start;let end:number|null=null,endBasis:TimedTranscriptSegment['endBasis']='unknown';if(segment.duration>0){end=segment.start+segment.duration;endBasis='provided-duration';}else if(next!==undefined){end=next;endBasis='next-segment';}else if(options.playerEndSeconds!==undefined&&options.playerEndSeconds>segment.start){end=options.playerEndSeconds;endBasis='player-end';}else if(options.estimateFinalSeconds!==undefined){end=segment.start+options.estimateFinalSeconds;endBasis='estimated-opt-in';}return {...segment,end,endBasis};});}
 export function transcriptSrt(segments:readonly TranscriptSegment[],options:TranscriptTimingOptions={}):string{return resolveTranscriptEnds(segments,options).filter((segment):segment is TimedTranscriptSegment&{end:number}=>segment.end!==null).map((segment,index)=>`${index+1}\n${timestamp(segment.start).replace('.',',')} --> ${timestamp(segment.end).replace('.',',')}\n${segment.text}\n`).join('\n');}
-function safeMetadata(metadata:TranscriptMetadata){let videoUrl:string|null=null;try{const url=new URL(metadata.videoUrl??'');if(url.protocol==='https:'&&['www.youtube.com','youtube.com','m.youtube.com','youtu.be','studio.youtube.com'].includes(url.hostname)&&!url.username&&!url.password)videoUrl=url.href;}catch{/* Unknown video context remains unknown. */}const exportedAt=metadata.exportedAt??new Date().toISOString();if(!Number.isFinite(Date.parse(exportedAt)))throw new Error('Data de exportação inválida.');return {title:metadata.title??'Transcrição',videoUrl,videoId:metadata.videoId&&/^[\w-]{11}$/.test(metadata.videoId)?metadata.videoId:videoUrl?videoIdFromUrl(videoUrl)??null:null,exportedAt:new Date(exportedAt).toISOString()};}
+/** Validate the host's limited provenance declaration without inferring an association from text. */
+export function validateTranscriptInputSource(source:TranscriptInputSource):TranscriptInputSource {
+  const bad=():never=>{throw new Error('Proveniência de transcrição inválida. Confira origem, nome, instante e associação declarada.');};
+  if(!source||typeof source!=='object'||Array.isArray(source)||Object.keys(source).some(key=>!['kind','fileName','importedAt','videoAssociation'].includes(key))||!['observed-page','imported-file','edited-text'].includes(source.kind)||!['observed','user-declared','none'].includes(source.videoAssociation))return bad();
+  if(source.kind==='observed-page'?(source.videoAssociation!=='observed'||source.fileName!==undefined||source.importedAt!==undefined):source.videoAssociation==='observed')return bad();
+  if(source.fileName!==undefined&&(typeof source.fileName!=='string'||!source.fileName.trim()||source.fileName.length>200||/[\\/\p{Cc}\u2028\u2029\u202a-\u202e\u2066-\u2069]/u.test(source.fileName)||['.','..'].includes(source.fileName.trim())))return bad();
+  let importedAt:string|undefined;
+  if(source.importedAt!==undefined){
+    if(typeof source.importedAt!=='string')return bad();
+    const match=/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?(Z|[+-](\d{2}):(\d{2}))$/.exec(source.importedAt);
+    if(!match)return bad();
+    const [,year,month,day,hour,minute,second,,offsetHour,offsetMinute]=match;
+    const yearNumber=Number(year),leap=yearNumber%400===0||yearNumber%4===0&&yearNumber%100!==0;
+    const days=[31,leap?29:28,31,30,31,30,31,31,30,31,30,31][Number(month)-1]??0;
+    if(Number(month)<1||Number(month)>12||Number(day)<1||Number(day)>days||Number(hour)>23||Number(minute)>59||Number(second)>59||Number(offsetHour??0)>23||Number(offsetMinute??0)>59||!Number.isFinite(Date.parse(source.importedAt)))return bad();
+    importedAt=new Date(source.importedAt).toISOString();
+  }
+  return {kind:source.kind,videoAssociation:source.videoAssociation,...(source.fileName!==undefined?{fileName:source.fileName}:{}),...(importedAt!==undefined?{importedAt}:{})};
+}
+/** Stable metadata for exports and cache keys; unassociated imports/edits never inherit a page identity. */
+export function transcriptSourceMetadata(metadata:TranscriptMetadata){
+  const inputSource=metadata.inputSource===undefined?undefined:validateTranscriptInputSource(metadata.inputSource);
+  if(inputSource?.videoAssociation==='none')return {title:inputSource.kind==='imported-file'?`Transcrição importada${inputSource.fileName?`: ${inputSource.fileName}`:''}`:'Transcrição editada',videoUrl:null,videoId:null,inputSource};
+  let videoUrl:string|null=null;
+  try{const url=new URL(metadata.videoUrl??'');if(url.protocol==='https:'&&['www.youtube.com','youtube.com','m.youtube.com','youtu.be','studio.youtube.com'].includes(url.hostname)&&!url.username&&!url.password)videoUrl=url.href;}catch{/* Unknown video context remains unknown. */}
+  return {title:metadata.title??'Transcrição',videoUrl,videoId:metadata.videoId&&/^[\w-]{11}$/.test(metadata.videoId)?metadata.videoId:videoUrl?videoIdFromUrl(videoUrl)??null:null,...(inputSource?{inputSource}:{})};
+}
+function safeMetadata(metadata:TranscriptMetadata){const context=transcriptSourceMetadata(metadata),exportedAt=metadata.exportedAt??new Date().toISOString();if(!Number.isFinite(Date.parse(exportedAt)))throw new Error('Data de exportação inválida.');return {...context,exportedAt:new Date(exportedAt).toISOString()};}
 function optionalString(value:unknown,max=500):string|null {return typeof value==='string'&&value.trim()&&value.length<=max?value:null;}
 export function transcriptAiOrigin(value:unknown):string|null {
   if(typeof value!=='string')return null;
@@ -220,16 +253,19 @@ function safeAiResults(results:readonly TranscriptAiResult[]|undefined,metadata:
   for(const result of results){
     const context=result?.context;
     if(!result||!Object.hasOwn(AI_LABELS,result.feature)||seen.has(result.feature)||result.generated!==true||typeof result.text!=='string'||!result.text.trim()||!context||context.videoUrl!==metadata.videoUrl||context.videoId!==metadata.videoId||context.inputCharacters!==text.length||context.segmentCount!==segments.length||context.inputKind!==(segments.length?'timed-transcript':'plain-text')||!Number.isFinite(Date.parse(result.receivedAt)))continue;
-    accepted.push({feature:result.feature,text:result.text,generated:true,source:optionalString(result.source),model:optionalString(result.model),requestedModel:optionalString(result.requestedModel),origin:transcriptAiOrigin(result.origin),backendOrigin:transcriptAiOrigin(result.backendOrigin),receivedAt:new Date(result.receivedAt).toISOString(),context:{videoUrl:metadata.videoUrl,videoId:metadata.videoId,inputKind:context.inputKind,inputCharacters:text.length,segmentCount:segments.length}});seen.add(result.feature);
+    let inputSource:TranscriptInputSource|undefined;
+    try{inputSource=context.inputSource===undefined?undefined:validateTranscriptInputSource(context.inputSource);}catch{continue;}
+    if(JSON.stringify(inputSource)!==JSON.stringify(metadata.inputSource))continue;
+    accepted.push({feature:result.feature,text:result.text,generated:true,source:optionalString(result.source),model:optionalString(result.model),requestedModel:optionalString(result.requestedModel),origin:transcriptAiOrigin(result.origin),backendOrigin:transcriptAiOrigin(result.backendOrigin),receivedAt:new Date(result.receivedAt).toISOString(),context:{videoUrl:metadata.videoUrl,videoId:metadata.videoId,inputKind:context.inputKind,inputCharacters:text.length,segmentCount:segments.length,...(inputSource?{inputSource}: {})}});seen.add(result.feature);
   }
   return accepted;
 }
 export function transcriptExport(segments:readonly TranscriptSegment[],metadata:TranscriptMetadata={},options:TranscriptTimingOptions={},plainText?:string){
   const resolved=resolveTranscriptEnds(segments,options),context=safeMetadata(metadata),text=plainText??transcriptText(resolved),aiResults=safeAiResults(metadata.aiResults,context,text,resolved);
-  return {schemaVersion:1,kind:'transcript-export',...context,text,timestampsAvailable:resolved.length>0,segments:resolved,...(aiResults.length?{aiResults}:{}),limitations:['Somente os trechos fornecidos ou já observados; não comprova transcrição completa.',...(!resolved.length?['Texto sem timestamps conhecidos; nenhum horário foi inventado.']:[]),...(resolved.some(segment=>segment.end===null)?['Há finais desconhecidos; VTT/SRT omitem esses cues. JSON/CSV/Markdown conservam seus textos e inícios.']:[]),...(resolved.some(segment=>segment.endBasis==='estimated-opt-in')?['Há finais estimados com opção explícita.']:[]),...(aiResults.length?['Resumo, tópicos e roteiro anexados são conteúdo gerado por IA já disponível e válido nesta sessão; revise erros e inferências. Não são segmentos originais nem receberam timestamps da transcrição.']:[])]};
+  return {schemaVersion:1,kind:'transcript-export',...context,text,timestampsAvailable:resolved.length>0,segments:resolved,...(aiResults.length?{aiResults}:{}),limitations:['Somente os trechos fornecidos ou já observados; não comprova transcrição completa.',...(context.inputSource?.videoAssociation==='none'?['Arquivo ou texto sem associação declarada ao vídeo: URL, ID e título da coleta não foram herdados.']:context.inputSource?.videoAssociation==='user-declared'?['Associação ao vídeo declarada pelo usuário; o conteúdo importado/editado não foi verificado como pertencente a esse vídeo.']:[]),...(!resolved.length?['Texto sem timestamps conhecidos; nenhum horário foi inventado.']:[]),...(resolved.some(segment=>segment.end===null)?['Há finais desconhecidos; VTT/SRT omitem esses cues. JSON/CSV/Markdown conservam seus textos e inícios.']:[]),...(resolved.some(segment=>segment.endBasis==='estimated-opt-in')?['Há finais estimados com opção explícita.']:[]),...(aiResults.length?['Resumo, tópicos e roteiro anexados são conteúdo gerado por IA já disponível e válido nesta sessão; revise erros e inferências. Não são segmentos originais nem receberam timestamps da transcrição.']:[])]};
 }
 export function transcriptRows(segments:readonly TranscriptSegment[],metadata:TranscriptMetadata={},options:TranscriptTimingOptions={},plainText?:string):Record<string,unknown>[] {
-  const report=transcriptExport(segments,metadata,options,plainText),base={title:report.title,videoUrl:report.videoUrl,videoId:report.videoId,exportedAt:report.exportedAt};
+  const report=transcriptExport(segments,metadata,options,plainText),source=report.inputSource,base={title:report.title,videoUrl:report.videoUrl,videoId:report.videoId,exportedAt:report.exportedAt,...(source?{inputSourceKind:source.kind,inputFileName:source.fileName??null,inputImportedAt:source.importedAt??null,videoAssociation:source.videoAssociation}:{})};
   const rows:Record<string,unknown>[]=report.segments.map(segment=>({...segment,...base,kind:'transcript-segment',startTimestamp:timestamp(segment.start),endTimestamp:segment.end===null?null:timestamp(segment.end)}));
   if(!rows.length&&plainText)rows.push({...base,kind:'transcript-plain-text',text:plainText});
   for(const result of report.aiResults??[])rows.push({...base,kind:'generated-ai',text:result.text,generated:true,aiFeature:result.feature,aiLabel:AI_LABELS[result.feature],aiSource:result.source,aiModel:result.model,aiRequestedModel:result.requestedModel,aiOrigin:result.origin,aiBackendOrigin:result.backendOrigin,aiReceivedAt:result.receivedAt,aiContextVideoUrl:result.context.videoUrl,aiContextVideoId:result.context.videoId,aiContextInputKind:result.context.inputKind,aiContextInputCharacters:result.context.inputCharacters,aiContextSegmentCount:result.context.segmentCount});

@@ -1,10 +1,10 @@
 import type {PageSnapshot,RemoteResponse,TranscriptSegment} from '../shared/types';
-import {parseTranscript,transcriptText,transcriptExport,transcriptCsv,transcriptMarkdown,transcriptSrt,transcriptAiProvenance,type TranscriptAiFeature,type TranscriptAiProvenance,type TranscriptAiResult} from '../core/transcript';
+import {parseTranscript,transcriptText,transcriptExport,transcriptCsv,transcriptMarkdown,transcriptSrt,transcriptAiProvenance,transcriptSourceMetadata,type TranscriptAiFeature,type TranscriptAiProvenance,type TranscriptAiResult,type TranscriptInputSource,type TranscriptMetadata} from '../core/transcript';
 import {downloadBlob} from '../core/media';
 
-export type {TranscriptAiFeature,TranscriptAiProvenance} from '../core/transcript';
+export type {TranscriptAiFeature,TranscriptAiProvenance,TranscriptInputSource} from '../core/transcript';
 export interface TranscriptExtras {invalidate():void;beginAi(feature:TranscriptAiFeature):{cached:boolean;requestId:number};completeAi(feature:TranscriptAiFeature,result:RemoteResponse,requestId:number):void;failAi(feature:TranscriptAiFeature,error:unknown,requestId:number):void;}
-interface Dependencies {segments:()=>TranscriptSegment[];text:()=>string;metadata:()=>PageSnapshot;aiContext?:()=>string;aiProvenance?:()=>TranscriptAiProvenance;}
+interface Dependencies {segments:()=>TranscriptSegment[];text:()=>string;metadata:()=>PageSnapshot;aiContext?:()=>string;aiProvenance?:()=>TranscriptAiProvenance;inputSource?:()=>TranscriptInputSource;}
 interface CachedAiEntry {key:string;result:TranscriptAiResult;}
 interface PendingAi {feature:TranscriptAiFeature;requestId:number;key:string;provenance:ReturnType<typeof transcriptAiProvenance>;context:TranscriptAiResult['context'];}
 const mounted=new WeakMap<Element,TranscriptExtras>();
@@ -14,33 +14,36 @@ export function initTranscriptExtras(deps:Dependencies):TranscriptExtras {
   if(!textarea||!card)throw new Error('O painel de transcrição não está disponível.');
   const existing=mounted.get(card);if(existing)return existing;
   let cache=new Map<TranscriptAiFeature,CachedAiEntry>(),pending:PendingAi|undefined,serial=0;
-  const host=document.createElement('div');host.id='transcript-extras';host.innerHTML=`<div class="actions"><button id="transcript-copy-timestamps">Copiar timestamps + texto</button><button id="transcript-export-json">JSON com metadados</button><button id="transcript-export-csv">CSV com timestamps</button><button id="transcript-metadata-md">Markdown com metadados</button><button id="transcript-srt">Baixar SRT</button></div><p class="muted">Metadados usam o contexto da coleta atual. Horários só acompanham o texto original sem edição ou legendas importadas com timestamps. Finais desconhecidos não recebem duração inventada. JSON, CSV e Markdown incluem apenas resumo, tópicos e roteiro já gerados e ainda válidos nesta sessão, separados do texto original e com procedência; exportar nunca gera IA.</p><div class="actions"><button id="transcript-copy-summary" disabled>Copiar resumo</button><button id="transcript-copy-topics" disabled>Copiar tópicos</button><button id="transcript-copy-script" disabled>Copiar roteiro</button><button id="transcript-ai-back">Voltar à transcrição</button></div><p id="transcript-ai-state" role="status" aria-live="polite">Resumo, tópicos e roteiro só são gerados após os botões explícitos de IA. Nenhum resultado em cache foi carregado.</p>`;card.append(host);
+  const host=document.createElement('div');host.id='transcript-extras';host.innerHTML=`<div class="actions"><button id="transcript-copy-timestamps">Copiar timestamps + texto</button><button id="transcript-export-json">JSON com metadados</button><button id="transcript-export-csv">CSV com timestamps</button><button id="transcript-metadata-md">Markdown com metadados</button><button id="transcript-srt">Baixar SRT</button></div><p id="transcript-input-source" class="muted"></p><p class="muted">Arquivos e textos editados sem associação declarada não recebem URL, ID ou título da coleta. Horários só acompanham o texto original sem edição ou legendas importadas com timestamps. Finais desconhecidos não recebem duração inventada. JSON, CSV e Markdown incluem apenas resumo, tópicos e roteiro já gerados e ainda válidos nesta sessão, separados do texto original e com procedência; exportar nunca gera IA.</p><div class="actions"><button id="transcript-copy-summary" disabled>Copiar resumo</button><button id="transcript-copy-topics" disabled>Copiar tópicos</button><button id="transcript-copy-script" disabled>Copiar roteiro</button><button id="transcript-ai-back">Voltar à transcrição</button></div><p id="transcript-ai-state" role="status" aria-live="polite">Resumo, tópicos e roteiro só são gerados após os botões explícitos de IA. Nenhum resultado em cache foi carregado.</p>`;card.append(host);
   const get=<T extends HTMLElement=HTMLElement>(id:string)=>host.querySelector<T>(`#transcript-${id}`)!;
   const output=document.getElementById('transcript-result')!;
   const status=(value:string,error=false)=>{get('ai-state').textContent=value;get('ai-state').classList.toggle('error',error);};
   const timed=()=>{const current=deps.text(),segments=deps.segments();return current===transcriptText(segments)?segments:parseTranscript(current);};
-  const metadata=()=>{const snapshot=deps.metadata();return {title:snapshot.title||'Transcrição',videoUrl:snapshot.url,videoId:snapshot.videoId};};
+  const metadata=():TranscriptMetadata=>{const snapshot=deps.metadata(),base={title:snapshot.title||'Transcrição',videoUrl:snapshot.url,videoId:snapshot.videoId};return deps.inputSource?transcriptSourceMetadata({...base,inputSource:deps.inputSource()}):base;};
+  const renderSource=()=>{try{const source=metadata().inputSource;get('input-source').textContent=source?`Origem: ${{'observed-page':'página observada','imported-file':'arquivo importado','edited-text':'texto editado'}[source.kind]}${source.fileName?` · arquivo de origem: ${source.fileName}`:''}${source.importedAt?` · importado em ${source.importedAt}`:''}. ${source.videoAssociation==='none'?'Sem associação a vídeo: URL, ID e título da coleta não são herdados.':source.videoAssociation==='user-declared'?'Associação ao vídeo declarada pelo usuário; a importação/edição não comprova esse vínculo.':'Vídeo vinculado à página observada.'}`:'Fonte não declarada pelo host; contrato legado de metadados da coleta.';}catch{get('input-source').textContent='Proveniência incompatível. Confira a fonte e a associação antes de exportar ou gerar IA.';}};
   const provenance=()=>transcriptAiProvenance(deps.aiProvenance?.());
-  const context=()=>JSON.stringify({text:deps.text(),segments:timed(),url:deps.metadata().url,videoId:deps.metadata().videoId,ai:deps.aiContext?.()??'',provenance:provenance()});
-  const updateCopies=()=>{for(const [feature,id]of [['transcript-summary','copy-summary'],['transcript-topics','copy-topics'],['transcript-script','copy-script']]as const)get<HTMLButtonElement>(id).disabled=cache.get(feature)?.key!==context();};
-  const invalidate=()=>{cache=new Map();pending=undefined;serial++;output.textContent='';output.hidden=false;updateCopies();status('Conteúdo ou contexto alterado. Os resultados anteriores foram descartados.');};
+  const context=()=>JSON.stringify({text:deps.text(),segments:timed(),metadata:metadata(),ai:deps.aiContext?.()??'',provenance:provenance()});
+  const updateCopies=()=>{let key:string|undefined;try{key=context();}catch{/* Invalid source cannot make an old generated result available. */}for(const [feature,id]of [['transcript-summary','copy-summary'],['transcript-topics','copy-topics'],['transcript-script','copy-script']]as const)get<HTMLButtonElement>(id).disabled=key===undefined||cache.get(feature)?.key!==key;};
+  const invalidate=()=>{cache=new Map();pending=undefined;serial++;output.textContent='';output.hidden=false;updateCopies();renderSource();status('Conteúdo ou contexto alterado. Os resultados anteriores foram descartados.');};
   const show=(feature:TranscriptAiFeature,entry:CachedAiEntry,cached=false)=>{output.hidden=false;output.textContent=entry.result.text;status(`${labels[feature]} ${cached?'recuperado do cache desta sessão':'concluído'} · ${entry.result.source??'fonte desconhecida'}. Revise o conteúdo gerado.`);};
   const controller:TranscriptExtras={
     invalidate,
     beginAi(feature){
+      renderSource();
       const key=context(),stored=cache.get(feature);
       if(stored?.key===key){show(feature,stored,true);return {cached:true,requestId:0};}
       if(pending)throw new Error('Aguarde a análise atual concluir antes de iniciar outra.');
       if(!deps.text().trim())throw new Error('Colete ou importe uma transcrição antes de solicitar IA.');
       for(const [name,entry]of cache)if(entry.key!==key)cache.delete(name);updateCopies();
       const requestId=++serial,report=transcriptExport(timed(),metadata(),{},deps.text());
-      pending={feature,requestId,key,provenance:provenance(),context:{videoUrl:report.videoUrl,videoId:report.videoId,inputKind:report.timestampsAvailable?'timed-transcript':'plain-text',inputCharacters:report.text.length,segmentCount:report.segments.length}};
+      pending={feature,requestId,key,provenance:provenance(),context:{videoUrl:report.videoUrl,videoId:report.videoId,inputKind:report.timestampsAvailable?'timed-transcript':'plain-text',inputCharacters:report.text.length,segmentCount:report.segments.length,...(report.inputSource?{inputSource:report.inputSource}:{})}};
       output.hidden=false;output.textContent='';status(`${labels[feature]} em processamento no backend escolhido…`);return {cached:false,requestId};
     },
     completeAi(feature,result,requestId){
       if(!pending||pending.feature!==feature||pending.requestId!==requestId)return;
       const active=pending;pending=undefined;
-      if(active.key!==context()){invalidate();status('A entrada mudou durante a análise. O resultado antigo foi descartado.');return;}
+      let currentKey:string;try{currentKey=context();}catch{invalidate();status('A proveniência da entrada mudou ou ficou inválida. O resultado antigo foi descartado.',true);return;}
+      if(active.key!==currentKey){invalidate();status('A entrada mudou durante a análise. O resultado antigo foi descartado.');return;}
       const data=result.data&&typeof result.data==='object'?result.data as Record<string,unknown>:{};
       if(result.status!=='ok'||typeof data.text!=='string'||!data.text.trim()){status(result.error??'A IA não retornou texto concluído. Nenhum resultado foi colocado em cache.',true);return;}
       const model=typeof data.model==='string'&&data.model.trim()&&data.model.length<=500?data.model:null;
@@ -57,6 +60,7 @@ export function initTranscriptExtras(deps:Dependencies):TranscriptExtras {
   get('ai-back').addEventListener('click',()=>{output.textContent='';status('Transcrição original exibida. Resultados válidos continuam disponíveis para cópia nesta sessão.');textarea.focus();});
   const save=(content:string,name:string,type:string)=>downloadBlob(new Blob([content],{type}),name);
   const exportMetadata=()=>{
+    renderSource();
     const key=context();for(const [feature,entry]of cache)if(entry.key!==key)cache.delete(feature);updateCopies();
     return {...metadata(),aiResults:[...cache.values()].filter(entry=>entry.key===key).map(entry=>entry.result)};
   };
@@ -66,5 +70,5 @@ export function initTranscriptExtras(deps:Dependencies):TranscriptExtras {
   get('srt').addEventListener('click',()=>perform(()=>{const segments=timed(),report=transcriptExport(segments,metadata()),content=transcriptSrt(segments);if(!content)throw new Error('Nenhum cue tem fim conhecido. Use JSON para conservar texto e inícios desconhecidos.');save(content,'prevlev-transcricao.srt','application/x-subrip;charset=utf-8');const omitted=report.segments.filter(segment=>segment.end===null).length;status(`SRT exportado.${omitted?` ${omitted} cue(s) sem fim conhecido foram omitidos; JSON conserva todos os textos.`:''}`);}));
   textarea.addEventListener('input',invalidate);
   const file=document.getElementById('transcript-file') as HTMLInputElement|null;if(file&&!file.accept.includes('.srt'))file.accept+=',.srt';
-  mounted.set(card,controller);return controller;
+  renderSource();mounted.set(card,controller);return controller;
 }
