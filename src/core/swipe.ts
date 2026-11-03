@@ -3,7 +3,7 @@ import type { VideoRecord } from '../shared/types';
 import { videoIdFromUrl } from './parse.ts';
 import { toCsv } from './export.ts';
 import { isoBoundary } from './observations.ts';
-import {inspectSwipeAssetDataUrl,normalizeSwipeAsset} from './swipe-assets';
+import {inspectSwipeAssetDataUrl,normalizeSwipeAsset} from './swipe-assets.ts';
 
 export const SWIPE_MAX_ITEMS=5000;
 export const SWIPE_MAX_BYTES=4*1024*1024;

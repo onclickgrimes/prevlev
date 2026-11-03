@@ -9,3 +9,9 @@ O commit explícito da biblioteca pessoal agora reutiliza `parseSwipeImport(payl
 Uma biblioteca antiga com uma imagem inline inválida continua legível e exportável. Um novo commit/import dessa imagem é recusado até uma ação explícita do usuário corrigir ou remover o campo; não há descarte ou conversão silenciosa dos dados antigos. Uma imagem inline válida sem `asset` permanece compatível e não recebe metadados inventados.
 
 Evidência: `tests/swipe-inline-boundary.test.ts` cobre os dois formatos JSON, PNG malformado, cabeçalho 8000×8000, MIME divergente, base64 não canônico, recusa atômica de import/commit e preservação do legado em leitura/exportação. Os testes usam apenas memória e diretórios temporários, com rede e decoders substituídos para verificar ausência de chamadas.
+
+## Carregamento nativo do backend
+
+O backend pessoal importa o código compartilhado diretamente no Node 24. A cadeia `swipe.ts` → `swipe-assets.ts` → `image-preflight.ts`/`observations.ts` agora usa extensões `.ts` explícitas. O parser compartilhado de contêiner permanece `.mjs`. Isso preserva o bundler do navegador e permite carregar `server/library.mjs` nativamente, sem depender da resolução especial do Vitest.
+
+`tests/library-native-import.test.ts` executa processos Node separados com diretório temporário vazio: importar o módulo não cria dados nem inicia transporte, e o fluxo explícito read/commit/read verifica ativos JSON e recusa atômica sem decoder ou rede. Nenhum servidor HTTP, conta ou serviço real é iniciado.

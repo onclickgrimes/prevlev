@@ -1,6 +1,6 @@
-import { decodeImageBitmap, preflightImage, withImageDecodeSlot } from './image-preflight';
+import { decodeImageBitmap, preflightImage, withImageDecodeSlot } from './image-preflight.ts';
 import { inspectImageBytes, type ImageInfo } from '../shared/image-header.mjs';
-import {isoBoundary} from './observations';
+import {isoBoundary} from './observations.ts';
 
 export const SWIPE_ASSET_MAX_BYTES = 3 * 1024 * 1024;
 export interface SwipeAssetProvenance {
