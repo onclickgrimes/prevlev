@@ -349,6 +349,11 @@ test("explicit catalog and exact text selection send task data only through the 
       expectedOrigin: sidecarOrigin,
     },
   });
+  await page.locator('[data-ai="transcript-summary"]').click();
+  await expect(page.locator('#transcript-ai-state')).toContainText('cache desta sessão');
+  expect(analyses()).toHaveLength(1);
+  await expect(page.locator('#ai-usage-totals')).toContainText('1 tentativas preparadas; 1 POSTs ao backend iniciados');
+  await expect(page.locator('#ai-usage-totals')).toContainText('1 reutilizações locais de cache');
   await page.locator('[data-page="comments"]').click();
   await page.locator("#comment-likes").fill("1");
   await page.locator("#comments-ai").click();
@@ -370,6 +375,8 @@ test("explicit catalog and exact text selection send task data only through the 
   await page.locator("#remote-feature").selectOption("thumbnail-generation");
   await expect(page.locator("#remote-run")).toBeDisabled();
   expect(analyses()).toHaveLength(2);
+  await expect(page.locator('#ai-usage-totals')).toContainText('2 tentativas preparadas; 2 POSTs ao backend iniciados');
+  await expect(page.locator('#ai-usage-totals')).toContainText('ok 2');
   expect(
     requests.every(
       (request) =>

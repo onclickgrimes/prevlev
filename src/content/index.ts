@@ -29,6 +29,8 @@ import {videoIdFromUrl} from '../core/parse';
 import {mountContextualTools,type ContextualController} from './contextual';
 import {mountResearchOverlay} from './research-overlay';
 import { validateCaptureCategories } from '../ui/capture-options';
+import {createProfitCardAdapter} from './profit-card';
+import {createProfitCardBridge} from './profit-card-bridge';
 
 const contentScope=globalThis as typeof globalThis&{__prevlevContentInitialized?:boolean};
 if(!contentScope.__prevlevContentInitialized){
@@ -36,6 +38,8 @@ contentScope.__prevlevContentInitialized=true;
 const HOST_ID = "prevlev-controls";
 const HIDDEN = "data-prevlev-hidden";
 const collector=createCollectionController(document);
+const profitCard=createProfitCardAdapter({doc:document,readMetrics:()=>readStudioMetrics(document)});
+const profitCardBridge=createProfitCardBridge(profitCard,{doc:document});
 let collectionControlsCleanup:(()=>void)|undefined;
 let contextual:ContextualController|undefined;
 let researchOverlay:ReturnType<typeof mountResearchOverlay>|undefined;
@@ -170,6 +174,7 @@ window.addEventListener("pagehide", () => {
   timer = undefined;
   navigation(false);
   collector.dispose();
+  profitCard.cancel();
   contextual?.cleanup();contextual=undefined;
   researchOverlay?.dispose();researchOverlay=undefined;
 });
@@ -453,9 +458,19 @@ interface Message {
   timeoutMs?:number;
   jobId?:string;
   includeResults?:boolean;
+  session?:string;
+  sequence?:number;
+  observationId?:string;
 }
 async function dispatch(message: Message): Promise<unknown> {
   switch (message.type) {
+    case 'STUDIO_PROFIT_OBSERVE':
+    case 'STUDIO_PROFIT_SHOW':
+    case 'STUDIO_PROFIT_RESTORE':
+    case 'STUDIO_PROFIT_CANCEL':{
+      if(suspended)throw new Error('Ative a página antes de apresentar uma estimativa local.');
+      return profitCardBridge.dispatch(message);
+    }
     case 'START_COLLECTION':{
       if(suspended)throw new Error('Ative a página antes de iniciar a coleta.');
       return{status:'ok',collection:collector.start({kind:message.kind as CollectionKind,maxItems:message.maxItems,maxSteps:message.maxSteps,timeoutMs:message.timeoutMs})};
@@ -565,6 +580,7 @@ async function dispatch(message: Message): Promise<unknown> {
       const categories = message.redactionCategories === undefined ? undefined : validateCaptureCategories(message.redactionCategories);
       if (categories && !message.redact) throw new Error('Ative a ocultação para selecionar categorias.');
       const studioKind=message.kind==='analytics'||message.kind==='latest-performance'?message.kind:undefined;
+      if(studioKind)await profitCardBridge.prepareCapture();
       const element = studioKind
         ? getStudioScreenshotTargets(studioKind,document)[0]
         : readVideoCards(document).find((c) => {

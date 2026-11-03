@@ -3,7 +3,7 @@ import {readFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {existsSync} from 'node:fs';
 let browser:Browser,context:BrowserContext,page:Page;
-type State={messages:Record<string,unknown>[];writes:number;tabUrl:string;holdCapture:boolean;finishCapture?:()=>void;holdMeasurement?:boolean;finishMeasurement?:()=>void;holdMetadata?:boolean;finishMetadata?:()=>void;copied?:string};
+type State={messages:Record<string,unknown>[];writes:number;tabUrl:string;holdCapture:boolean;finishCapture?:()=>void;holdMeasurement?:boolean;finishMeasurement?:()=>void;holdMetadata?:boolean;finishMetadata?:()=>void;copied?:string;finishImport?:()=>void};
 type Fixture=Window&{__gapState:State};
 test.beforeAll(async()=>{browser=await chromium.launch({executablePath:existsSync('/usr/bin/chromium')?'/usr/bin/chromium':undefined,headless:true,args:['--no-sandbox']});});
 test.afterAll(async()=>{await browser?.close();});
@@ -40,6 +40,21 @@ test.beforeEach(async()=>{
   page=await context.newPage();await page.goto('http://localhost:9401/workspace.html');await expect(page.locator('#video-rows')).toContainText('Vídeo congelado A');
 });
 test.afterEach(async()=>{await context.close();});
+test('strict caption imports preserve prior input and discard a late file after an edit is undone',async()=>{
+  await page.locator('[data-page="transcript"]').click();await page.locator('#transcript-text').fill('Texto anterior');
+  await page.locator('#transcript-file').setInputFiles({name:'mixed.vtt',mimeType:'text/vtt',buffer:Buffer.from('WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nVálido\n\n00:00:04.000 --> 00:00:03.000\nInválido')});
+  await expect(page.locator('#notice')).toContainText('nenhum trecho foi aplicado');await expect(page.locator('#transcript-text')).toHaveValue('Texto anterior');
+  await page.evaluate(()=>{
+    const native=File.prototype.text;
+    File.prototype.text=function(){const reading=native.call(this);if(this.name!=='late.vtt')return reading;return new Promise<string>(resolve=>{(window as unknown as Fixture).__gapState.finishImport=()=>{void reading.then(resolve);};});};
+  });
+  const valid='WEBVTT\n\n00:00:03.125 --> 00:00:05.750\nArquivo atrasado';
+  await page.locator('#transcript-file').setInputFiles({name:'late.vtt',mimeType:'text/vtt',buffer:Buffer.from(valid)});
+  await expect.poll(()=>page.evaluate(()=>!!(window as unknown as Fixture).__gapState.finishImport)).toBe(true);
+  await page.locator('#transcript-text').fill('Edição');await page.locator('#transcript-text').fill('Texto anterior');
+  await page.evaluate(async()=>{(window as unknown as Fixture).__gapState.finishImport!();await new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())));});
+  await expect(page.locator('#transcript-text')).toHaveValue('Texto anterior');
+});
 test('metadata from an old selected tab or URL never reaches the clipboard',async()=>{
   await page.evaluate(()=>{const select=document.querySelector<HTMLSelectElement>('#tab-select')!;select.append(new Option('Outra aba','2'));(window as unknown as Fixture).__gapState.holdMetadata=true;});
   await page.locator('#copy-title').click();await expect.poll(()=>page.evaluate(()=>!!(window as unknown as Fixture).__gapState.finishMetadata)).toBe(true);
@@ -60,6 +75,21 @@ test('explicit selected-tab preview context uses read-only snapshot without repl
   const observed=await page.evaluate(()=>({messages:(window as unknown as Fixture).__gapState.messages,writes:(window as unknown as Fixture).__gapState.writes}));
   expect(observed.messages).toEqual([{type:'GET_IMAGE_CONTEXT'}]);expect(observed.writes).toBe(0);
   await page.locator('[data-page="research"]').click();await expect(page.locator('#video-rows')).toContainText('Vídeo congelado A');await expect(page.locator('#video-rows')).not.toContainText('Vídeo observado B');
+});
+test('workspace wires explicit capture and card composition saves to the real local asset store',async()=>{
+  await page.locator('#card-shot').click();await expect(page.locator('#notice')).toContainText('Captura');
+  await page.locator('[data-page="swipe"]').click();await expect(page.locator('.captured-asset-save')).toBeEnabled();
+  expect(await page.locator('#swipe-list .swipe-item').count()).toBe(0);
+  await page.locator('.captured-asset-save').click();await expect(page.locator('#swipe-list .swipe-item')).toHaveCount(1);
+  await expect(page.locator('#swipe-list')).toContainText('Ativo local');
+  await page.locator('[data-page="card-composition"]').click();
+  const png=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=8;c.height=4;const ctx=c.getContext('2d')!;ctx.fillStyle='#0000ff';ctx.fillRect(0,0,8,4);return c.toDataURL().split(',')[1];});
+  await page.locator('#card-compose-file').setInputFiles({name:'local.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')});
+  await page.locator('#card-compose-title').fill('Composição explícita');await page.locator('#card-compose-url').fill('https://example.test/referencia');
+  await page.locator('#card-compose-render').click();await expect(page.locator('#card-compose-save')).toBeEnabled();
+  expect(await page.locator('#swipe-list .swipe-item').count()).toBe(1);
+  await page.locator('#card-compose-save').click();await expect(page.locator('#card-compose-status')).toContainText('salva');
+  await page.locator('[data-page="swipe"]').click();await expect(page.locator('#swipe-list .swipe-item')).toHaveCount(2);await expect(page.locator('#swipe-list')).toContainText('Composição explícita');
 });
 test('Studio capture is masked and accepted only for explicit local composition, then invalidated by mask edits',async()=>{
   await page.evaluate(()=>{(window as unknown as Fixture).__gapState.tabUrl='https://studio.youtube.com/video/aaaaaaaaaaa/analytics';});

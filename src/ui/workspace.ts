@@ -27,10 +27,12 @@ import { selectResearchVideos, researchComparison, type ResearchFilter } from ".
 import { initResearchTools } from "./research";
 import { toCsv } from "../core/export";
 import {
-  parseTranscript,
+  parseTranscriptImport,
   transcriptText,
   transcriptVtt,
   transcriptMarkdown,
+  validateTranscriptInputSource,
+  type TranscriptInputSource,
 } from "../core/transcript";
 import {
   downloadBlob,
@@ -64,6 +66,12 @@ import { initVisualSimilarityTools } from "./visual-similarity";
 import { initStudioOverview } from "./studio-overview";
 import { initCaptureOptions } from "./capture-options";
 import { initTranscriptExtras, type TranscriptAiFeature } from "./transcript-extra";
+import { AiUsageJournal, isAiUsageFeature } from "../core/ai-usage";
+import { mountAiUsage } from "./ai-usage";
+import type { ProfitInput } from "../core/profit";
+import type { ProfitCardObservation } from "../content/profit-card";
+import {mountVideoActions,type VideoActions} from './video-actions';
+import {mountCapturedAsset} from './captured-asset';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) =>
   document.getElementById(id) as T;
@@ -78,8 +86,10 @@ let snapshot: PageSnapshot = {
   warnings: [],
 };
 let segments: TranscriptSegment[] = [];
+let transcriptInputSource:TranscriptInputSource={kind:'observed-page',videoAssociation:'observed'};
 let transcriptStamp = "";
-function invalidateTranscriptContext() {const stamp=JSON.stringify([segments,document.getElementById("transcript-text")?.textContent,($<HTMLTextAreaElement>("transcript-text")?.value),snapshot.url,snapshot.videoId]);if(stamp!==transcriptStamp){transcriptExtras?.invalidate();transcriptStamp=stamp;}}
+function invalidateTranscriptContext() {const stamp=JSON.stringify([segments,document.getElementById("transcript-text")?.textContent,($<HTMLTextAreaElement>("transcript-text")?.value),snapshot.url,snapshot.videoId,transcriptInputSource]);if(stamp!==transcriptStamp){transcriptExtras?.invalidate();transcriptStamp=stamp;}}
+function adoptTranscript(next:TranscriptSegment[]) {segments=next;transcriptInputSource={kind:'observed-page',videoAssociation:'observed'};transcriptImportRevision++;}
 let planId: string | undefined;
 let studioPreviewGeneration = 0;
 let planTab: number | undefined;
@@ -103,10 +113,13 @@ let selectedAiStreaming = false;
 let aiSelectionSaving = false;
 let aiRequestRunning = false;
 let metadataRequestRevision = 0;
+let transcriptImportRevision = 0;
+const aiUsage = new AiUsageJournal();
+mountAiUsage($("connection"),aiUsage);
 let imageContextRevision=0,imageTabRevision=0,studioCaptureRevision=0,studioCaptureRequest=0;
 let studioCaptureObserved:{tabId:number;url:string;stamp:string;kind:"analytics"|"latest-performance";redact:boolean;categories:ReturnType<typeof getRedactionCategories>;token:number}|undefined;
 const studioCaptureContext=()=>JSON.stringify([value("tab-select"),snapshot.url,snapshot.videoId,studioCaptureRevision,studioCaptureObserved?.url,studioCaptureObserved?.token,$<HTMLInputElement>("redact").checked,getRedactionCategories()]);
-function invalidateStudioComposition(reason="A aba, coleta ou ocultação mudou. Capture novamente para compor.") {studioCaptureRevision++;studioCaptureRequest++;studioComposer.invalidate(reason);}
+function invalidateStudioComposition(reason="A aba, coleta ou ocultação mudou. Capture novamente para compor.") {studioCaptureRevision++;studioCaptureRequest++;studioComposer.invalidate(reason);capturedAssets?.invalidate();}
 async function validateStudioCaptureContext(key:string):Promise<boolean> {
   const observed=studioCaptureObserved;
   if(!observed||key!==studioCaptureContext()||Number(value("tab-select"))!==observed.tabId)return false;
@@ -120,9 +133,18 @@ async function validateStudioCaptureContext(key:string):Promise<boolean> {
 }
 let remoteOutputEpoch = 0;
 function invalidateRemoteOutput() { remoteOutputEpoch++; remoteImages.invalidate(); $("remote-result").textContent=""; }
-const transcriptExtras=initTranscriptExtras({segments:()=>segments,text:transcriptContent,metadata:()=>snapshot,aiContext:()=>JSON.stringify([savedBackendOrigin,selectedAiOrigin,selectedAiModel,selectedAiStreaming]),aiProvenance:()=>({model:selectedAiModel,origin:selectedAiOrigin,backendOrigin:savedBackendOrigin})});
+const transcriptAssociate=element('button','Associar este texto ao vídeo da coleta atual');
+transcriptAssociate.id='transcript-associate-video';transcriptAssociate.type='button';
+$('transcript-text').after(transcriptAssociate);
+function renderTranscriptSource(){
+  transcriptAssociate.textContent=`Associar este texto ao vídeo da coleta atual${snapshot.videoId?`: ${snapshot.videoId}`:''}`;
+  transcriptAssociate.hidden=transcriptInputSource.kind==='observed-page'||transcriptInputSource.videoAssociation!=='none'||!snapshot.videoId;
+}
+transcriptAssociate.addEventListener('click',()=>{if(!snapshot.videoId)return;transcriptInputSource={...transcriptInputSource,videoAssociation:'user-declared'};invalidateTranscriptContext();renderTranscriptSource();});
+const transcriptExtras=initTranscriptExtras({segments:()=>segments,text:transcriptContent,metadata:()=>snapshot,inputSource:()=>transcriptInputSource,aiContext:()=>JSON.stringify([savedBackendOrigin,selectedAiOrigin,selectedAiModel,selectedAiStreaming]),aiProvenance:()=>({model:selectedAiModel,origin:selectedAiOrigin,backendOrigin:savedBackendOrigin})});
 const commentTools = initCommentTools({snapshot: () => snapshot, onAi: async () => {showPage("remote"); await remote("comment-analysis");}});
 const swipeTools = initSwipeTools();
+const capturedAssets=mountCapturedAsset($('swipe'),{saveAsset:(blob,metadata,guard)=>swipeTools.saveAsset(blob,metadata,guard)});
 const renderComments = () => commentTools.render();
 const currentComments = () => commentTools.currentComments();
 const renderSwipe = () => swipeTools.render();
@@ -244,7 +266,7 @@ async function scan() {
     })),
   };
   nicheTools.invalidate(); cardComposer.invalidateSnapshot(); channelReport.invalidate();
-  segments = snapshot.transcript;
+  adoptTranscript(snapshot.transcript);
   await chrome.storage.local.set({ snapshot });
   render();
   notice(
@@ -308,7 +330,11 @@ function readVideoFilter(): ResearchFilter {
 function visibleVideos() {
   return selectResearchVideos(snapshot.videos, { ...readVideoFilter(), sort: value("sort") });
 }
+let videoRowsRevision=0;
+let sampleVideoActions:VideoActions[]=[];
 function renderVideos() {
+  const revision=++videoRowsRevision;
+  for(const actions of sampleVideoActions)actions.dispose();sampleVideoActions=[];
   researchTools?.refresh();
   const videos = visibleVideos(),
     body = $("video-rows");
@@ -345,6 +371,7 @@ function renderVideos() {
     save.addEventListener("click", () => {
       void saveVideo(video).catch(fail);
     });
+    sampleVideoActions.push(mountVideoActions(action,{video,notice,isCurrent:captured=>revision===videoRowsRevision&&snapshot.videos.some(current=>current.id===captured.id&&current.url===captured.url&&current.title===captured.title&&current.source===captured.source)}));
     action.append(save);
     row.append(action);
     body.append(row);
@@ -396,6 +423,8 @@ function renderMetrics(videos: VideoRecord[]) {
   }
 }
 function render() {
+  transcriptImportRevision++;
+  analyticsTools.invalidate();
   imageContextRevision++;
   imageTools.invalidateContext();
   invalidateStudioComposition();
@@ -409,6 +438,7 @@ function render() {
     `${snapshot.title || "Nenhum vídeo selecionado"}${snapshot.videoId ? " · " + snapshot.videoId : ""}`;
   $<HTMLTextAreaElement>("transcript-text").value = transcriptText(segments);
   invalidateTranscriptContext();
+  renderTranscriptSource();
   profitTools.render();
   removalTools.invalidate();
   $<HTMLInputElement>("swipe-title").value = snapshot.title;
@@ -544,6 +574,8 @@ async function screenshot(kind: string) {
   const sourceTab=compose?await chrome.tabs.get(tabId):undefined;
   if(!current())return;
   if(compose&&!/^https:\/\/studio\.youtube\.com\//.test(sourceTab?.url??""))throw new Error("Selecione a aba Studio autorizada para compor esta captura.");
+  if(kind==='analytics'||kind==='latest-performance')await restoreProfitCard();
+  if(!current())return;
   const capture = await chrome.runtime.sendMessage({
     type: "CAPTURE_SCREENSHOT",
     tabId,
@@ -584,13 +616,28 @@ async function screenshot(kind: string) {
       details.redactions,
     );
   if(!current())return;
+  const assetReceipt=capture.tabContext as {tabId?:number;url?:string}|undefined;
+  let offerCaptured:(()=>void)|undefined;
+  if(assetReceipt?.tabId===tabId&&typeof assetReceipt.url==='string'){
+    const latest=await chrome.tabs.get(tabId);
+    if(!current())return;
+    if(latest.url!==assetReceipt.url)throw new Error('A URL da aba mudou após a captura. A imagem foi descartada.');
+    {
+      const title=`Captura local ${kind==='video'?'de card':kind==='analytics'?'de analytics':'do desempenho do vídeo'}`;
+      const sourceUrl=assetReceipt.url,capturedAt=new Date().toISOString();
+      offerCaptured=()=>capturedAssets?.offer({blob:cropped,metadata:{title,url:sourceUrl,source:'user-provided',provenance:{kind:'capture',sourceUrl,createdAt:capturedAt}},isCurrent:current});
+    }
+  }
+  if(!current())return;
   if(compose&&(kind==="analytics"||kind==="latest-performance")) {
     const valid=await validateStudioCaptureContext(contextKey);
     if(!current())return;
     if(!valid){invalidateStudioComposition("A página da captura mudou. Capture novamente antes de compor.");return;}
-    await studioComposer.setCapture(cropped,{kind,contextKey,capturedAt:new Date().toISOString(),redactionValidated:true,redacted:redact,categories});
+    await studioComposer.setCapture(cropped,{kind,contextKey,capturedAt:new Date().toISOString(),redactionValidated:true,redacted:redact,categories,sourceUrl:studioCaptureObserved?.url});
+    if(current())offerCaptured?.();
     return;
   }
+  offerCaptured?.();
   downloadBlob(cropped,`prevlev-${kind}.png`);
   notice(
     details.coarse ? `Captura salva com ocultação ampla (${(details.coarseSelectors??[]).join(", ")}). Confira a imagem antes de compartilhar.` : "Captura da área visível salva. Confira a ocultação antes de compartilhar.",
@@ -794,16 +841,21 @@ on("timeline-capture", async () => {
 });
 $("transcript-file").addEventListener("change", () => {
   void (async () => {
+    const revision = ++transcriptImportRevision, previousText = transcriptContent(), previousSegments = segments;
     const file = $<HTMLInputElement>("transcript-file").files?.[0];
     if (!file) return;
     if (file.size > 5_000_000) throw new Error("Use arquivo de até 5 MB.");
-    const text = await file.text(),
-      parsed = parseTranscript(text);
+    const text = await file.text();
+    if (revision !== transcriptImportRevision || $<HTMLInputElement>("transcript-file").files?.[0] !== file || transcriptContent() !== previousText || segments !== previousSegments) return;
+    const parsed = parseTranscriptImport(text,{fileName:file.name});
+    const source=validateTranscriptInputSource({kind:'imported-file',fileName:file.name,importedAt:new Date().toISOString(),videoAssociation:'none'});
     segments = parsed;
+    transcriptInputSource=source;
     $<HTMLTextAreaElement>("transcript-text").value = parsed.length
       ? transcriptText(parsed)
       : text;
     invalidateTranscriptContext();
+    renderTranscriptSource();
     notice(
       parsed.length
         ? `${parsed.length} segmentos importados.`
@@ -811,6 +863,7 @@ $("transcript-file").addEventListener("change", () => {
     );
   })().catch(fail);
 });
+$("transcript-text").addEventListener("input",()=>{transcriptImportRevision++;transcriptInputSource={...transcriptInputSource,kind:'edited-text',videoAssociation:'none'};invalidateTranscriptContext();renderTranscriptSource();});
 function transcriptContent() {
   return $<HTMLTextAreaElement>("transcript-text").value;
 }
@@ -838,7 +891,7 @@ on("transcript-vtt", () =>
 on("transcript-md", () =>
   textFile(
     segments.length && transcriptContent() === transcriptText(segments)
-      ? transcriptMarkdown(segments, snapshot.title)
+      ? transcriptMarkdown(segments, snapshot.title,{videoUrl:snapshot.url,videoId:snapshot.videoId,inputSource:transcriptInputSource})
       : transcriptContent(),
     "prevlev-transcricao.md",
     "text/markdown",
@@ -975,7 +1028,13 @@ async function remote(
   expectedAi?: { model: string; origin: string; backendOrigin: string },
 ): Promise<RemoteResponse> {
   const ai = isAiFeature(feature);
+  let usageId: number | undefined;
+  const prepareUsage = (settings?: {aiModel?:string;backendUrl?:string;aiOrigin?:string}) => {
+    if (usageId === undefined && isAiUsageFeature(feature)) usageId = aiUsage.begin({feature,model:settings?.aiModel??selectedAiModel,backendOrigin:settings?.backendUrl??savedBackendOrigin,origin:settings?.aiOrigin??selectedAiOrigin});
+    return usageId;
+  };
   if (ai && (aiRequestRunning || aiSelectionSaving)) {
+    const id=prepareUsage();if(id!==undefined)aiUsage.blocked(id);
     if (expectedAi) return {status:"error",source:"prevlev:client",error:"Solicitação não enviada. Aguarde a análise ou o salvamento da seleção atual concluir."};
     throw new Error("Aguarde a análise ou o salvamento da seleção atual concluir.");
   }
@@ -1016,6 +1075,7 @@ async function remote(
       if (expectedAi) return {status:"error",source:"prevlev:client",error:"Solicitação não enviada. Não foi possível ler a configuração local."};
       throw error;
     }
+    if(ai)prepareUsage(settings);
     if (expectedAi && (settings.aiModel !== expectedAi.model || settings.aiOrigin !== expectedAi.origin || settings.backendUrl !== expectedAi.backendOrigin))
       return {status:"error",source:"prevlev:client",error:"Solicitação não enviada. A seleção de modelo, origem ou backend mudou; revise o briefing."};
     if (expectedAi && settings.backendUrl) {
@@ -1034,7 +1094,8 @@ async function remote(
             expectedOrigin: settings.aiOrigin,
           }
         : {}),
-    });
+    },usageId===undefined?undefined:()=>{aiUsage.dispatched(usageId!);});
+    if(usageId!==undefined)aiUsage.complete(usageId,response);
     if (feature === "thumbnail-generation" && response.status === "ok") await remoteImages.validate(response,true);
     if (requestEpoch !== remoteOutputEpoch) return response;
     if (output !== null) await displayRemote(response, output);
@@ -1048,6 +1109,7 @@ async function remote(
     return response;
   } finally {
     if (ai) {
+      const id=prepareUsage();if(id!==undefined)aiUsage.blocked(id);
       aiRequestRunning = false;
       updateAiButtons();
     }
@@ -1059,7 +1121,8 @@ for (const b of document.querySelectorAll<HTMLButtonElement>("[data-ai]"))
     void (async()=>{
       const feature=b.dataset.ai as TranscriptAiFeature;
       const request=transcriptExtras?.beginAi(feature);
-      if(!request||request.cached)return;
+      if(!request)return;
+      if(request.cached){aiUsage.cacheHit(feature);return;}
       try {const response=await remote(feature,null,{text:transcriptContent()});transcriptExtras?.completeAi(feature,response,request.requestId);}
       catch(error){transcriptExtras?.failAi(feature,error,request.requestId);throw error;}
     })().catch(fail);
@@ -1326,6 +1389,10 @@ on("clear-data", async () => {
     )
   )
     return;
+  aiUsage.clear();
+  swipeTools.invalidatePendingOperations();
+  swipeSync.invalidate();
+  profitTools.invalidateContext();
   await chrome.storage.local.remove(["snapshot"]);
   await saveSwipe([]);
   snapshot = {
@@ -1337,14 +1404,14 @@ on("clear-data", async () => {
     warnings: [],
   };
   nicheTools.invalidate(); cardComposer.invalidateSnapshot(); channelReport.clearInputs();
-  segments = [];
+  adoptTranscript([]);
   render();
   await renderSwipe();
   notice("Dados locais apagados.");
 });
 const getRedactionCategories = initCaptureOptions();
 const compositionHost=element("div");compositionHost.id="studio-composition-host";$("studio").append(compositionHost);
-const studioComposer=mountStudioComposition(compositionHost,{contextKey:studioCaptureContext,validateContext:validateStudioCaptureContext,notice});
+const studioComposer=mountStudioComposition(compositionHost,{contextKey:studioCaptureContext,validateContext:validateStudioCaptureContext,notice,saveAsset:(blob,metadata,guard)=>swipeTools.saveAsset(blob,metadata,guard)});
 for(const event of ["input","change"])$("studio").addEventListener(event,evt=>{
   const target=evt.target;if(!(target instanceof Element))return;
   if(target.id==="redact"||target.closest("#capture-redaction-categories"))invalidateStudioComposition();
@@ -1352,7 +1419,46 @@ for(const event of ["input","change"])$("studio").addEventListener(event,evt=>{
 });
 $("studio-compose-cancel").addEventListener("click",()=>studioCaptureRequest++);
 const midrollTools = mountMidrollTools(document, invalidateStudioPreview);
-const profitTools = initProfitTools({snapshot:()=>snapshot});
+const profitSession=crypto.randomUUID();let profitSequence=0,profitRequestEpoch=0;
+let profitReceipt:{tabId:number;observation:ProfitCardObservation}|undefined;
+async function profitCommand(tabId:number,type:string,observationId?:string,input?:ProfitInput) {
+  const response=await chrome.tabs.sendMessage(tabId,{type,session:profitSession,sequence:++profitSequence,...(observationId?{observationId}:{}),...(input?{input}:{})}) as {status:string;error?:string;observation?:ProfitCardObservation};
+  if(response.status!=='ok')throw new Error(response.error??'O card do Studio não confirmou a ação local.');
+  return response;
+}
+async function restoreProfitCard(cancel=false) {
+  const epoch=++profitRequestEpoch;
+  const receipt=profitReceipt;
+  if(cancel)profitReceipt=undefined;
+  if(receipt)try {await profitCommand(receipt.tabId,cancel?'STUDIO_PROFIT_CANCEL':'STUDIO_PROFIT_RESTORE',receipt.observation.id);}
+  catch(error){if(epoch===profitRequestEpoch)throw error;}
+}
+const profitTools = initProfitTools({snapshot:()=>snapshot,
+  observeCard:async()=>{
+    const epoch=++profitRequestEpoch,tabId=targetTab(),before=await chrome.tabs.get(tabId);
+    if(epoch!==profitRequestEpoch||tabId!==targetTab())throw new Error('A aba mudou antes da leitura do card.');
+    if(!before.url?.startsWith('https://studio.youtube.com/'))throw new Error('Selecione uma aba HTTPS do YouTube Studio.');
+    const response=await profitCommand(tabId,'STUDIO_PROFIT_OBSERVE');
+    const observation=response.observation;
+    if(!observation)throw new Error('A página não devolveu uma observação de receita.');
+    const after=await chrome.tabs.get(tabId);
+    if(epoch!==profitRequestEpoch||tabId!==targetTab()||before.url!==after.url||observation.url!==after.url){
+      await profitCommand(tabId,'STUDIO_PROFIT_CANCEL',observation.id).catch(()=>{});
+      throw new Error('A aba ou o contexto mudou durante a leitura. Observe e confirme novamente.');
+    }
+    profitReceipt={tabId,observation};return observation;
+  },
+  showOnCard:async(input,observationId)=>{
+    const receipt=profitReceipt,epoch=++profitRequestEpoch;
+    if(!receipt||receipt.observation.id!==observationId||receipt.tabId!==targetTab())throw new Error('Leia e confirme novamente o card da aba selecionada.');
+    const tab=await chrome.tabs.get(receipt.tabId);
+    if(epoch!==profitRequestEpoch||receipt!==profitReceipt||receipt.tabId!==targetTab()||tab.url!==receipt.observation.url)throw new Error('A aba ou a URL mudou. Leia e confirme novamente o card.');
+    await profitCommand(receipt.tabId,'STUDIO_PROFIT_SHOW',observationId,input);
+    if(epoch!==profitRequestEpoch||receipt!==profitReceipt||receipt.tabId!==targetTab())throw new Error('A solicitação foi invalidada por uma ação mais recente.');
+  },
+  restoreCard:()=>restoreProfitCard(),cancelCard:()=>restoreProfitCard(true),
+});
+for(const event of ['input','change'])$('tab-select').addEventListener(event,()=>profitTools.invalidateContext());
 const removalTools = mountMidrollRemoval(document, {observe:async()=>{
   const tabId = targetTab();
   const response = await chrome.tabs.sendMessage(tabId,{type:"STUDIO_OBSERVE_MIDROLLS"}) as {status:string;error?:string;observation?:MidrollRemovalObservation};
@@ -1379,7 +1485,7 @@ $("tab-select").addEventListener("input",()=>studioOverview.invalidateContext())
 mountDailyObservations($("daily-observations"));
 const channelReport = mountChannelReport($("channel-report"),()=>snapshot.videos);
 const nicheTools = initNicheTools({snapshot:()=>snapshot});
-const cardComposer = initCardCompositionTools({snapshot:()=>snapshot});
+const cardComposer = initCardCompositionTools({snapshot:()=>snapshot,saveAsset:(blob,metadata,guard)=>swipeTools.saveAsset(blob,metadata,guard)});
 initVisualSimilarityTools();
 const imageContextIdentity=(source:"collection"|"selected-tab")=>source==="collection"?`collection:${imageContextRevision}`:value("tab-select")?`tab:${value("tab-select")}:${imageTabRevision}`:undefined;
 const imageTools = initImageTools({notice,contextVideos:()=>snapshot.videos,contextIdentity:imageContextIdentity,captureContext:async({source,expectedIdentity,signal})=>{
@@ -1398,17 +1504,18 @@ for(const event of ["input","change"])$("tab-select").addEventListener(event,()=
 chrome.tabs.onUpdated?.addListener((tabId,change)=>{
   if(tabId!==Number(value("tab-select"))||(!change.url&&change.status!=="loading"))return;
   metadataRequestRevision++;
+  profitTools.invalidateContext();
   imageTabRevision++;imageTools.invalidateContext();studioOverview.invalidateContext();studioCaptureObserved=undefined;invalidateStudioComposition("A aba selecionada navegou. Declare novamente o contexto e faça outra captura.");
 });
-chrome.tabs.onRemoved?.addListener(tabId=>{if(tabId===Number(value("tab-select"))){metadataRequestRevision++;imageTabRevision++;imageTools.invalidateContext();studioOverview.invalidateContext();studioCaptureObserved=undefined;invalidateStudioComposition("A aba foi fechada. Selecione outra origem.");}});
-window.addEventListener("pagehide",()=>{metadataRequestRevision++;});
+chrome.tabs.onRemoved?.addListener(tabId=>{if(tabId===Number(value("tab-select"))){metadataRequestRevision++;profitTools.invalidateContext();imageTabRevision++;imageTools.invalidateContext();studioOverview.invalidateContext();studioCaptureObserved=undefined;invalidateStudioComposition("A aba foi fechada. Selecione outra origem.");}});
+window.addEventListener("pagehide",()=>{metadataRequestRevision++;transcriptImportRevision++;profitTools.invalidateContext();});
 const remoteImages = mountRemoteImages($("remote-images"));
-initCollectionTools({targetTab,snapshot:()=>snapshot,notice,adopt:async(next)=>{snapshot=next;nicheTools.invalidate(); cardComposer.invalidateSnapshot(); channelReport.invalidate();segments=next.transcript;await chrome.storage.local.set({snapshot});render();}});
+initCollectionTools({targetTab,snapshot:()=>snapshot,notice,adopt:async(next)=>{snapshot=next;nicheTools.invalidate(); cardComposer.invalidateSnapshot(); channelReport.invalidate();adoptTranscript(next.transcript);await chrome.storage.local.set({snapshot});render();}});
 initSponsorshipTools();
 const researchTools = initResearchTools({ getUrl: () => snapshot.url, getVisibleVideos: visibleVideos, getAllVideos: () => snapshot.videos, onChange: () => { try { renderVideos(); if ($("notice").classList.contains("error")) notice("Filtros de pesquisa atualizados."); } catch (error) { fail(error); } } });
-initSwipeSync(renderSwipe);
+const swipeSync=initSwipeSync(renderSwipe);
 initOfficialSearch();
-initAnalyticsTools({ snapshot: () => snapshot, filter: readVideoFilter });
+const analyticsTools=initAnalyticsTools({ snapshot: () => snapshot, filter: readVideoFilter });
 initHistoryTools({ snapshot: () => snapshot, filter: readVideoFilter });
 void (async () => {
   await tabs();
@@ -1416,7 +1523,7 @@ void (async () => {
   if (saved) {
     snapshot = saved;
     nicheTools.invalidate(); cardComposer.invalidateSnapshot(); channelReport.invalidate();
-    segments = saved.transcript;
+    adoptTranscript(saved.transcript);
   }
   const settings = await getSettings();
   savedBackendOrigin = settings.backendUrl;
