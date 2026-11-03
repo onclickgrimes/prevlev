@@ -1,3 +1,17 @@
+# Auditoria completa dos escopos locais · checkpoint verificado
+
+Em 3 de novembro de 2026, o código funcional foi congelado em `1b8018c89d1bf5edb8a994ce7df171948c292c53`. `npm run check` passou: **typecheck, lint, 872 testes em 75 arquivos e build**. A suíte completa final de navegador passou com **251 aprovações e 2 skips** de extensão instalada (253 cenários). Não houve contorno da política.
+
+A auditoria reavaliou os 33 itens originais, os oito achados próprios, os 40 recursos e os extras. Foram integrados guards de metadados e comentários; frames/moedas nativos; importação estrita e proveniência de transcrições; paginação/ações da amostra; recibos/projeção reversível de lucro; ativos/pastas/sync pessoal; captura/composição→biblioteca; timestamps de patrocínio; invalidação de analytics; journal de tentativas e inspeção de pacote. [Matriz atual e limites específicos](LOCAL_SCOPE_AUDIT.md).
+
+O Node 24 carregou os módulos do backend nativamente. Um servidor temporário próprio em loopback, porta efêmera e DATA_DIR descartável confirmou health, capacidades de biblioteca, gravação/leitura de PNG válido e recusa atômica de imagem inválida. Nenhum provedor, conta/canal ou serviço do usuário foi chamado. Esse teste não valida o Omni real.
+
+O ZIP próprio tem dez entradas, **1.149.580 bytes**, CRC e hashes internos conferidos; SHA-256 `b085a61013eb48af771e3c8bf09c9c3e69d32c43757bf052945dc6b1f4e2d255`. A versão do manifesto permanece 0.6.5; a revisão de fonte acima identifica este novo build. A inspeção de conteúdo/material de distribuição passou antes da criação do pacote, sem alegar certificação universal de autoria ou segurança.
+
+A primeira regressão integral deste lote encontrou quatro seletores de teste que incluíam as novas ações e um estado real de prévia preso após cancelamento. Os seletores foram tornados específicos e o estado foi reproduzido deterministicamente e corrigido, com 20 testes focados de imagens. A rodada final acima passou integralmente com fonte congelada. A revisão também fechou respostas tardias, mistura de período, revogação de confirmação, BFCache, importação/sync após limpar, import nativo Node e captura após suspensão/clear. Testes interrompidos ou rechecagens parciais não contam como a suíte final.
+
+Permanece separado o que exige ambiente, evidência ou fonte externa: extensão instalada, Studio real, waveform/remoção sem anchors comprovados, datasets globais/privados, Omni/cliente MCP reais e contratos não anunciados de referências/parâmetros/cota. Nenhuma equivalência completa com a referência é declarada.
+
 # Checkpoint final das nove lacunas locais
 
 Em 3 de novembro de 2026, typecheck, lint, **686 testes automatizados em 60 arquivos** e build passaram. A regressão completa do build final passou em **162 cenários de navegador**, com **2 ignorados** por política da extensão instalada. A fonte foi congelada durante a execução. O pacote próprio foi verificado por CRC e hashes de suas dez entradas. Uma regressão adicional, na mesma fonte funcional, confirmou que um PNG local novo sobrevive à rejeição tardia de uma captura antiga após navegação:1 cenário direcionado aprovado. Total de aprovações de navegador verificadas:163 (162 na suíte integral+1 dirigido).

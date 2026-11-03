@@ -1,5 +1,7 @@
 # Cobertura dos 40 recursos · v0.6.5
 
+Estado atual dos 33 itens e 40 recursos: [auditoria dos escopos locais e dependências](LOCAL_SCOPE_AUDIT.md). Os checkpoints abaixo, incluindo suspensões de publicação e tarefas então abertas, são registros históricos; não representam a fila atual. Validação atual: 872 testes e 251 cenários de navegador aprovados; 2 skips por política.
+
 Checkpoint das nove lacunas locais implementado e verificado: [escopo entregue e limites](NINE_LOCAL_GAPS.md). 686 testes automatizados e162 cenários de navegador aprovados;2 ignorados por política. Descrições históricas abaixo permanecem como registro da base, não como afirmação de ausência atual.
 
 Checkpoint de contexto D20/D26: cache inclui backend salvo e conexão invalida resultados; troca de vídeo/aba descarta publicação e período declarados. Verificação local:630 testes e10 cenários direcionados; demais lacunas continuam abertas.
@@ -75,7 +77,7 @@ A matriz legível por ferramentas está em [feature-status.json](feature-status.
 | --- | --- |
 | MCP local próprio para clientes compatíveis | implemented: Cinco ferramentas próprias somente para leitura por processo stdio separado: capacidades, análise de dados locais e listar/abrir/exportar histórico. Desativado por padrão, ativação/conexão manual; não configura clientes, usa Nexlev, chama IA/rede ou altera canal/histórico. Evidência: [mcp.test.ts](../tests/mcp.test.ts). |
 | Guia visual ChatGPT/Claude | implemented: Guia local e compositor revisável para configuração/cópia manual. Não detecta, registra, conecta nem envia automaticamente. |
-| Contador de cota | not_implemented: Sem plano comercial ou cota externa; backend tem limite local de requisições. |
+| Tentativas próprias / cota | partial: Tentativas da sessão, envio iniciado, respostas/incerteza e cache separados, sem telemetria. Saldo, tokens, cobrança e cota externos desconhecidos. |
 | Atalhos de serviços web Nexlev | not_implemented: Nenhum atalho abre serviços Nexlev. |
 | Exportar CSV/JSON/Markdown | implemented: Arquivos gerados no navegador a partir dos dados disponíveis. |
 | Telemetria/sincronização Nexlev | not_implemented: Não há envio automático de coleta para servidores Nexlev. |

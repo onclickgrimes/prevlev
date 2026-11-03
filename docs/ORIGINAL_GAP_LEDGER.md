@@ -1,5 +1,7 @@
 # Ledger de diferenças comprovadas da referência
 
+Estado atual dos 33 itens e 40 recursos: [auditoria dos escopos locais e dependências](LOCAL_SCOPE_AUDIT.md). Os checkpoints abaixo, incluindo suspensões de publicação e tarefas então abertas, são registros históricos; não representam a fila atual. Validação atual: 872 testes e 251 cenários de navegador aprovados; 2 skips por política.
+
 Checkpoint das nove lacunas locais implementado e verificado: [escopo entregue e limites](NINE_LOCAL_GAPS.md). 686 testes automatizados e162 cenários de navegador aprovados;2 ignorados por política. Descrições históricas abaixo permanecem como registro da base, não como afirmação de ausência atual.
 
 Checkpoint de contexto D20/D26: cache inclui backend salvo e conexão invalida resultados; troca de vídeo/aba descarta publicação e período declarados. Verificação local:630 testes e10 cenários direcionados; demais lacunas continuam abertas.

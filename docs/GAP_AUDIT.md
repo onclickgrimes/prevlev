@@ -1,5 +1,7 @@
 # Auditoria de gaps · 40 recursos e extras
 
+Estado atual dos 33 itens e 40 recursos: [auditoria dos escopos locais e dependências](LOCAL_SCOPE_AUDIT.md). Os checkpoints abaixo, incluindo suspensões de publicação e tarefas então abertas, são registros históricos; não representam a fila atual. Validação atual: 872 testes e 251 cenários de navegador aprovados; 2 skips por política.
+
 Checkpoint das nove lacunas locais implementado e verificado: [escopo entregue e limites](NINE_LOCAL_GAPS.md). 686 testes automatizados e162 cenários de navegador aprovados;2 ignorados por política. Descrições históricas abaixo permanecem como registro da base, não como afirmação de ausência atual.
 
 Checkpoint de contexto D20/D26: cache inclui backend salvo e conexão invalida resultados; troca de vídeo/aba descarta publicação e período declarados. Verificação local:630 testes e10 cenários direcionados; demais lacunas continuam abertas.
@@ -88,9 +90,9 @@ Os estados anteriores de FEATURES foram preservados: esta auditoria não troca `
 | --- | --- | --- |
 | MCP próprio e integração em clientes | Cinco tools stdio somente leitura, desligado por padrão. | D32, EC04, RT05, UL05, UL06 |
 | Guia visual/detecção/compositor ChatGPT/Claude | Guia/compositor local; configuração/cópia manual, sem detecção ou conexão automática. | D32, EC04, RT05 |
-| Contador de uso/cota | Limite próprio de requests no servidor; nenhum saldo externo conhecido. | D32, UL06 |
+| Contador de uso/cota | Journal local das tentativas próprias da sessão; cache separado. Nenhum saldo, token, cobrança ou cota externos conhecidos. | D32, UL06 |
 | Similar Thumbnails/Thumbnail Lab/Niche Finder e atalhos próprios | Ferramentas próprias parciais de imagens/pesquisa/relatório; sem atalhos a serviços privados Nexlev. | D06, D07, D08, D09, D10, D28, D30, D31, EC01, EC04, UL05 |
-| Exportar CSV/JSON/Markdown | Pesquisa exporta CSV/JSON; analytics exporta CSV/JSON/MD; transcrição ainda incompleta. | D13, D19, D29, D30, AF02 |
+| Exportar CSV/JSON/Markdown | Pesquisa, analytics, relatórios e transcrição exportam o material disponível, com procedência e desconhecidos explícitos. | D13, D19, D29, D30, AF02 |
 | Telemetria/sincronização Nexlev | Ausentes por intenção/restrição; não devem ser recriadas como chamadas Nexlev. | UL05 |
 
 ## Achados adicionais e trabalho independente
