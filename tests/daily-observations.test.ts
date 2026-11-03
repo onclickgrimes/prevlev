@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDailyReport, type DailyInput } from "../src/core/daily-observations";
+import { buildDailyReport, dailyReportCsv, dailyReportJson, dailyReportMarkdown, type DailyInput } from "../src/core/daily-observations";
 
 const now = Date.parse("2026-11-03T12:00:00Z");
 const base = (overrides: Partial<DailyInput> = {}): DailyInput => ({ channelId: "channel_1", date: "2026-11-01", timeZone: "America/Sao_Paulo", completion: "complete", videos: [], ...overrides });
@@ -65,5 +65,53 @@ describe("manual daily observations", () => {
     expect(() => buildDailyReport(base({ videos: [{ videoId: "../x", views: 1 }] }), now)).toThrow();
     expect(() => buildDailyReport(base({ channelId: "" }), now)).toThrow();
     expect(() => buildDailyReport(base({ asOf: "2026-11-02T12:00:00Z" }), now)).toThrow();
+  });
+});
+
+
+describe("manual daily report exports", () => {
+  it("preserves scope, provenance, zero, unknowns, duplicates and conflict in a versioned JSON envelope", () => {
+    const report = buildDailyReport(base({ date: "2026-11-03", completion: "partial", asOf: "2026-11-03T11:00:00Z", sourceDescription: "Anotação privada", channelViews: 0, videos: [{ videoId: "a", views: 0 }, { videoId: "a", views: 0 }, { videoId: "missing" }, { videoId: "bad", views: 3 }, { videoId: "bad", views: 4 }] }), now);
+    const data = JSON.parse(dailyReportJson(report));
+    expect(data).toMatchObject({ format: "prevlev-manual-daily-report", version: 1, channelId: "channel_1", date: "2026-11-03", timeZone: "America/Sao_Paulo", completion: "partial", asOf: "2026-11-03T11:00:00.000Z", source: "user-provided", sourceDescription: "Anotação privada", channelViews: 0, channelViewsStatus: "known", coverage: { known: 1, unknown: 1, conflicts: 1, inputRows: 5, uniqueVideos: 3 }, ranking: ["a"] });
+    expect(data.videos).toEqual(expect.arrayContaining([{ videoId: "a", views: 0, status: "known", occurrences: 2 }, { videoId: "missing", views: null, status: "unknown", occurrences: 1 }, { videoId: "bad", views: null, status: "conflict", occurrences: 2 }]));
+    expect(data.limitations[0]).toContain("conflitantes");
+  });
+  it("includes summary and status columns for empty, missing, zero and conflict in CSV", () => {
+    const empty = buildDailyReport(base(), now), json = JSON.parse(dailyReportJson(empty));
+    expect(json).toMatchObject({ completion: "complete", asOf: null, channelViews: null, channelViewsStatus: "unknown", sourceDescription: null, videos: [] });
+    const csv = dailyReportCsv(empty);
+    expect(csv.split("\r\n")).toHaveLength(2);
+    expect(csv).toContain('"summary","channel_1","2026-11-01","America/Sao_Paulo","complete","","user-provided"');
+    expect(csv).toContain('"channel_views_status"');
+    const report = buildDailyReport(base({ channelViews: 0, videos: [{ videoId: "zero", views: 0 }, { videoId: "missing" }, { videoId: "bad", views: 3 }, { videoId: "bad", views: 4 }] }), now);
+    const rows = dailyReportCsv(report).split("\r\n");
+    expect(rows).toHaveLength(5);
+    expect(rows.find(row => row.includes('"zero"'))).toContain('"zero","0","known","1","1"');
+    expect(rows.find(row => row.includes('"missing"'))).toContain('"missing","","unknown","1"');
+    expect(rows.find(row => row.includes('"bad"'))).toContain('"bad","","conflict","2",""');
+    expect(dailyReportMarkdown(report)).toContain("| zero | 0 | conhecido | 1 | 1 |");
+  });
+  it("keeps GFM strikethrough, bare URLs and emails as literal source text", () => {
+    const report = buildDailyReport(base({ sourceDescription: "~~private~~ https://example.org/path www.example.org mail@example.org <img src=x>|ok" }), now);
+    const markdown = dailyReportMarkdown(report);
+    expect(markdown).toContain("\\~\\~private\\~\\~");
+    expect(markdown).toContain("https&#58;//example&#46;org/path");
+    expect(markdown).toContain("www&#46;example&#46;org");
+    expect(markdown).toContain("mail&#64;example&#46;org");
+    expect(markdown).toContain("&lt;img src=x&gt;\\|ok");
+    expect(markdown).not.toContain("https://example.org");
+    expect(markdown).not.toContain("<img src=x>");
+  });
+  it("neutralizes CSV formulas and Markdown/HTML syntax in supplied descriptions", () => {
+    for (const prefix of ["=", "+", "-", "@"]) {
+      const report = buildDailyReport(base({ sourceDescription: `${prefix}SUM(1), "quote"\n<script>|[click](https://example.invalid)` }), now);
+      const csv = dailyReportCsv(report), md = dailyReportMarkdown(report);
+      expect(csv).toContain(`"'${prefix}SUM(1), ""quote""\n<script>|[click](https://example.invalid)"`);
+      expect(md).toContain("&lt;script&gt;");
+      expect(md).not.toContain("<script>");
+      expect(md).toContain("\\|\\[click\\]\\(https&#58;//example&#46;invalid\\)");
+      expect(md).toContain("sem verificação");
+    }
   });
 });

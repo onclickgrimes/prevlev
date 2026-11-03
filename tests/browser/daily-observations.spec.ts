@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import { build } from "esbuild";
 import { resolve } from "node:path";
 import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 
 test.use({ launchOptions: { executablePath: process.env.PREVLEV_CHROMIUM_PATH ?? (existsSync("/usr/bin/chromium") ? "/usr/bin/chromium" : undefined), args: ["--no-sandbox"] } });
 
@@ -26,9 +27,35 @@ test("manual report exposes scope, absence, conflicts and no network activity", 
   await expect(result.locator("ol li")).toHaveText(["alpha: 10", "zero: 0"]);
   await expect(result).toContainText("conflict: conflito entre linhas");
   await expect(result.locator("img")).toHaveCount(0);
+  await expect(page.getByText(/Arquivos exportados ficam no dispositivo/)).toBeVisible();
+  for (const [label, extension] of [["JSON", "json"], ["CSV", "csv"], ["Markdown", "md"]] as const) {
+    const pending = page.waitForEvent("download");
+    await page.getByRole("button", { name: `Exportar ${label}` }).click();
+    const download = await pending;
+    expect(download.suggestedFilename()).toBe(`prevlev-observacoes-diarias.${extension}`);
+    const contents = await readFile(await download.path(), "utf8");
+    expect(contents).toContain(extension === "md" ? "channel\\_1" : "channel_1");
+    expect(contents).toContain("2020-01-01");
+    if (extension === "json") {
+      const parsed = JSON.parse(contents);
+      expect(parsed).toMatchObject({ source: "user-provided", channelViews: 0, asOf: null });
+      expect(parsed.videos).toContainEqual({ videoId: "conflict", views: null, status: "conflict", occurrences: 2 });
+    } else if (extension === "csv") {
+      expect(contents).toContain('"conflict","","conflict","2"');
+    } else {
+      expect(contents).toContain("&lt;img");
+      expect(contents).not.toContain("<img");
+    }
+  }
   await page.locator('[name="date"]').fill("2020-01-02");
   await expect(result).toBeHidden();
+  await expect(page.getByRole("button", { name: "Exportar JSON" })).toBeDisabled();
+  await page.locator('[name="videos"]').fill("alpha,invalid");
+  await page.getByRole("button", { name: "Gerar relatório" }).click();
+  await expect(page.getByRole("button", { name: "Exportar CSV" })).toBeDisabled();
   await page.getByRole("button", { name: "Limpar" }).click();
+  await expect(page.getByRole("button", { name: "Exportar Markdown" })).toBeDisabled();
+  await expect(page.locator("#daily-status")).toHaveText("Formulário e relatório visível foram limpos; arquivos exportados permanecem no dispositivo.");
   await expect(page.locator('[name="channelId"]')).toHaveValue("");
   expect(requests).toEqual([]);
 });

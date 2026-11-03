@@ -1,4 +1,4 @@
-# Prevlev · v0.6.3
+# Prevlev · v0.6.4
 
 Extensão Chrome Manifest V3 independente para pesquisar vídeos, preparar imagens e operar ferramentas assistidas no YouTube/Studio. O núcleo funciona no navegador; análises de amostra e IA usam um backend próprio opcional.
 
@@ -12,7 +12,7 @@ Comentários têm filtros por autor, texto, perguntas, curtidas, respostas e cor
 
 A transcrição reconhece layouts adicionais, preserva trechos observados durante virtualização e aceita VTT/SRT. A prévia de thumbnails permite combinações cíclicas de arquivos e títulos, layouts e metadados editáveis; a compressão por tamanho informa o resultado medido. Os controles modernos de Studio continuam sujeitos à revisão do usuário e aos layouts reconhecidos.
 
-Observações diárias permitem montar em memória um relatório com valores informados manualmente, data e fuso, canal e vídeos; não coletam o Studio, não persistem e não inferem views diárias de contadores acumulados. A origem é uma declaração do usuário, e a lista cobre apenas os vídeos informados.
+Observações diárias permitem montar em memória um relatório com valores informados manualmente, data e fuso, canal e vídeos; não coletam o Studio, não persistem e não inferem views diárias de contadores acumulados. A origem é uma declaração do usuário, e a lista cobre apenas os vídeos informados. A exportação JSON/CSV/Markdown é manual; os arquivos baixados permanecem no dispositivo.
 
 O compositor local de cards e Shorts usa imagem fornecida e metadados informados ou selecionados da coleta, com fundos e exportação PNG em 1×/2×. É uma ilustração, não uma captura ou analytics.
 

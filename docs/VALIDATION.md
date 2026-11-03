@@ -1,3 +1,9 @@
+# Validação da versão 0.6.4
+
+Em 3 de novembro de 2026, typecheck, lint e build passaram com **470 testes automatizados em 43 arquivos**. O relatório diário, suas exportações e a integração do workspace passaram em **6 testes direcionados de navegador**. A suíte integral anterior da v0.6.2 teve 89 aprovados e dois ignorados pela política de extensões; não foi repetida integralmente nesta alteração localizada.
+
+As exportações JSON, CSV e Markdown são ações explícitas e preservam período, origem declarada, cobertura e estados desconhecido/conflito; arquivos baixados permanecem no dispositivo. A validação cobre dados vazios, fórmula de planilha, texto Markdown, anulação por edição/reset e ausência de rede. Nenhum serviço, conta ou dado real foi acessado. ZIP verificado com CRC e hashes de nove arquivos internos; SHA-256: `5152e105b5c6360030b6900baf7f90cdae87b3bcd9038948619426f453830784`.
+
 # Validação da versão 0.6.3
 
 Em 3 de novembro de 2026, typecheck, lint e build passaram com **466 testes automatizados em 43 arquivos**. O relatório diário e a integração do workspace passaram em **6 testes direcionados de navegador**. A suíte completa anterior, da v0.6.2, teve 89 aprovados e dois ignorados pela política de extensões do Chromium; não foi repetida integralmente nesta alteração localizada.
