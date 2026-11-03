@@ -32,6 +32,18 @@ Em D27 há um relatório diário manual, em memória, de contagens declaradas pe
 
 Em D29, o relatório local acrescenta contagens mecânicas de formato e título na amostra, e WPM mediante ID elegível, transcrição, duração e cobertura declarados pelo usuário. Não verifica essas declarações nem infere tópicos, estratégia ou receita. A diferença em relação ao relatório original permanece parcial.
 
+## Checkpoint local independente · D22/D23/D25/D28/D32
+
+Base: `58fb1477ff333eaac7a8bdd3f6a3edc10cd67050`. Código e fixtures preparados em checkout separado, sem publicação GitHub nem operação em serviços/contas reais. Não inclui as correções de imagem/coleta de outra tarefa.
+
+- **D25:** Calculadora local vincula receita, período, moeda e origem. Exige confirmação manual da quantidade do mesmo período e do vínculo da receita; alterações de entradas/coleta invalidam resultado e confirmações. Alternância receita/lucro restaura o valor na calculadora local. Alternância no card real do Studio não implementada; período observado é contexto até declaração do usuário. Runtime real pendente.
+- **D28:** Thumbnail Lab organiza briefing estruturado, referências locais e até 12 solicitações/12 MiB de respostas em memória. Envio explícito pelo backend salvo, com modelo/origem exatos, estados do transporte e resultado incerto; abrir ou reabrir resultado não gera. Contrato atual envia somente texto e uma imagem 16:9. Arquivos/URLs/notas de referência nunca são enviados; resolução e proporção não são controles suportados. Serviço Omni e geração real não acessados.
+- **D32:** Guia MCP local e compositor para as cinco ferramentas e oito análises existentes; prepara/copia configuração com caminhos absolutos e prompts revisáveis. Nenhum cliente é detectado, configurado, conectado ou acionado automaticamente. Integração no aplicativo escolhido é manual e não foi testada; saldo/cota externos desconhecidos.
+- **D23:** Plano local de remoção por todos/faixa inclusiva, prévia Remove N, confirmação específica, cancelamento, expiração e reobservação do contexto. Leitura somente dos campos legados já reconhecidos; observação manual exige declaração explícita. Nenhum executor de remoção, seletor de exclusão ou Save. Toolbar moderna não é lista de slots; interruptivos indisponíveis sem marcador comprovado. Runtime real pendente.
+- **D22:** Algoritmo e UI para raster PNG local com geometria, escala, cores, posição temporal e FPS declarados, estimativa visual explícita, progresso/cancelamento e exportação. Colunas desconhecidas interrompem intervalos; canvas protegido falha seguro. Estimativa visual não equivale a PCM/RMS e não alimenta planos Studio automaticamente. Adapter de waveform Studio ausente por falta de evidência da geometria.
+
+O aceite local não encerra a diferença completa com a referência. Veja [escopo de integração](LOCAL_INDEPENDENT_PATCH.md) e [validação](VALIDATION.md).
+
 ## D01 · P0
 
 Referência informada: módulos `6buNu`. Recursos: 10, 29.

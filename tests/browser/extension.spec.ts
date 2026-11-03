@@ -72,6 +72,11 @@ test("loaded MV3 extension scans fixture, filters, saves reference and refuses u
   await page.locator("#revenue").fill("1000");
   await page.locator("#cost").fill("100");
   await page.locator("#video-total").fill("3");
+  await page.locator("#profit-currency").fill("BRL");
+  await page.locator("#profit-period-start").fill("2026-10-01");
+  await page.locator("#profit-period-end").fill("2026-10-31");
+  await page.locator("#profit-revenue-confirm").check();
+  await page.locator("#profit-count-confirm").check();
   await page.locator("#profit").click();
   await expect(page.locator("#profit-output")).toContainText("700");
   await page.locator("#studio-preview").click();

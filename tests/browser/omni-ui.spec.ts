@@ -151,6 +151,7 @@ test.beforeEach(async () => {
               model: (requests.at(-1)?.body?.payload as Record<string, unknown>)
                 ?.model,
               generated: true,
+              ...(requests.at(-1)?.body?.feature === "thumbnail-generation" ? {images:[{mime:"image/png",base64:"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aGv8AAAAASUVORK5CYII="}]} : {}),
               transport: "fixture-final-only",
             },
           }),
@@ -542,4 +543,33 @@ test("catalog auth and offline failures remain visible without generation or inv
   );
   expect(catalogs()).toHaveLength(2);
   expect(analyses()).toHaveLength(0);
+});
+
+test("workspace Thumbnail Lab pins the saved backend, sends only briefing text and reports preflight changes", async () => {
+  await connect(); await discover(); await selectModel("fixture:image");
+  // Editing the connection form does not change the saved transport or its journal label.
+  await page.locator("#backend-url").fill("http://127.0.0.1:8788");
+  await page.locator('[data-page="thumbnail-lab"]').click();
+  expect(analyses()).toHaveLength(0);
+  await expect(page.locator("#thumbnail-lab-model")).toContainText(`backend: ${backendOrigin}`);
+  await page.locator('#thumbnail-lab-form [name="title"]').fill("Astronomia observada");
+  await page.locator("#thumbnail-lab-ref-url").fill("https://example.invalid/referencia-local.png");
+  await page.locator("#thumbnail-lab-add-url").click();
+  await page.locator("#thumbnail-lab-generate").click();
+  await expect(page.locator("#thumbnail-lab-history")).toContainText("Resposta de imagem recebida");
+  expect(analyses()).toHaveLength(1);
+  expect(analyses()[0].url).toBe(`${backendOrigin}/v1/analyze`);
+  expect(analyses()[0].body).toMatchObject({feature:"thumbnail-generation",payload:{model:"fixture:image",expectedOrigin:sidecarOrigin,stream:false}});
+  expect(Object.keys(analyses()[0].body?.payload as object).sort()).toEqual(["expectedOrigin","model","prompt","stream"]);
+  expect(JSON.stringify(analyses()[0].body)).not.toContain("example.invalid");
+  await page.locator("#thumbnail-lab-history button").click();
+  await expect(page.locator("#remote-images img")).toHaveCount(1);
+  expect(analyses()).toHaveLength(1);
+  // Another workspace can change persisted settings while this lab remains open.
+  await page.evaluate(() => { const settings=(window as unknown as FixtureWindow).__omniStore.settings as Record<string,unknown>; settings.backendUrl="http://127.0.0.1:8788"; });
+  await page.locator('[data-page="thumbnail-lab"]').click();
+  await page.locator("#thumbnail-lab-generate").click();
+  await expect(page.locator("#thumbnail-lab-status")).toContainText("Solicitação não enviada");
+  await expect(page.locator("#thumbnail-lab-history li").first()).toContainText("Erro da solicitação");
+  expect(analyses()).toHaveLength(1);
 });

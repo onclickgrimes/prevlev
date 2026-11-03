@@ -108,7 +108,17 @@
       "verificationStatus": "fixture_coverage_only",
       "installedExtensionVerification": "blocked_by_environment_policy",
       "runtimeVerificationStatus": "pending_installed_and_live_validation",
-      "configurationRequirements": []
+      "configurationRequirements": [],
+      "localIndependentCheckpoint": {
+        "baseCommit": "58fb1477ff333eaac7a8bdd3f6a3edc10cd67050",
+        "scope": "Calculadora local vincula receita, período, moeda e origem. Exige confirmação manual da quantidade do mesmo período e do vínculo da receita; alterações de entradas/coleta invalidam resultado e confirmações. Alternância receita/lucro restaura o valor na calculadora local.",
+        "remaining": "Alternância no card real do Studio não implementada; período observado é contexto até declaração do usuário. Runtime real pendente.",
+        "tests": [
+          "tests/profit.test.ts",
+          "tests/browser/profit.spec.ts"
+        ],
+        "runtimeVerified": false
+      }
     },
     {
       "id": 6,
@@ -354,7 +364,19 @@
       "verificationStatus": "fixture_coverage_only",
       "installedExtensionVerification": "blocked_by_environment_policy",
       "runtimeVerificationStatus": "pending_installed_and_live_validation",
-      "configurationRequirements": []
+      "configurationRequirements": [],
+      "localIndependentCheckpoint": {
+        "baseCommit": "58fb1477ff333eaac7a8bdd3f6a3edc10cd67050",
+        "scope": "Algoritmo e UI para raster PNG local com geometria, escala, cores, posição temporal e FPS declarados, estimativa visual explícita, progresso/cancelamento e exportação. Colunas desconhecidas interrompem intervalos; canvas protegido falha seguro. Plano local de remoção por todos/faixa inclusiva, prévia Remove N, confirmação específica, cancelamento, expiração e reobservação do contexto. Leitura somente dos campos legados já reconhecidos; observação manual exige declaração explícita.",
+        "remaining": "Estimativa visual não equivale a PCM/RMS e não alimenta planos Studio automaticamente. Adapter de waveform Studio ausente por falta de evidência da geometria. Nenhum executor de remoção, seletor de exclusão ou Save. Toolbar moderna não é lista de slots; interruptivos indisponíveis sem marcador comprovado. Runtime real pendente.",
+        "tests": [
+          "tests/waveform.test.ts",
+          "tests/browser/waveform.spec.ts",
+          "tests/midroll-removal.test.ts",
+          "tests/browser/midroll-removal.spec.ts"
+        ],
+        "runtimeVerified": false
+      }
     },
     {
       "id": 18,
@@ -882,7 +904,17 @@
       "runtimeVerificationStatus": "pending_installed_and_live_validation",
       "configurationRequirements": [
         "Executar o backend Prevlev na máquina do Omni existente; configurar OMNI_BASE_URL (padrão http://127.0.0.1:7814) e chave existente do serviço apenas no servidor se exigida; consultar catálogo e selecionar provider:model compatível. Não houve acesso à instalação do usuário."
-      ]
+      ],
+      "localIndependentCheckpoint": {
+        "baseCommit": "58fb1477ff333eaac7a8bdd3f6a3edc10cd67050",
+        "scope": "Thumbnail Lab organiza briefing estruturado, referências locais e até 12 solicitações/12 MiB de respostas em memória. Envio explícito pelo backend salvo, com modelo/origem exatos, estados do transporte e resultado incerto; abrir ou reabrir resultado não gera.",
+        "remaining": "Contrato atual envia somente texto e uma imagem 16:9. Arquivos/URLs/notas de referência nunca são enviados; resolução e proporção não são controles suportados. Serviço Omni e geração real não acessados.",
+        "tests": [
+          "tests/thumbnail-lab.test.ts",
+          "tests/browser/thumbnail-lab.spec.ts"
+        ],
+        "runtimeVerified": false
+      }
     }
   ],
   "extras": [
@@ -903,8 +935,17 @@
     },
     {
       "name": "Guia visual ChatGPT/Claude",
-      "status": "not_implemented",
-      "boundary": "A extensão atua somente em YouTube/Studio."
+      "status": "implemented",
+      "boundary": "Guia MCP local e compositor para as cinco ferramentas e oito análises existentes; prepara/copia configuração com caminhos absolutos e prompts revisáveis. Nenhum cliente é detectado, configurado, conectado ou acionado automaticamente. Integração no aplicativo escolhido é manual e não foi testada; saldo/cota externos desconhecidos.",
+      "source": [
+        "src/core/mcp-guide.ts",
+        "src/ui/mcp-guide.ts"
+      ],
+      "tests": [
+        "tests/mcp-guide.test.ts",
+        "tests/browser/mcp-guide.spec.ts"
+      ],
+      "runtimeVerificationStatus": "user_client_configuration_not_performed"
     },
     {
       "name": "Contador de cota",

@@ -21,6 +21,7 @@ import {
   setStudioPeriodVerified,
   getStudioRedactionDetails,
   getStudioScreenshotTargets,
+  observeStudioMidrollSlots,
 } from "./studio";
 import { mountTimeline, refreshTimeline, dispatchTimeline } from "./timeline";
 import {createCollectionController,mountCollectionControls,type CollectionKind} from './collection';
@@ -691,6 +692,8 @@ async function dispatch(message: Message): Promise<unknown> {
             .join("\n"),
         ),
       };
+    case "STUDIO_OBSERVE_MIDROLLS":
+      return {status:"ok",observation:observeStudioMidrollSlots(document)};
     case "STUDIO_PREVIEW":
       if (!message.action) throw new Error("Selecione uma ação.");
       return previewStudioAction(message.action, message.input, document);

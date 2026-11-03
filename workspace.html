@@ -20,6 +20,7 @@
           ><button data-page="history">◷ &nbsp; Histórico próprio</button
           ><button data-page="channel">▥ &nbsp; Canal</button
           ><button data-page="images">▧ &nbsp; Imagens</button
+          ><button data-page="thumbnail-lab">✧ &nbsp; Thumbnail Lab</button
           ><button data-page="transcript">≋ &nbsp; Transcrição</button
           ><button data-page="comments">☷ &nbsp; Comentários</button
           ><button data-page="studio">▥ &nbsp; Studio</button
@@ -31,6 +32,7 @@
           ><button data-page="visual-similarity">▧ &nbsp; Semelhança visual</button
           ><button data-page="sponsorships">⌁ &nbsp; Patrocínios</button
           ><button data-page="remote">✧ &nbsp; Análises</button
+          ><button data-page="mcp">⌘ &nbsp; Guia MCP</button
           ><button data-page="connection">⚙ &nbsp; Conexão</button>
         </nav>
         <div class="sidebar-footer">
@@ -64,6 +66,8 @@
         <section id="official-search" class="page" hidden></section>
         <section id="analytics" class="page" hidden></section>
         <section id="history" class="page" hidden></section>
+        <section id="thumbnail-lab" class="page" hidden></section>
+        <section id="mcp" class="page" hidden></section>
         <section id="research" class="page">
           <div class="hero">
             <div>
@@ -363,8 +367,7 @@
             <div class="card">
               <h2>Lucro líquido estimado</h2>
               <p class="muted">
-                Informe os valores ou use a receita que estiver visível no
-                Studio.
+                Vincule receita, custo e contagem manual ao mesmo período e moeda.
               </p>
               <label
                 >Receita<input
@@ -384,7 +387,7 @@
                   id="video-total"
                   type="number"
                   min="0"
-                  value="1" /></label
+                  value="" /></label
               ><button id="profit">Calcular</button
               ><output id="profit-output"></output>
             </div>

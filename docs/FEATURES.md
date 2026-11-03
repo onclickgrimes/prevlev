@@ -4,6 +4,10 @@ Implementação independente; não há declaração de paridade completa com Nex
 
 O detalhamento por linha registra a base v0.4 e as ampliações de v0.6; outros limites estão em [GAP_AUDIT.md](GAP_AUDIT.md) e [ORIGINAL_GAP_LEDGER.md](ORIGINAL_GAP_LEDGER.md). O estado de implementação descreve o escopo entregue; validação de runtime e configuração de produto são eixos separados. “Implementado” não declara paridade ou teste com extensão instalada. Dados faltantes permanecem desconhecidos. Os estados dos 40 recursos foram preservados nesta etapa; ampliar um relatório local não equivale a entregar a base de pesquisa e os serviços privados da referência.
 
+## Ampliação local independente (sem publicação)
+
+Sobre a base `58fb1477ff333eaac7a8bdd3f6a3edc10cd67050`, foram adicionados vínculo contábil de lucro (D25), Thumbnail Lab (D28), guia/compositor MCP (D32), plano de remoção sem executor (D23) e estimativa visual de waveform local (D22). [Escopo e limites](LOCAL_INDEPENDENT_PATCH.md). Toggle no card real, remoção real e waveform Studio permanecem sem adapter validado; referências de imagem não são enviadas pelo contrato atual e não há saldo/cota inventados.
+
 ## Evidência e runtime
 
 - Testes unitários e integração verificam cálculos locais, transportes injetados, arquivos temporários e MCP em memória/stdio. Provedores, chaves e respostas de API são fixtures; não houve serviço do usuário, conta real ou cota consultada.
@@ -64,7 +68,7 @@ A matriz legível por ferramentas está em [feature-status.json](feature-status.
 | Extra | Estado e limite |
 | --- | --- |
 | MCP local próprio para clientes compatíveis | implemented: Cinco ferramentas próprias somente para leitura por processo stdio separado: capacidades, análise de dados locais e listar/abrir/exportar histórico. Desativado por padrão, ativação/conexão manual; não configura clientes, usa Nexlev, chama IA/rede ou altera canal/histórico. Evidência: [mcp.test.ts](../tests/mcp.test.ts). |
-| Guia visual ChatGPT/Claude | not_implemented: A extensão atua somente em YouTube/Studio. |
+| Guia visual ChatGPT/Claude | implemented: Guia local e compositor revisável para configuração/cópia manual. Não detecta, registra, conecta nem envia automaticamente. |
 | Contador de cota | not_implemented: Sem plano comercial ou cota externa; backend tem limite local de requisições. |
 | Atalhos de serviços web Nexlev | not_implemented: Nenhum atalho abre serviços Nexlev. |
 | Exportar CSV/JSON/Markdown | implemented: Arquivos gerados no navegador a partir dos dados disponíveis. |

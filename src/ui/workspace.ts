@@ -22,7 +22,6 @@ import {
   summarizeVideos,
   lifetimeVph,
   sortVideos,
-  netProfit,
 } from "../core/metrics";
 import { selectResearchVideos, researchComparison, type ResearchFilter } from "../core/research";
 import { initResearchTools } from "./research";
@@ -40,6 +39,12 @@ import {
   type Rect,
 } from "../core/media";
 import { mountMidrollTools } from "./midroll-tools";
+import { initProfitTools } from "./profit";
+import { mountThumbnailLab } from "./thumbnail-lab";
+import { mountMcpGuide } from "./mcp-guide";
+import { mountWaveformTools } from "./waveform";
+import { mountMidrollRemoval } from "./midroll-removal";
+import type { MidrollRemovalObservation } from "../core/midroll-removal";
 import { initOfficialSearch } from "./official-search";
 import { initAnalyticsTools } from "./analytics";
 import { initHistoryTools } from "./history";
@@ -91,6 +96,7 @@ let timeline: TimelineView | undefined;
 let aiCatalog: AiCatalogData | undefined;
 let selectedAiModel = "";
 let selectedAiOrigin = "http://127.0.0.1:7814";
+let savedBackendOrigin = "";
 let selectedAiStreaming = false;
 let aiSelectionSaving = false;
 let aiRequestRunning = false;
@@ -374,8 +380,8 @@ function render() {
     `${snapshot.title || "Nenhum vídeo selecionado"}${snapshot.videoId ? " · " + snapshot.videoId : ""}`;
   $<HTMLTextAreaElement>("transcript-text").value = transcriptText(segments);
   invalidateTranscriptContext();
-  if (snapshot.studio?.revenue !== undefined)
-    $<HTMLInputElement>("revenue").value = String(snapshot.studio.revenue);
+  profitTools.render();
+  removalTools.invalidate();
   $<HTMLInputElement>("swipe-title").value = snapshot.title;
   $<HTMLInputElement>("swipe-url").value = snapshot.url;
   if (!value("channel-url"))
@@ -774,11 +780,6 @@ on("transcript-md", () =>
     "text/markdown",
   ),
 );
-on("profit", () => {
-  const r = netProfit(num("revenue"), num("cost"), num("video-total"));
-  $("profit-output").textContent =
-    `${r.profit.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} ${snapshot.studio?.currency ?? "(mesma moeda da receita)"}`;
-});
 on("period", async () => {
   $("studio-plan").textContent = JSON.stringify(
     await tabMessage("STUDIO_PERIOD", {
@@ -923,18 +924,18 @@ async function remote(
   feature: RemoteFeature,
   output: string | null = "remote-result",
   extra: Record<string, unknown> = {},
-) {
+  expectedAi?: { model: string; origin: string; backendOrigin: string },
+): Promise<RemoteResponse> {
   const ai = isAiFeature(feature);
-  if (ai && (aiRequestRunning || aiSelectionSaving))
-    throw new Error(
-      "Aguarde a análise ou o salvamento da seleção atual concluir.",
-    );
+  if (ai && (aiRequestRunning || aiSelectionSaving)) {
+    if (expectedAi) return {status:"error",source:"prevlev:client",error:"Solicitação não enviada. Aguarde a análise ou o salvamento da seleção atual concluir."};
+    throw new Error("Aguarde a análise ou o salvamento da seleção atual concluir.");
+  }
   if (ai) {
     aiRequestRunning = true;
     updateAiButtons();
   }
   try {
-    notice("Enviando ao backend configurado…");
     const query = value("remote-query");
     const current = snapshot.videos.find((v) => v.id === snapshot.videoId);
     let payload: Record<string, unknown>;
@@ -958,7 +959,19 @@ async function remote(
             ? (current?.channelId ?? current?.channel)
             : snapshot.videoId,
       };
-    const settings = await getSettings();
+    let settings;
+    try { settings = await getSettings(); }
+    catch (error) {
+      if (expectedAi) return {status:"error",source:"prevlev:client",error:"Solicitação não enviada. Não foi possível ler a configuração local."};
+      throw error;
+    }
+    if (expectedAi && (settings.aiModel !== expectedAi.model || settings.aiOrigin !== expectedAi.origin || settings.backendUrl !== expectedAi.backendOrigin))
+      return {status:"error",source:"prevlev:client",error:"Solicitação não enviada. A seleção de modelo, origem ou backend mudou; revise o briefing."};
+    if (expectedAi && settings.backendUrl) {
+      try { backendOrigin(settings.backendUrl); }
+      catch { return {status:"error",source:"prevlev:client",error:"Solicitação não enviada. Revise a origem do backend configurado."}; }
+    }
+    notice("Enviando ao backend configurado…");
     const response = await callBackend(settings, feature, {
       ...payload,
       ...extra,
@@ -1022,6 +1035,7 @@ function updateAiButtons() {
   $("ai-selected-label").textContent = selectedAiModel
     ? `${selectedAiModel} · ${selectedAiStreaming ? "streaming solicitado" : "JSON"} · backend revalida antes de enviar`
     : "Nenhum modelo selecionado. Consulte o OmniProviders na aba Conexão.";
+  thumbnailLab?.refreshSelection();
 }
 async function persistAiSelection() {
   aiSelectionSaving = true;
@@ -1215,6 +1229,7 @@ on("save-settings", async () => {
     backendToken: value("backend-token").trim(),
     ...(old.backendUrl !== origin ? { aiModel: "", aiStreaming: false } : {}),
   });
+  savedBackendOrigin = origin;
   if (old.backendUrl !== origin) {
     aiCatalog = undefined;
     selectedAiModel = "";
@@ -1236,6 +1251,7 @@ on("clear-connection", async () => {
     aiModel: "",
     aiStreaming: false,
   });
+  savedBackendOrigin = "";
   aiCatalog = undefined;
   selectedAiModel = "";
   selectedAiStreaming = false;
@@ -1269,6 +1285,27 @@ on("clear-data", async () => {
 });
 const getRedactionCategories = initCaptureOptions();
 const midrollTools = mountMidrollTools(document, invalidateStudioPreview);
+const profitTools = initProfitTools({snapshot:()=>snapshot});
+const removalTools = mountMidrollRemoval(document, {observe:async()=>{
+  const tabId = targetTab();
+  const response = await chrome.tabs.sendMessage(tabId,{type:"STUDIO_OBSERVE_MIDROLLS"}) as {status:string;error?:string;observation?:MidrollRemovalObservation};
+  if (tabId !== targetTab()) return undefined;
+  if (response.status === "error") throw new Error(response.error ?? "Não foi possível observar os slots.");
+  return response.observation ? {...response.observation,contextKey:JSON.stringify([tabId,response.observation.contextKey])} : undefined;
+}});
+$("tab-select").addEventListener("change",()=>removalTools.invalidate());
+$("tab-select").addEventListener("input",()=>removalTools.invalidate());
+mountWaveformTools(document, invalidateStudioPreview);
+mountMcpGuide($("mcp"));
+const thumbnailLab = mountThumbnailLab($("thumbnail-lab"), {
+  selection: () => ({
+    model: aiCatalog?.models.find(model => model.id === selectedAiModel),
+    origin: selectedAiOrigin,
+    backendOrigin: savedBackendOrigin,
+  }),
+  generate: payload => remote("thumbnail-generation", null, {prompt:payload.prompt}, {model:payload.model,origin:payload.expectedOrigin,backendOrigin:savedBackendOrigin}),
+  showResult: response => { displayRemote(response,"remote-result"); showPage("remote"); },
+});
 const studioOverview = initStudioOverview({snapshot:()=>snapshot});
 mountDailyObservations($("daily-observations"));
 const channelReport = mountChannelReport($("channel-report"),()=>snapshot.videos);
@@ -1292,6 +1329,7 @@ void (async () => {
     segments = saved.transcript;
   }
   const settings = await getSettings();
+  savedBackendOrigin = settings.backendUrl;
   $<HTMLInputElement>("backend-url").value = settings.backendUrl;
   $<HTMLInputElement>("backend-token").value = settings.backendToken;
   selectedAiModel = settings.aiModel;

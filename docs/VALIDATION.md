@@ -1,3 +1,13 @@
+# Validação do patch local independente · D22/D23/D25/D28/D32
+
+Em 3 de novembro de 2026, no checkout separado baseado em `58fb1477ff333eaac7a8bdd3f6a3edc10cd67050`, `npm run check` passou integralmente: **typecheck, lint, 517 testes automatizados em 50 arquivos e build**. A suíte completa final de navegador passou em **112 cenários**, com **2 cenários de extensão instalada ignorados** pela política gerenciada, sem contorno. Ignorados não contam como aprovados. `git diff --check` e a leitura dos JSONs de cobertura também passaram.
+
+Os módulos novos cobrem lucro por período/moeda/origem, Thumbnail Lab em memória, guia/compositor MCP, plano local de remoção e raster visual local de waveform. As fixtures integradas verificam a navegação do workspace sem chamadas automáticas, referências não enviadas, procedência do backend salvo e invalidação ao trocar a aba. A revisão encontrou e corrigiu o registro de backend ainda não salvo e decodificações PNG simultâneas. As cinco fixtures de waveform foram repetidas por um revisor independente.
+
+A primeira rodada integral de navegador teve 109 aprovações, dois ignorados e um erro `ENOENT` em arquivos de trace durante execução concorrente de uma suíte direcionada na mesma pasta de saída. A rodada final usou uma pasta exclusiva e passou integralmente; não foi feita alteração no recurso de transcrição para resolver esse erro de infraestrutura.
+
+Não houve geração real, acesso ao serviço Omni do usuário, conexão de cliente MCP, conta/canal real ou alteração de política. Toggle no card real, remoção real e leitura automática de waveform Studio continuam sem adapter validado. Referências de thumbnail ficam locais pelo contrato atual. Nenhuma publicação GitHub foi executada. Veja [escopo de integração](LOCAL_INDEPENDENT_PATCH.md).
+
 # Validação da versão 0.6.5
 
 Em 3 de novembro de 2026, typecheck, lint e build passaram com **476 testes automatizados em 45 arquivos** (executados antes da alteração exclusiva do número da versão). A integração do relatório de conteúdo no workspace passou em **6 testes direcionados de navegador** no build final. A suíte integral anterior, da v0.6.2, teve 89 aprovados e dois ignorados pela política de extensões; não foi repetida integralmente nesta alteração localizada.

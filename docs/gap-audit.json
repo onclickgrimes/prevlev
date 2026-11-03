@@ -1174,7 +1174,7 @@
     {
       "id": "X02",
       "name": "Guia visual/detecção/compositor ChatGPT/Claude",
-      "available": "Documentação manual; sem guia/compositor integrado.",
+      "available": "Guia e compositor integrados localmente; configuração/cópia manual. Sem detecção, registro ou conexão automática.",
       "remainingGapIds": [
         "D32",
         "EC04",
@@ -2184,7 +2184,19 @@
       ],
       "runtimeGate": "RT03",
       "implementationProofIsRuntimeProof": false,
-      "workRemainingAtBaseline": true
+      "workRemainingAtBaseline": true,
+      "independentLocalCheckpoint": {
+        "baseCommit": "58fb1477ff333eaac7a8bdd3f6a3edc10cd67050",
+        "status": "local_scope_implemented_fixture_tested",
+        "scope": "Algoritmo e UI para raster PNG local com geometria, escala, cores, posição temporal e FPS declarados, estimativa visual explícita, progresso/cancelamento e exportação. Colunas desconhecidas interrompem intervalos; canvas protegido falha seguro.",
+        "remaining": "Estimativa visual não equivale a PCM/RMS e não alimenta planos Studio automaticamente. Adapter de waveform Studio ausente por falta de evidência da geometria.",
+        "tests": [
+          "tests/waveform.test.ts",
+          "tests/browser/waveform.spec.ts"
+        ],
+        "runtimeVerified": false,
+        "published": false
+      }
     },
     {
       "id": "D23",
@@ -2218,7 +2230,19 @@
       ],
       "runtimeGate": "RT03",
       "implementationProofIsRuntimeProof": false,
-      "workRemainingAtBaseline": true
+      "workRemainingAtBaseline": true,
+      "independentLocalCheckpoint": {
+        "baseCommit": "58fb1477ff333eaac7a8bdd3f6a3edc10cd67050",
+        "status": "local_scope_implemented_fixture_tested",
+        "scope": "Plano local de remoção por todos/faixa inclusiva, prévia Remove N, confirmação específica, cancelamento, expiração e reobservação do contexto. Leitura somente dos campos legados já reconhecidos; observação manual exige declaração explícita.",
+        "remaining": "Nenhum executor de remoção, seletor de exclusão ou Save. Toolbar moderna não é lista de slots; interruptivos indisponíveis sem marcador comprovado. Runtime real pendente.",
+        "tests": [
+          "tests/midroll-removal.test.ts",
+          "tests/browser/midroll-removal.spec.ts"
+        ],
+        "runtimeVerified": false,
+        "published": false
+      }
     },
     {
       "id": "D24",
@@ -2300,7 +2324,19 @@
       ],
       "runtimeGate": "RT03",
       "implementationProofIsRuntimeProof": false,
-      "workRemainingAtBaseline": true
+      "workRemainingAtBaseline": true,
+      "independentLocalCheckpoint": {
+        "baseCommit": "58fb1477ff333eaac7a8bdd3f6a3edc10cd67050",
+        "status": "local_scope_implemented_fixture_tested",
+        "scope": "Calculadora local vincula receita, período, moeda e origem. Exige confirmação manual da quantidade do mesmo período e do vínculo da receita; alterações de entradas/coleta invalidam resultado e confirmações. Alternância receita/lucro restaura o valor na calculadora local.",
+        "remaining": "Alternância no card real do Studio não implementada; período observado é contexto até declaração do usuário. Runtime real pendente.",
+        "tests": [
+          "tests/profit.test.ts",
+          "tests/browser/profit.spec.ts"
+        ],
+        "runtimeVerified": false,
+        "published": false
+      }
     },
     {
       "id": "D26",
@@ -2453,7 +2489,19 @@
           "part": "saldo/cota sem fonte autorizada",
           "category": "unavailable_legitimately"
         }
-      ]
+      ],
+      "independentLocalCheckpoint": {
+        "baseCommit": "58fb1477ff333eaac7a8bdd3f6a3edc10cd67050",
+        "status": "local_scope_implemented_fixture_tested",
+        "scope": "Thumbnail Lab organiza briefing estruturado, referências locais e até 12 solicitações/12 MiB de respostas em memória. Envio explícito pelo backend salvo, com modelo/origem exatos, estados do transporte e resultado incerto; abrir ou reabrir resultado não gera.",
+        "remaining": "Contrato atual envia somente texto e uma imagem 16:9. Arquivos/URLs/notas de referência nunca são enviados; resolução e proporção não são controles suportados. Serviço Omni e geração real não acessados.",
+        "tests": [
+          "tests/thumbnail-lab.test.ts",
+          "tests/browser/thumbnail-lab.spec.ts"
+        ],
+        "runtimeVerified": false,
+        "published": false
+      }
     },
     {
       "id": "D29",
@@ -2675,7 +2723,19 @@
           "part": "saldo externo sem endpoint permitido",
           "category": "unavailable_legitimately"
         }
-      ]
+      ],
+      "independentLocalCheckpoint": {
+        "baseCommit": "58fb1477ff333eaac7a8bdd3f6a3edc10cd67050",
+        "status": "local_scope_implemented_fixture_tested",
+        "scope": "Guia MCP local e compositor para as cinco ferramentas e oito análises existentes; prepara/copia configuração com caminhos absolutos e prompts revisáveis. Nenhum cliente é detectado, configurado, conectado ou acionado automaticamente.",
+        "remaining": "Integração no aplicativo escolhido é manual e não foi testada; saldo/cota externos desconhecidos.",
+        "tests": [
+          "tests/mcp-guide.test.ts",
+          "tests/browser/mcp-guide.spec.ts"
+        ],
+        "runtimeVerified": false,
+        "published": false
+      }
     },
     {
       "id": "D33",

@@ -1,4 +1,5 @@
 import { parseCount, parseDuration } from "../core/parse";
+import type { MidrollRemovalObservation } from "../core/midroll-removal";
 
 /** DOM adapters only. No account changes run during module initialization. */
 export type StudioAction =
@@ -356,6 +357,43 @@ function timestamp(seconds: number): string {
   ]
     .map((n) => String(n).padStart(2, "0"))
     .join(":");
+}
+
+const removalNodeIdentities = new WeakMap<Element, number>();
+let removalNodeSequence = 0;
+function removalNodeIdentity(element: Element): number {
+  let value = removalNodeIdentities.get(element);
+  if (value === undefined) { value = ++removalNodeSequence; removalNodeIdentities.set(element, value); }
+  return value;
+}
+
+/** Read-only observation using the same legacy editor/input anchors as insertion.
+ * The modern timestamp toolbar is a playhead and is never interpreted as a slot list.
+ * No removal control or interruptive marker is documented, so neither is inferred.
+ */
+export function observeStudioMidrollSlots(doc: Document = document): MidrollRemovalObservation | undefined {
+  if (!studioDocument(doc)) return undefined;
+  const editors = midrollEditors(doc);
+  if (editors.length !== 1 || Array.from(doc.querySelectorAll<HTMLElement>("ytve-ad-breaks-editor-options-panel")).some(visible)) return undefined;
+  const editor = editors[0], fields = midrollFields(editor);
+  if (!fields.length || fields.length > 500) return undefined;
+  const routeVideo = /^\/video\/([^/]+)/.exec(doc.location.pathname)?.[1];
+  const scope = editor.closest("[video-id],[data-video-id]");
+  const declaredVideo = scope?.getAttribute("video-id") ?? scope?.getAttribute("data-video-id");
+  if (!routeVideo || declaredVideo && declaredVideo !== routeVideo) return undefined;
+  const slots = fields.map(field => {
+    const seconds = parseDuration(field.value);
+    return seconds !== undefined && seconds <= 604_800 ? { id: `observed-slot-${removalNodeIdentity(field)}`, seconds, displayedTime: field.value } : undefined;
+  });
+  if (slots.some(slot => !slot)) return undefined;
+  return {
+    source: "studio-dom",
+    contextKey: JSON.stringify([doc.location.href, editorFingerprint(editor), removalNodeIdentity(editor), slots]),
+    contextLabel: `vídeo ${routeVideo}`,
+    observedAt: new Date().toISOString(),
+    slots: slots as NonNullable<(typeof slots)[number]>[],
+    limitations: ["Somente campos de horário visíveis reconhecidos no editor legado; a lista pode ser parcial.", "Leitura validada em fixtures locais; funcionamento em conta real não verificado.", "Nenhum seletor de remoção ou marcador interruptivo foi inferido."],
+  };
 }
 
 function displayedMoney(value: string): number | undefined {

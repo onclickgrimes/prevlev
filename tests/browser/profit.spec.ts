@@ -1,0 +1,62 @@
+import { test, expect, chromium, type Browser } from "@playwright/test";
+import { build } from "esbuild";
+import { existsSync } from "node:fs";
+
+let browser: Browser;
+test.beforeAll(async () => { browser = await chromium.launch({ executablePath: process.env.PREVLEV_CHROMIUM_PATH ?? (existsSync("/usr/bin/chromium") ? "/usr/bin/chromium" : undefined), headless: true, args: ["--no-sandbox"] }); });
+test.afterAll(async () => { await browser?.close(); });
+
+test("profit stays local, requires period confirmation, and clears the result after new collection or edits", async () => {
+  const page = await browser.newPage();
+  const requests: string[] = [];
+  await page.route("**/*", route => { requests.push(route.request().url()); return route.abort(); });
+  await page.setContent('<section id="studio"><input id="revenue" type="number"><input id="cost" type="number" value="100"><input id="video-total" type="number" value="1"><button id="profit">Calcular</button><output id="profit-output"></output><button id="new-collection">Nova coleta</button><button id="no-revenue">Sem receita</button></section>');
+  const bundle = await build({ stdin: { contents: `import { initProfitTools } from './src/ui/profit';
+    const snapshot = {url:'https://studio.youtube.com/channel/fixture/analytics',title:'Fixture',videos:[],comments:[],transcript:[],warnings:[],studio:{source:'studio-dom',observedAt:'2024-03-01T00:00:00Z',revenue:1000,currencyCode:'BRL',videoCount:999,period:{label:'Últimos 28 dias',selector:'#date-range-label'},sources:{revenue:{selector:'#TOTAL_ESTIMATED_EARNINGS-tab #metric-total',label:'Receita estimada',raw:'R$ 1.000,00'}}}};
+    const tools = initProfitTools({snapshot:()=>snapshot});
+    document.querySelector('#new-collection').addEventListener('click',()=>{snapshot.studio.observedAt='2024-03-02T00:00:00Z';tools.render();});
+    document.querySelector('#no-revenue').addEventListener('click',()=>{snapshot.studio=undefined;tools.render();});`, resolveDir: process.cwd(), loader: "ts" }, bundle: true, write: false, format: "iife" });
+  await page.addScriptTag({ content: bundle.outputFiles[0].text });
+  await expect(page.locator("#video-total")).toHaveValue("1");
+  await page.locator("#profit").click();
+  await expect(page.locator("#profit-output")).toBeEmpty();
+  await page.locator("#video-total").fill("3");
+  await page.locator("#profit-revenue-confirm").check();
+  await page.locator("#profit-count-confirm").check();
+  await page.locator("#profit").click();
+  await expect(page.locator("#profit-output")).toHaveText("Lucro estimado local: 700 BRL");
+  await page.locator("#profit-back-revenue").click();
+  await expect(page.locator("#profit-output")).toHaveText("Receita declarada: 1.000 BRL");
+  await expect(page.locator("#revenue")).toHaveValue("1000");
+  await page.locator("#cost").fill("120");
+  await expect(page.locator("#profit-output")).toBeEmpty();
+  await expect(page.locator("#profit-count-confirm")).not.toBeChecked();
+  await page.locator("#profit-revenue-confirm").check();
+  await page.locator("#profit-count-confirm").check();
+  await page.locator("#profit").click();
+  await expect(page.locator("#profit-output")).toContainText("640 BRL");
+  await page.locator("#new-collection").click();
+  await expect(page.locator("#profit-output")).toBeEmpty();
+  await expect(page.locator("#profit-revenue-confirm")).not.toBeChecked();
+  await page.locator("#no-revenue").click();
+  await expect(page.locator("#revenue")).toHaveValue("");
+  expect(requests).toEqual([]);
+  await page.close();
+});
+
+test("manual dates and currency are required when no Studio period was observed", async () => {
+  const page = await browser.newPage();
+  await page.setContent('<input id="revenue" type="number"><input id="cost" type="number" value="100"><input id="video-total" type="number" value="1"><button id="profit">Calcular</button><output id="profit-output"></output>');
+  const bundle = await build({ stdin: { contents: `import { initProfitTools } from './src/ui/profit';initProfitTools({snapshot:()=>({url:'',title:'',videos:[],comments:[],transcript:[],warnings:[]})});`, resolveDir: process.cwd(), loader: "ts" }, bundle: true, write: false, format: "iife" });
+  await page.addScriptTag({ content: bundle.outputFiles[0].text });
+  await page.locator("#revenue").fill("1000");
+  await page.locator("#profit-currency").fill("USD");
+  await page.locator("#profit-revenue-confirm").check(); await page.locator("#profit-count-confirm").check();
+  await page.locator("#profit").click();
+  await expect(page.locator("#profit-output")).toBeEmpty();
+  await page.locator("#profit-period-start").fill("2024-01-01"); await page.locator("#profit-period-end").fill("2024-01-31");
+  await page.locator("#profit-revenue-confirm").check(); await page.locator("#profit-count-confirm").check();
+  await page.locator("#profit").click();
+  await expect(page.locator("#profit-output")).toHaveText("Lucro estimado local: 900 USD");
+  await page.close();
+});

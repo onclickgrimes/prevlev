@@ -120,6 +120,41 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   await context?.browser()?.close();
 });
+
+test("workspace exposes local MCP, references, raster and removal planning without automatic network", async () => {
+  const page = await context.newPage();
+  const unexpected: string[] = [], errors: string[] = [];
+  page.on("pageerror",error=>errors.push(error.message));
+  await page.route("**/*",route=>{
+    if (new URL(route.request().url()).origin === "http://localhost:9393") return route.fallback();
+    unexpected.push(route.request().url()); return route.abort();
+  });
+  await page.goto("http://localhost:9393/workspace.html");
+  await page.locator('[data-page="thumbnail-lab"]').click();
+  await expect(page.locator("#thumbnail-lab-generate")).toBeDisabled();
+  await page.locator("#thumbnail-lab-ref-url").fill("https://example.invalid/local-only.png");
+  await page.locator("#thumbnail-lab-add-url").click();
+  await expect(page.locator("#thumbnail-lab-references")).toContainText("não enviada");
+  await page.locator('[data-page="mcp"]').click();
+  await expect(page.locator("#mcp-tools dt")).toHaveCount(5);
+  await page.locator("#mcp-prepare-prompt").click();
+  await expect(page.locator("#mcp-prompt-output")).toHaveValue(/prevlev_capabilities/);
+  await expect(page.locator("#mcp-guide-status")).toContainText("somente você pode enviá-lo");
+  await page.locator('[data-page="studio"]').click();
+  await expect(page.locator("#waveform-status")).toContainText("Escolha uma imagem");
+  await expect(page.locator("#waveform-analyze")).toBeDisabled();
+  await page.locator("#removal-source").selectOption("manual");
+  await page.locator("#removal-context").fill("vídeo local observado");
+  await page.locator("#removal-times").fill("120\n240");
+  await page.locator("#removal-observed").check();
+  await page.locator("#removal-preview").click();
+  await expect(page.locator("#removal-title")).toContainText("Remove 2");
+  await page.locator("#tab-select").dispatchEvent("change");
+  await expect(page.locator("#removal-confirm")).toBeDisabled();
+  await expect(page.locator("#removal-status")).toContainText("aba alterada");
+  expect(unexpected).toEqual([]); expect(errors).toEqual([]);
+  await page.close();
+});
 test("UI with browser-API fixture scans, filters, saves, exports and reports IA configuration", async () => {
   const page = await context.newPage();
   const errors: string[] = [];
@@ -154,6 +189,11 @@ test("UI with browser-API fixture scans, filters, saves, exports and reports IA 
   await page.locator("#revenue").fill("1000");
   await page.locator("#cost").fill("100");
   await page.locator("#video-total").fill("3");
+  await page.locator("#profit-currency").fill("BRL");
+  await page.locator("#profit-period-start").fill("2026-10-01");
+  await page.locator("#profit-period-end").fill("2026-10-31");
+  await page.locator("#profit-revenue-confirm").check();
+  await page.locator("#profit-count-confirm").check();
   await page.locator("#profit").click();
   await expect(page.locator("#profit-output")).toContainText("700");
   await page.locator("#studio-preview").click();

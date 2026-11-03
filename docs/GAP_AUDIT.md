@@ -8,6 +8,10 @@ O recibo/ZIP integral de especificação não foi lido neste executor; módulos/
 
 As33 diferenças de referência estão detalhadas em [ORIGINAL_GAP_LEDGER.md](ORIGINAL_GAP_LEDGER.md); os dados estruturados ficam em [gap-audit.json](gap-audit.json) e [original-gap-ledger.json](original-gap-ledger.json).
 
+## Checkpoint local independente
+
+D22, D23, D25, D28 e D32 receberam implementação local e fixtures adicionais sobre `58fb1477ff333eaac7a8bdd3f6a3edc10cd67050`, sem publicação. A calculadora exige vínculo declarado; o Lab preserva limites do contrato; o guia só prepara texto; remoção só produz plano; waveform só analisa raster local declarado. Adapters/serviços reais pendentes continuam explícitos. [Detalhes](LOCAL_INDEPENDENT_PATCH.md).
+
 ## Critério de conclusão
 
 Não considerar esgotados os gaps independentes enquanto houver item implementable_now sem aceite/verificação registrado. Um comportamento implementado pode continuar com runtime bloqueado; registrar ambos, sem esconder trabalho em needs configuration.
@@ -77,7 +81,7 @@ Os estados anteriores de FEATURES foram preservados: esta auditoria não troca `
 | Extra | Disponível | Gaps |
 | --- | --- | --- |
 | MCP próprio e integração em clientes | Cinco tools stdio somente leitura, desligado por padrão. | D32, EC04, RT05, UL05, UL06 |
-| Guia visual/detecção/compositor ChatGPT/Claude | Documentação manual; sem guia/compositor integrado. | D32, EC04, RT05 |
+| Guia visual/detecção/compositor ChatGPT/Claude | Guia/compositor local; configuração/cópia manual, sem detecção ou conexão automática. | D32, EC04, RT05 |
 | Contador de uso/cota | Limite próprio de requests no servidor; nenhum saldo externo conhecido. | D32, UL06 |
 | Similar Thumbnails/Thumbnail Lab/Niche Finder e atalhos próprios | Ferramentas próprias parciais de imagens/pesquisa/relatório; sem atalhos a serviços privados Nexlev. | D06, D07, D08, D09, D10, D28, D30, D31, EC01, EC04, UL05 |
 | Exportar CSV/JSON/Markdown | Pesquisa exporta CSV/JSON; analytics exporta CSV/JSON/MD; transcrição ainda incompleta. | D13, D19, D29, D30, AF02 |
