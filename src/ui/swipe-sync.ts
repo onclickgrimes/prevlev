@@ -1,20 +1,76 @@
 import {getSwipe,updateSwipe,getSettings} from '../shared/storage';
 import type {SwipeItem} from '../shared/storage';
 import type {Settings} from '../shared/types';
-import {normalizeSwipeLibrary,mergeSwipeImport} from '../core/swipe';
+import {parseSwipeImport,mergeSwipeImport} from '../core/swipe';
 import {callBackendOperation} from '../shared/backend';
-export function initSwipeSync(render:()=>Promise<void>):void{
- const section=document.getElementById('swipe');if(!section)return;const card=document.createElement('div');card.className='card';card.innerHTML=`<h2>Biblioteca no seu backend pessoal</h2><p>Transferência manual de referências. Consulte a revisão do backend e confira o destino antes de enviar. Isto não conecta contas nem cria uma nuvem multiusuário.</p><div class="actions"><button id="swipe-sync-read">Consultar revisão do backend</button><button id="swipe-sync-upload" disabled>Substituir biblioteca do backend…</button><button id="swipe-sync-merge" disabled>Mesclar no navegador…</button><button id="swipe-sync-replace" disabled>Substituir biblioteca local…</button></div><p id="swipe-sync-status" role="status" aria-live="polite">Nenhuma transferência solicitada.</p><pre id="swipe-sync-preview"></pre>`;section.append(card);
+
+export interface SwipeSyncTools { invalidate():void; }
+export function initSwipeSync(render:()=>Promise<void>):SwipeSyncTools {
+ const section=document.getElementById('swipe');if(!section)return {invalidate:()=>{}};
+ const card=document.createElement('div');card.className='card';card.innerHTML=`<h2>Biblioteca no seu backend pessoal</h2><p>Transferência manual de referências. Consulte a revisão do backend e confira o destino antes de enviar. Isto não conecta contas nem cria uma nuvem multiusuário.</p><div class="actions"><button id="swipe-sync-read">Consultar revisão do backend</button><button id="swipe-sync-upload" disabled>Substituir biblioteca do backend…</button><button id="swipe-sync-merge" disabled>Mesclar no navegador…</button><button id="swipe-sync-replace" disabled>Substituir biblioteca local…</button></div><p id="swipe-sync-status" role="status" aria-live="polite">Nenhuma transferência solicitada.</p><pre id="swipe-sync-preview"></pre>`;section.append(card);
  const field=<T extends HTMLElement=HTMLElement>(name:string)=>card.querySelector<T>(`#swipe-sync-${name}`)!;
- let remote:{items:SwipeItem[];revision:string;settings:Settings;assetSchemaVersion:number;folderIdentityVersion:number}|undefined,busy=false;
+ let remote:{items:SwipeItem[];revision:string;settings:Settings;assetSchemaVersion:number;folderIdentityVersion:number}|undefined,busy=false,epoch=0;
  const identity=(s:Settings)=>JSON.stringify([s.backendUrl,s.backendToken]);
  const status=(message:string)=>{field('status').textContent=message;};
  const controls=()=>{for(const action of ['read','upload','merge','replace'])field<HTMLButtonElement>(action).disabled=busy||(action!=='read'&&!remote);};
- async function readRemote(settings:Settings){const result=await callBackendOperation(settings,'/v1/library',{action:'read'});if(result.status!=='ok'||result.source!=='prevlev:library'||!result.data||typeof result.data!=='object')throw new Error(result.error??'O backend não disponibiliza uma biblioteca pessoal compatível.');const data=result.data as Record<string,unknown>;if(!Array.isArray(data.items))throw new Error('O backend não retornou uma lista explícita de referências. Nenhuma biblioteca foi alterada.');if(typeof data.revision!=='string'||!/^[a-f0-9]{64}$/.test(data.revision))throw new Error('Revisão de biblioteca incompatível.');return{items:normalizeSwipeLibrary(data.items),revision:data.revision,settings,assetSchemaVersion:data.assetSchemaVersion===1?1:0,folderIdentityVersion:data.folderIdentityVersion===1?1:0};}
- function on(name:string,work:()=>Promise<void>){field(name).addEventListener('click',()=>{if(busy)return;busy=true;controls();void work().catch(error=>status(error instanceof Error?error.message:String(error))).finally(()=>{busy=false;controls();});});}
- async function checked(){if(!remote)throw new Error('Consulte uma revisão antes de transferir.');const settings=await getSettings();if(identity(settings)!==identity(remote.settings)){remote=undefined;throw new Error('O backend mudou. Consulte a origem atual antes de transferir dados.');}return remote;}
- on('read',async()=>{remote=undefined;const settings=await getSettings();if(!settings.backendUrl)throw new Error('Configure e salve o backend pessoal na aba Conexão.');const state=await readRemote(settings);if(identity(await getSettings())!==identity(settings))throw new Error('A conexão mudou; a prévia foi descartada.');remote=state;const local=await getSwipe(),merged=mergeSwipeImport(local,state.items);field('preview').textContent=JSON.stringify({destination:settings.backendUrl,remoteRevision:state.revision,localItems:local.length,remoteItems:state.items.length,mergeAdds:merged.added,mergeDuplicates:merged.duplicates,mergeConflicts:merged.conflicts,remoteSample:state.items.slice(0,20).map(x=>({title:x.title,folder:x.folder,tags:x.tags}))},null,2);status('Revisão consultada. Nenhuma biblioteca foi alterada. A prévia mostra até 20 referências; contagens abrangem a biblioteca inteira.');});
- on('upload',async()=>{const state=await checked(),items=await getSwipe(),stamp=JSON.stringify(items);if(items.some(item=>item.asset)&&state.assetSchemaVersion!==1)throw new Error('Este backend não anuncia suporte a ativos locais v1. Atualize-o antes de enviar; nenhuma escrita foi iniciada.');if(items.some(item=>item.folderId)&&state.folderIdentityVersion!==1)throw new Error('Este backend não anuncia suporte a identidades de pasta. Atualize-o antes de enviar; nenhuma escrita foi iniciada.');if(!confirm(`Substituir ${state.items.length} referências do backend ${state.settings.backendUrl} pelas ${items.length} referências locais? Exporte uma cópia antes de substituir.`))return;if(identity(await getSettings())!==identity(state.settings)||JSON.stringify(await getSwipe())!==stamp)throw new Error('A conexão ou biblioteca local mudou durante a confirmação. Consulte e revise novamente.');const result=await callBackendOperation(state.settings,'/v1/library',{action:'commit',baseRevision:state.revision,items});remote=undefined;if(result.status!=='ok'||result.source!=='prevlev:library')throw new Error(result.error??'Transferência não confirmada. Consulte antes de repetir.');status(`${items.length} referências enviadas a ${state.settings.backendUrl}. Consulte a nova revisão antes de outra transferência.`);});
- for(const replace of [false,true])on(replace?'replace':'merge',async()=>{const state=await checked(),current=await getSwipe(),stamp=JSON.stringify(current),merged=mergeSwipeImport(current,state.items);if(!confirm(replace?`Substituir ${current.length} referências locais pelas ${state.items.length} referências da revisão consultada em ${state.settings.backendUrl}?`:`Mesclar ${merged.added} novas referências no navegador? ${merged.duplicates} duplicadas e ${merged.conflicts} conflitantes manterão os dados locais.`))return;if(identity(await getSettings())!==identity(state.settings))throw new Error('A conexão mudou; nenhuma biblioteca local foi alterada.');const latest=await readRemote(state.settings);if(latest.revision!==state.revision){remote=undefined;throw new Error('A biblioteca do backend mudou. Consulte e revise novamente.');}if(identity(await getSettings())!==identity(state.settings))throw new Error('A conexão mudou durante a consulta; nenhuma biblioteca local foi alterada.');await updateSwipe(async local=>{if(identity(await getSettings())!==identity(state.settings))throw new Error('A conexão mudou enquanto aguardava o bloqueio local; nenhuma biblioteca foi alterada.');if(JSON.stringify(local)!==stamp)throw new Error('A biblioteca local mudou. Consulte e revise novamente.');return replace?state.items:mergeSwipeImport(local,state.items).items;});remote=undefined;await render();status('Transferência local concluída. IDs, datas e metadados preservados. Consulte novamente para outra ação.');});
- controls();
+ const invalidate=()=>{
+  epoch++;remote=undefined;field('preview').textContent='';controls();
+  status('Contexto local descartado. Uma solicitação já enviada ao backend pode ter sido concluída; consulte novamente antes de transferir.');
+ };
+ async function readRemote(settings:Settings){const result=await callBackendOperation(settings,'/v1/library',{action:'read'});if(result.status!=='ok'||result.source!=='prevlev:library'||!result.data||typeof result.data!=='object')throw new Error(result.error??'O backend não disponibiliza uma biblioteca pessoal compatível.');const data=result.data as Record<string,unknown>;if(!Array.isArray(data.items))throw new Error('O backend não retornou uma lista explícita de referências. Nenhuma biblioteca foi alterada.');if(typeof data.revision!=='string'||!/^[a-f0-9]{64}$/.test(data.revision))throw new Error('Revisão de biblioteca incompatível.');return{items:parseSwipeImport(data.items),revision:data.revision,settings,assetSchemaVersion:data.assetSchemaVersion===1?1:0,folderIdentityVersion:data.folderIdentityVersion===1?1:0};}
+ function on(name:string,work:(check:()=>void)=>Promise<void>){
+  field(name).addEventListener('click',()=>{
+   if(busy)return;
+   const mine=epoch,check=()=>{if(mine!==epoch||!card.isConnected)throw new DOMException('A transferência pendente pertence ao contexto descartado.','AbortError');};
+   busy=true;controls();
+   void work(check).catch(error=>{if(mine===epoch&&!(error instanceof DOMException&&error.name==='AbortError'))status(error instanceof Error?error.message:String(error));}).finally(()=>{busy=false;controls();});
+  });
+ }
+ async function checked(check:()=>void){
+  check();const state=remote;if(!state)throw new Error('Consulte uma revisão antes de transferir.');
+  const settings=await getSettings();check();
+  if(remote!==state||identity(settings)!==identity(state.settings)){remote=undefined;throw new Error('O backend mudou. Consulte a origem atual antes de transferir dados.');}
+  return state;
+ }
+ on('read',async check=>{
+  remote=undefined;const settings=await getSettings();check();
+  if(!settings.backendUrl)throw new Error('Configure e salve o backend pessoal na aba Conexão.');
+  const state=await readRemote(settings);check();
+  const latestSettings=await getSettings();check();
+  if(identity(latestSettings)!==identity(settings))throw new Error('A conexão mudou; a prévia foi descartada.');
+  const local=await getSwipe();check();const merged=mergeSwipeImport(local,state.items);
+  remote=state;
+  field('preview').textContent=JSON.stringify({destination:settings.backendUrl,remoteRevision:state.revision,localItems:local.length,remoteItems:state.items.length,mergeAdds:merged.added,mergeDuplicates:merged.duplicates,mergeConflicts:merged.conflicts,remoteSample:state.items.slice(0,20).map(x=>({title:x.title,folder:x.folder,tags:x.tags}))},null,2);
+  status('Revisão consultada. Nenhuma biblioteca foi alterada. A prévia mostra até 20 referências; contagens abrangem a biblioteca inteira.');
+ });
+ on('upload',async check=>{
+  const state=await checked(check);check();const items=await getSwipe();check();const stamp=JSON.stringify(items);
+  if(items.some(item=>item.asset)&&state.assetSchemaVersion!==1)throw new Error('Este backend não anuncia suporte a ativos locais v1. Atualize-o antes de enviar; nenhuma escrita foi iniciada.');
+  if(items.some(item=>item.folderId)&&state.folderIdentityVersion!==1)throw new Error('Este backend não anuncia suporte a identidades de pasta. Atualize-o antes de enviar; nenhuma escrita foi iniciada.');
+  if(!confirm(`Substituir ${state.items.length} referências do backend ${state.settings.backendUrl} pelas ${items.length} referências locais? Exporte uma cópia antes de substituir.`))return;
+  check();const settings=await getSettings();check();const latest=await getSwipe();check();
+  if(identity(settings)!==identity(state.settings)||JSON.stringify(latest)!==stamp)throw new Error('A conexão ou biblioteca local mudou durante a confirmação. Consulte e revise novamente.');
+  const result=await callBackendOperation(state.settings,'/v1/library',{action:'commit',baseRevision:state.revision,items});check();remote=undefined;
+  if(result.status!=='ok'||result.source!=='prevlev:library')throw new Error(result.error??'Transferência não confirmada. Consulte antes de repetir.');
+  status(`${items.length} referências enviadas a ${state.settings.backendUrl}. Consulte a nova revisão antes de outra transferência.`);
+ });
+ for(const replace of [false,true])on(replace?'replace':'merge',async check=>{
+  const state=await checked(check);check();const current=await getSwipe();check();const stamp=JSON.stringify(current),merged=mergeSwipeImport(current,state.items);
+  if(!confirm(replace?`Substituir ${current.length} referências locais pelas ${state.items.length} referências da revisão consultada em ${state.settings.backendUrl}?`:`Mesclar ${merged.added} novas referências no navegador? ${merged.duplicates} duplicadas e ${merged.conflicts} conflitantes manterão os dados locais.`))return;
+  check();const settings=await getSettings();check();
+  if(identity(settings)!==identity(state.settings))throw new Error('A conexão mudou; nenhuma biblioteca local foi alterada.');
+  const latest=await readRemote(state.settings);check();
+  if(latest.revision!==state.revision){remote=undefined;throw new Error('A biblioteca do backend mudou. Consulte e revise novamente.');}
+  const latestSettings=await getSettings();check();
+  if(identity(latestSettings)!==identity(state.settings))throw new Error('A conexão mudou durante a consulta; nenhuma biblioteca local foi alterada.');
+  await updateSwipe(async local=>{
+   check();const lockedSettings=await getSettings();check();
+   if(identity(lockedSettings)!==identity(state.settings))throw new Error('A conexão mudou enquanto aguardava o bloqueio local; nenhuma biblioteca foi alterada.');
+   if(JSON.stringify(local)!==stamp)throw new Error('A biblioteca local mudou. Consulte e revise novamente.');
+   return replace?state.items:mergeSwipeImport(local,state.items).items;
+  });check();remote=undefined;await render();check();
+  status('Transferência local concluída. IDs, datas e metadados preservados. Consulte novamente para outra ação.');
+ });
+ window.addEventListener('pagehide',invalidate);controls();
+ return {invalidate};
 }
