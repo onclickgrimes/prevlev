@@ -162,11 +162,23 @@ export function readComments(root: Document | Element): CommentRecord[] {
     if (!body) continue;
     const author = ownValue(["#author-text", "[data-author]"], "data-author");
     const likesText = ownValue(["[data-likes]"], "data-likes") || ownValue(["#vote-count-middle", "#vote-count-left", '[aria-label*=" likes"]', '[aria-label*=" curtidas"]'], "aria-label");
-    const repliesText = ownValue(["[data-replies]"], "data-replies") || ownValue(["#more-replies", "ytd-comment-replies-renderer #text", '[aria-label*=" replies"]', '[aria-label*=" respostas"]'], "aria-label");
+    let repliesText = ownValue(["[data-replies]"], "data-replies") || ownValue(["#more-replies", "ytd-comment-replies-renderer #text", '[aria-label*=" replies"]', '[aria-label*=" respostas"]'], "aria-label");
+    const thread = owner.closest("ytd-comment-thread-renderer");
+    // YouTube also renders the main comment's reply count beside its view model.
+    // A loaded reply must never inherit that count or a sibling reply's metadata.
+    if (!repliesText && thread && thread.querySelector(component) === owner) {
+      const counts = new Map<number, string>();
+      for (const node of thread.querySelectorAll('#more-replies,ytd-comment-replies-renderer #text')) {
+        if (node.closest(selector) !== thread) continue;
+        const raw = normalizeCommentText(node.getAttribute('aria-label') || node.textContent || '');
+        const value = parseCount(raw);
+        if (value !== undefined) counts.set(value, raw);
+      }
+      if (counts.size === 1) repliesText = [...counts.values()][0];
+    }
     const trueHeart = ownNodes('[data-hearted="true"],ytd-creator-heart-renderer button[aria-pressed="true"],ytd-creator-heart-renderer #hearted').length > 0;
     const falseHeart = ownNodes('[data-hearted="false"],ytd-creator-heart-renderer button[aria-pressed="false"]').length > 0;
     let id = owner.getAttribute("data-comment-id") ?? owner.getAttribute("comment-id") ?? ownNodes("[data-comment-id],[comment-id]").map(node => node.getAttribute("data-comment-id") ?? node.getAttribute("comment-id")).find(Boolean);
-    const thread = owner.closest("ytd-comment-thread-renderer");
     if (!id && thread && (thread === owner || thread.querySelector(component) === owner)) id = thread.getAttribute("data-comment-id") ?? thread.getAttribute("comment-id");
     if (id && !/^[A-Za-z0-9_.:-]{1,256}$/.test(id)) id = undefined;
     if (!id) {

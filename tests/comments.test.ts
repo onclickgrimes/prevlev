@@ -64,6 +64,12 @@ describe("complete local comment filters", () => {
 });
 
 describe("scoped loaded comment parsing", () => {
+  it("reads a sibling thread reply count only for its main comment and refuses conflicting counters", () => {
+    document.body.innerHTML = `<ytd-comment-thread-renderer><ytd-comment-view-model data-comment-id="main"><span id="content-text">Main</span></ytd-comment-view-model><ytd-comment-replies-renderer><button id="more-replies"><span id="text">3 respostas</span></button><ytd-comment-view-model data-comment-id="reply"><span id="content-text">Reply</span><span data-replies="0"></span></ytd-comment-view-model><ytd-comment-view-model data-comment-id="unknown"><span id="content-text">Unknown reply</span></ytd-comment-view-model></ytd-comment-replies-renderer></ytd-comment-thread-renderer><ytd-comment-thread-renderer><ytd-comment-view-model data-comment-id="other"><span id="content-text">Other thread</span></ytd-comment-view-model><ytd-comment-replies-renderer><span id="more-replies">8 respostas</span><span id="text">9 respostas</span></ytd-comment-replies-renderer></ytd-comment-thread-renderer>`;
+    const comments = readComments(document);
+    expect(comments.map(comment=>[comment.id,comment.replies])).toEqual([["main",3],["reply",0],["unknown",undefined],["other",undefined]]);
+    expect(selectComments(comments,{minReplies:1}).map(comment=>comment.id)).toEqual(["main"]);
+  });
   it("includes already loaded replies while deduplicating outer thread and nested comment components", () => {
     document.body.innerHTML = `<ytd-comments><ytd-comment-thread-renderer data-comment-id="main"><ytd-comment-view-model><a id="author-text">Autor</a><span id="content-text">Pergunta?</span><span id="vote-count-middle">1,2 mil</span><span id="more-replies">2 respostas</span><ytd-creator-heart-renderer><button aria-pressed="true"></button></ytd-creator-heart-renderer></ytd-comment-view-model><ytd-comment-replies-renderer><ytd-comment-view-model><a id="author-text">Resposta</a><span id="content-text">Texto respondido</span><span id="published-time-text"><a href="/watch?v=abcdefghijk&amp;lc=reply.1">agora</a></span><span data-likes="0"></span><span data-replies="0"></span><span data-hearted="false"></span></ytd-comment-view-model></ytd-comment-replies-renderer></ytd-comment-thread-renderer></ytd-comments>`;
     expect(readComments(document)).toEqual([

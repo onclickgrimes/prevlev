@@ -3,7 +3,7 @@ import {readFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {existsSync} from 'node:fs';
 let browser:Browser,context:BrowserContext,page:Page;
-type State={messages:Record<string,unknown>[];writes:number;tabUrl:string;holdCapture:boolean;finishCapture?:()=>void;holdMeasurement?:boolean;finishMeasurement?:()=>void};
+type State={messages:Record<string,unknown>[];writes:number;tabUrl:string;holdCapture:boolean;finishCapture?:()=>void;holdMeasurement?:boolean;finishMeasurement?:()=>void;holdMetadata?:boolean;finishMetadata?:()=>void;copied?:string};
 type Fixture=Window&{__gapState:State};
 test.beforeAll(async()=>{browser=await chromium.launch({executablePath:existsSync('/usr/bin/chromium')?'/usr/bin/chromium':undefined,headless:true,args:['--no-sandbox']});});
 test.afterAll(async()=>{await browser?.close();});
@@ -17,6 +17,7 @@ test.beforeEach(async()=>{
   await context.addInitScript(()=>{
     const state:State={messages:[],writes:0,tabUrl:'https://www.youtube.com/results?search_query=observado',holdCapture:false};
     (window as unknown as Fixture).__gapState=state;
+    Object.defineProperty(navigator,'clipboard',{value:{writeText:async(text:string)=>{state.copied=text;}}});
     const frozen={url:'https://www.youtube.com/watch?v=aaaaaaaaaaa',videoId:'aaaaaaaaaaa',title:'Coleção congelada A',videos:[{id:'aaaaaaaaaaa',title:'Vídeo congelado A',url:'https://www.youtube.com/watch?v=aaaaaaaaaaa',source:'youtube-dom'}],comments:[],transcript:[],warnings:[]};
     const store:Record<string,unknown>={snapshot:frozen};
     Object.defineProperty(globalThis,'chrome',{value:{runtime:{id:'gap-fixture',getURL:(path:string)=>'http://localhost:9401/'+path,sendMessage:async(message:Record<string,unknown>)=>{
@@ -29,6 +30,7 @@ test.beforeEach(async()=>{
       }return {status:'not_configured',source:'fixture'};
     }},tabs:{query:async()=>[{id:1,url:state.tabUrl,title:'Aba observada B'}],get:async()=>({id:1,url:state.tabUrl,title:'Aba observada B'}),sendMessage:async(_tab:number,message:Record<string,unknown>)=>{
       state.messages.push(message);
+      if(message.type==='GET_CURRENT_METADATA'){const url=state.tabUrl;if(state.holdMetadata)await new Promise<void>(resolve=>{state.finishMetadata=resolve;});return {status:'ok',metadata:{title:'Título observado',id:new URL(url).searchParams.get('v')??undefined,url}};}
       if(message.type==='GET_IMAGE_CONTEXT')return {status:'ok',snapshot:{...frozen,url:state.tabUrl,title:'Aba observada B',videos:[{id:'bbbbbbbbbbb',title:'Vídeo observado B',url:'https://www.youtube.com/watch?v=bbbbbbbbbbb',source:'youtube-dom'}]}};
       if(message.type==='STUDIO_PREVIEW')return {status:'ready',id:'plan-fixture'};
       if(message.type==='CAPTURE_CARD'){if(state.holdMeasurement)await new Promise<void>(resolve=>{state.finishMeasurement=resolve;});return {status:'ok',captureStamp:'validated-fixture'};}
@@ -38,6 +40,19 @@ test.beforeEach(async()=>{
   page=await context.newPage();await page.goto('http://localhost:9401/workspace.html');await expect(page.locator('#video-rows')).toContainText('Vídeo congelado A');
 });
 test.afterEach(async()=>{await context.close();});
+test('metadata from an old selected tab or URL never reaches the clipboard',async()=>{
+  await page.evaluate(()=>{const select=document.querySelector<HTMLSelectElement>('#tab-select')!;select.append(new Option('Outra aba','2'));(window as unknown as Fixture).__gapState.holdMetadata=true;});
+  await page.locator('#copy-title').click();await expect.poll(()=>page.evaluate(()=>!!(window as unknown as Fixture).__gapState.finishMetadata)).toBe(true);
+  await page.locator('#tab-select').selectOption('2');await page.locator('#tab-select').selectOption('1');
+  await page.evaluate(()=>(window as unknown as Fixture).__gapState.finishMetadata!());
+  await expect(page.locator('#notice')).toContainText('Nada foi copiado');expect(await page.evaluate(()=>(window as unknown as Fixture).__gapState.copied)).toBeUndefined();
+  await page.evaluate(()=>{const state=(window as unknown as Fixture).__gapState;state.finishMetadata=undefined;});
+  await page.locator('#copy-title').click();await expect.poll(()=>page.evaluate(()=>!!(window as unknown as Fixture).__gapState.finishMetadata)).toBe(true);
+  await page.evaluate(()=>{const state=(window as unknown as Fixture).__gapState;state.tabUrl='https://www.youtube.com/watch?v=ccccccccccc';state.finishMetadata!();});
+  await expect(page.locator('#notice')).toContainText('Nada foi copiado');expect(await page.evaluate(()=>(window as unknown as Fixture).__gapState.copied)).toBeUndefined();
+  await page.evaluate(()=>{(window as unknown as Fixture).__gapState.holdMetadata=false;});await page.locator('#copy-title').click();
+  await expect.poll(()=>page.evaluate(()=>(window as unknown as Fixture).__gapState.copied)).toBe('Título observado\nccccccccccc');
+});
 test('explicit selected-tab preview context uses read-only snapshot without replacing the collection',async()=>{
   await page.locator('[data-page="images"]').click();expect(await page.evaluate(()=>(window as unknown as Fixture).__gapState.messages.length)).toBe(0);
   await page.locator('#preview-source').selectOption('selected-tab');await page.locator('#preview-load-context').click();

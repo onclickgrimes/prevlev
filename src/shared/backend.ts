@@ -23,6 +23,7 @@ export async function callBackend(
   settings: Settings,
   feature: RemoteFeature,
   payload: unknown,
+  onDispatch?: () => void,
 ): Promise<RemoteResponse> {
   if (!settings.backendUrl)
     return {
@@ -32,8 +33,11 @@ export async function callBackend(
     };
   const origin = backendOrigin(settings.backendUrl);
   const signal = AbortSignal.timeout(isAiFeature(feature) ? 305000 : 45000);
+  const requestBody = JSON.stringify({ feature, payload });
   let response: Response;
   try {
+    // Local observation only: this marks a fetch attempt, never provider receipt or billing.
+    try { onDispatch?.(); } catch { /* An observer cannot alter the requested transport. */ }
     response = await fetch(`${origin}/v1/analyze`, {
       method: "POST",
       headers: {
@@ -42,7 +46,7 @@ export async function callBackend(
           ? { Authorization: `Bearer ${settings.backendToken}` }
           : {}),
       },
-      body: JSON.stringify({ feature, payload }),
+      body: requestBody,
       credentials: "omit",
       redirect: "error",
       signal,

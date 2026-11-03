@@ -42,6 +42,18 @@ afterEach(() => {
 });
 
 describe("cliente browser para a ponte Prevlev/Omni, sem rede real", () => {
+  it("observa somente tentativas de fetch iniciadas, sem presumir recebimento ou repetir falhas", async () => {
+    const events: string[] = [], observer = vi.fn(() => { events.push('dispatch'); });
+    const fetcher = vi.fn<typeof fetch>(async () => { events.push('fetch'); throw new Error('fixture offline'); });
+    vi.stubGlobal('fetch',fetcher);
+    await callBackend(defaultSettings,'transcript-summary',{text:'fixture'},observer);
+    await expect(callBackend({...settings,backendUrl:'https://invalid.test/path'},'transcript-summary',{},observer)).rejects.toThrow();
+    const circular: Record<string,unknown>={};circular.self=circular;
+    await expect(callBackend(settings,'transcript-summary',circular,observer)).rejects.toThrow();
+    expect(observer).not.toHaveBeenCalled();
+    await expect(callBackend(settings,'transcript-summary',{text:'fixture'},observer)).rejects.toThrow('incerto');
+    expect(events).toEqual(['dispatch','fetch']);expect(fetcher).toHaveBeenCalledTimes(1);
+  });
   it("limita JSON de imagens antes da leitura e cancela stream que excede o teto sem repetir",async()=>{
     const cancel=vi.fn();let reads=0;
     const hugeHeader=new Response(new ReadableStream({cancel}),{headers:{'content-length':String(24*1024*1024+1)}});

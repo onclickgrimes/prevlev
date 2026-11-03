@@ -102,6 +102,7 @@ let savedBackendOrigin = "";
 let selectedAiStreaming = false;
 let aiSelectionSaving = false;
 let aiRequestRunning = false;
+let metadataRequestRevision = 0;
 let imageContextRevision=0,imageTabRevision=0,studioCaptureRevision=0,studioCaptureRequest=0;
 let studioCaptureObserved:{tabId:number;url:string;stamp:string;kind:"analytics"|"latest-performance";redact:boolean;categories:ReturnType<typeof getRedactionCategories>;token:number}|undefined;
 const studioCaptureContext=()=>JSON.stringify([value("tab-select"),snapshot.url,snapshot.videoId,studioCaptureRevision,studioCaptureObserved?.url,studioCaptureObserved?.token,$<HTMLInputElement>("redact").checked,getRedactionCategories()]);
@@ -506,7 +507,15 @@ on("export-csv", () => {
   textFile(toCsv(rows, columns), "prevlev-videos.csv", "text/csv");
 });
 on("copy-title", async () => {
-  const result = await tabMessage<{metadata:{title:string;id?:string;url:string}}>("GET_CURRENT_METADATA");
+  const revision = ++metadataRequestRevision, tabId = targetTab();
+  const current = () => revision === metadataRequestRevision && tabId === targetTab();
+  const before = await chrome.tabs.get(tabId);
+  if (!current()) throw new Error("A aba selecionada mudou. Solicite a cópia novamente.");
+  const result = await chrome.tabs.sendMessage(tabId, {type:"GET_CURRENT_METADATA"}) as {status?:string;error?:string;metadata?:{title:string;id?:string;url:string}};
+  const after = await chrome.tabs.get(tabId);
+  if (!current() || before.url !== after.url || result.metadata?.url !== after.url)
+    throw new Error("A aba ou URL mudou durante a leitura. Nada foi copiado; solicite novamente.");
+  if (result.status === "error") throw new Error(result.error);
   if (!result.metadata) throw new Error("A aba selecionada não devolveu metadados atuais.");
   await navigator.clipboard.writeText(`${result.metadata.title}\n${result.metadata.id ?? result.metadata.url}`);
   notice("Título e ID copiados.");
@@ -774,6 +783,7 @@ $("timeline-range").addEventListener("change", () => {
 });
 $("timeline-query").addEventListener("input", renderTimeline);
 $("tab-select").addEventListener("change", () => {
+  metadataRequestRevision++;
   timeline = undefined;
   renderTimeline();
 });
@@ -1309,6 +1319,7 @@ on("clear-connection", async () => {
   notice("Backend desconectado.");
 });
 on("clear-data", async () => {
+  metadataRequestRevision++;
   if (
     !window.confirm(
       "Apagar a coleta e toda a biblioteca deste perfil? Exporte antes de continuar.",
@@ -1386,9 +1397,11 @@ const imageTools = initImageTools({notice,contextVideos:()=>snapshot.videos,cont
 for(const event of ["input","change"])$("tab-select").addEventListener(event,()=>{imageTabRevision++;imageTools.invalidateContext();invalidateStudioComposition();});
 chrome.tabs.onUpdated?.addListener((tabId,change)=>{
   if(tabId!==Number(value("tab-select"))||(!change.url&&change.status!=="loading"))return;
+  metadataRequestRevision++;
   imageTabRevision++;imageTools.invalidateContext();studioOverview.invalidateContext();studioCaptureObserved=undefined;invalidateStudioComposition("A aba selecionada navegou. Declare novamente o contexto e faça outra captura.");
 });
-chrome.tabs.onRemoved?.addListener(tabId=>{if(tabId===Number(value("tab-select"))){imageTabRevision++;imageTools.invalidateContext();studioOverview.invalidateContext();studioCaptureObserved=undefined;invalidateStudioComposition("A aba foi fechada. Selecione outra origem.");}});
+chrome.tabs.onRemoved?.addListener(tabId=>{if(tabId===Number(value("tab-select"))){metadataRequestRevision++;imageTabRevision++;imageTools.invalidateContext();studioOverview.invalidateContext();studioCaptureObserved=undefined;invalidateStudioComposition("A aba foi fechada. Selecione outra origem.");}});
+window.addEventListener("pagehide",()=>{metadataRequestRevision++;});
 const remoteImages = mountRemoteImages($("remote-images"));
 initCollectionTools({targetTab,snapshot:()=>snapshot,notice,adopt:async(next)=>{snapshot=next;nicheTools.invalidate(); cardComposer.invalidateSnapshot(); channelReport.invalidate();segments=next.transcript;await chrome.storage.local.set({snapshot});render();}});
 initSponsorshipTools();
