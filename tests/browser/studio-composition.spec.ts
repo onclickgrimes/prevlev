@@ -4,13 +4,16 @@ import { existsSync } from 'node:fs';
 import type { StudioCaptureReceipt } from '../../src/core/studio-composition';
 import type { StudioCompositionTools } from '../../src/ui/studio-composition';
 
-type Fixture = Window & { tools: StudioCompositionTools; contextKey: string; bitmapCalls: number; holdBitmap: boolean; releaseBitmap?: () => void };
+type Fixture = Window & {
+  tools: StudioCompositionTools; contextKey: string; bitmapCalls: number; holdBitmap: boolean; releaseBitmap?: () => void;
+  validationCalls: number; validationAllowed: boolean; holdValidation: boolean; releaseValidation?: (allowed: boolean) => void;
+};
 let browser: Browser, context: BrowserContext, page: Page, bundle: string, unexpected: string[];
 test.beforeAll(async () => {
   bundle = (await build({ stdin: { contents: `import {mountStudioComposition} from './src/ui/studio-composition';
-window.contextKey='context-A';window.bitmapCalls=0;window.holdBitmap=false;
+window.contextKey='context-A';window.bitmapCalls=0;window.holdBitmap=false;window.validationCalls=0;window.validationAllowed=true;window.holdValidation=false;
 const real=window.createImageBitmap;window.createImageBitmap=(async(source,...rest)=>{window.bitmapCalls++;if(window.holdBitmap)await new Promise(resolve=>window.releaseBitmap=resolve);return real(source,...rest);});
-window.tools=mountStudioComposition(document.querySelector('#host'),{contextKey:()=>window.contextKey});`, resolveDir: process.cwd(), loader: 'ts' }, bundle: true, write: false, format: 'iife' })).outputFiles[0].text;
+window.tools=mountStudioComposition(document.querySelector('#host'),{contextKey:()=>window.contextKey,validateContext:async key=>{window.validationCalls++;if(window.holdValidation)return await new Promise(resolve=>window.releaseValidation=resolve);return window.validationAllowed;}});`, resolveDir: process.cwd(), loader: 'ts' }, bundle: true, write: false, format: 'iife' })).outputFiles[0].text;
   browser = await chromium.launch({ executablePath: process.env.PREVLEV_CHROMIUM_PATH ?? (existsSync('/usr/bin/chromium') ? '/usr/bin/chromium' : undefined), headless: true, args: ['--no-sandbox'] });
 });
 test.afterAll(async () => { await browser?.close(); });
@@ -100,4 +103,64 @@ test('cancelling during PNG encoding never retains the eventual encoded result',
   await page.locator('#studio-compose-cancel').click(); await expect(page.locator('#studio-compose-status')).toContainText('Composição cancelada');
   await page.evaluate(() => { (window as unknown as { finishCompositionEncoding(): void }).finishCompositionEncoding(); });
   await expect(page.locator('#studio-compose-render')).toBeDisabled(); await expect(page.locator('#studio-compose-output img')).toHaveCount(0); await expect(page.locator('#studio-compose-download')).toBeDisabled();
+});
+
+test('refuses actual-tab validation failures before accepting pixels or starting composition', async () => {
+  await page.evaluate(() => { (window as unknown as Fixture).validationAllowed = false; });
+  expect(await setCapture(receipt())).toContain('contexto real');
+  await expect(page.locator('#studio-compose-source')).toHaveText('Nenhuma imagem fornecida.'); expect(await page.evaluate(() => (window as unknown as Fixture).bitmapCalls)).toBe(0);
+  await page.evaluate(() => { (window as unknown as Fixture).validationAllowed = true; }); await setCapture(receipt());
+  await page.evaluate(() => { (window as unknown as Fixture).validationAllowed = false; }); await page.locator('#studio-compose-render').click();
+  await expect(page.locator('#studio-compose-status')).toContainText('contexto real'); await expect(page.locator('#studio-compose-render')).toBeDisabled(); expect(await page.evaluate(() => (window as unknown as Fixture).bitmapCalls)).toBe(0);
+});
+
+test('rejects a successful but stale validator reply after the synchronous context changes', async () => {
+  await setCapture(receipt()); await page.evaluate(() => { (window as unknown as Fixture).holdValidation = true; });
+  await page.locator('#studio-compose-render').click(); await expect.poll(() => page.evaluate(() => (window as unknown as Fixture).validationCalls)).toBe(2);
+  await page.evaluate(() => { const fixture = window as unknown as Fixture; fixture.contextKey = 'context-B'; fixture.releaseValidation?.(true); });
+  await expect(page.locator('#studio-compose-source')).toHaveText('Nenhuma imagem fornecida.'); await expect(page.locator('#studio-compose-render')).toBeDisabled();
+  expect(await page.evaluate(() => (window as unknown as Fixture).bitmapCalls)).toBe(0); await expect(page.locator('#studio-compose-output img')).toHaveCount(0);
+});
+
+test('revalidates the actual tab after a held composition decoder returns', async () => {
+  await setCapture(receipt()); await page.evaluate(() => { (window as unknown as Fixture).holdBitmap = true; });
+  await page.locator('#studio-compose-render').click(); await expect.poll(() => page.evaluate(() => (window as unknown as Fixture).bitmapCalls)).toBe(1);
+  await page.evaluate(() => { const fixture = window as unknown as Fixture; fixture.validationAllowed = false; fixture.holdBitmap = false; fixture.releaseBitmap?.(); });
+  await expect(page.locator('#studio-compose-status')).toContainText('contexto real'); await expect(page.locator('#studio-compose-output img')).toHaveCount(0); await expect(page.locator('#studio-compose-download')).toBeDisabled();
+  expect(await page.evaluate(() => (window as unknown as Fixture).validationCalls)).toBe(3);
+});
+
+test('revalidates the actual tab after a private preview decode before publishing', async () => {
+  await setCapture(receipt());
+  await page.evaluate(() => {
+    const original = HTMLImageElement.prototype.decode;
+    HTMLImageElement.prototype.decode = async function () { await new Promise<void>(resolve => Object.assign(window, { releaseStudioPreview: resolve })); await original.call(this); };
+  });
+  await page.locator('#studio-compose-render').click();
+  await expect.poll(() => page.evaluate(() => typeof (window as unknown as { releaseStudioPreview?: () => void }).releaseStudioPreview)).toBe('function');
+  await page.evaluate(() => { (window as unknown as Fixture).validationAllowed = false; (window as unknown as { releaseStudioPreview(): void }).releaseStudioPreview(); });
+  await expect(page.locator('#studio-compose-status')).toContainText('contexto real'); await expect(page.locator('#studio-compose-source')).toHaveText('Nenhuma imagem fornecida.'); await expect(page.locator('#studio-compose-output img')).toHaveCount(0);
+  expect(await page.evaluate(() => (window as unknown as Fixture).validationCalls)).toBe(4);
+});
+
+test('an actual-tab validation failure before download clears pixels and produces no file', async () => {
+  await setCapture(receipt()); await page.locator('#studio-compose-render').click(); await expect(page.locator('#studio-compose-output img')).toBeVisible();
+  const files: string[] = []; page.on('download', download => files.push(download.suggestedFilename()));
+  await page.evaluate(() => { (window as unknown as Fixture).validationAllowed = false; }); await page.locator('#studio-compose-download').click();
+  await expect(page.locator('#studio-compose-status')).toContainText('contexto real'); await expect(page.locator('#studio-compose-source')).toHaveText('Nenhuma imagem fornecida.'); await expect(page.locator('#studio-compose-output img')).toHaveCount(0); await expect(page.locator('#studio-compose-download')).toBeDisabled(); expect(files).toEqual([]);
+});
+
+test('download validation ignores duplicate clicks and a late reply after cancellation', async () => {
+  await setCapture(receipt()); await page.locator('#studio-compose-render').click(); await expect(page.locator('#studio-compose-output img')).toBeVisible();
+  const files: string[] = []; page.on('download', download => files.push(download.suggestedFilename()));
+  await page.evaluate(() => { const fixture = window as unknown as Fixture; fixture.holdValidation = true; const button = document.getElementById('studio-compose-download') as HTMLButtonElement; button.click(); button.click(); });
+  await expect.poll(() => page.evaluate(() => (window as unknown as Fixture).validationCalls)).toBe(5); await expect(page.locator('#studio-compose-download')).toBeDisabled();
+  await page.locator('#studio-compose-cancel').click(); await page.evaluate(() => { (window as unknown as Fixture).releaseValidation?.(true); });
+  await expect(page.locator('#studio-compose-status')).toContainText('Composição cancelada'); await expect(page.locator('#studio-compose-source')).toHaveText('Nenhuma imagem fornecida.'); expect(files).toEqual([]);
+});
+
+test('local PNG acceptance, composition and download never query the tab validator', async () => {
+  await page.evaluate(() => { const fixture = window as unknown as Fixture; fixture.validationAllowed = false; fixture.contextKey = 'another-tab'; });
+  await upload(); await page.locator('#studio-compose-render').click(); await expect(page.locator('#studio-compose-output img')).toBeVisible();
+  const file = page.waitForEvent('download'); await page.locator('#studio-compose-download').click(); expect((await file).suggestedFilename()).toBe('prevlev-studio-composicao.png'); expect(await page.evaluate(() => (window as unknown as Fixture).validationCalls)).toBe(0);
 });

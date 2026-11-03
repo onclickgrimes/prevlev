@@ -10,7 +10,13 @@ export interface StudioCompositionTools {
   invalidate(reason?: string): void;
   dispose(): void;
 }
-export function mountStudioComposition(host: HTMLElement, dependencies: { contextKey?: () => string; notice?: (message: string, error?: boolean) => void } = {}): StudioCompositionTools {
+export interface StudioCompositionDependencies {
+  contextKey?: () => string;
+  /** Root checks the actual tab URL/identity; never called for a user-selected local PNG. */
+  validateContext?: (contextKey: string) => Promise<boolean>;
+  notice?: (message: string, error?: boolean) => void;
+}
+export function mountStudioComposition(host: HTMLElement, dependencies: StudioCompositionDependencies = {}): StudioCompositionTools {
   const doc = host.ownerDocument, panel = doc.createElement('div'); panel.className = 'card'; panel.id = 'studio-composition';
   panel.innerHTML = `<h2>Compor captura do Studio</h2>
     <p>Crie uma moldura própria para um recorte validado ou PNG local. Nenhuma captura ou composição é iniciada ao abrir. O tema altera a moldura; os pixels da captura mantêm a aparência original.</p>
@@ -32,23 +38,43 @@ export function mountStudioComposition(host: HTMLElement, dependencies: { contex
   const get = <T extends HTMLElement = HTMLElement>(id: string) => panel.querySelector<T>(`#studio-compose-${id}`)!;
   const file = get<HTMLInputElement>('file'), enabled = get<HTMLInputElement>('enabled'), render = get<HTMLButtonElement>('render'), download = get<HTMLButtonElement>('download'), status = get('status'), output = get('output');
   let input: StudioCompositionInput | undefined, result: Blob | undefined, owner: ImagePreview | undefined, controller: AbortController | undefined, epoch = 0, disposed = false;
+  let downloading: object | undefined;
   const message = (value: string, error = false) => { status.textContent = value; dependencies.notice?.(value, error); };
-  const clearOutput = () => { epoch++; controller?.abort(); controller = undefined; result = undefined; owner?.release(); owner = undefined; output.replaceChildren(); download.disabled = true; render.disabled = !input || disposed; };
+  const clearOutput = () => { epoch++; controller?.abort(); controller = undefined; downloading = undefined; result = undefined; owner?.release(); owner = undefined; output.replaceChildren(); download.disabled = true; render.disabled = !input || disposed; };
   const invalidate = (reason = 'Contexto alterado. Forneça uma nova captura validada ou escolha o PNG novamente.') => { if (disposed) return; clearOutput(); input = undefined; file.value = ''; get('source').textContent = 'Nenhuma imagem fornecida.'; render.disabled = true; message(reason); };
   const syncOptions = () => { get('note-label').hidden = get<HTMLSelectElement>('layout').value !== 'video-info'; get<HTMLInputElement>('color').disabled = get<HTMLSelectElement>('background').value !== 'custom'; };
   for (const id of ['layout', 'theme', 'background', 'color', 'scale', 'title', 'period', 'note']) for (const event of ['input', 'change']) get(id).addEventListener(event, () => { clearOutput(); syncOptions(); if (!input) file.value = ''; message(input ? 'Opções alteradas. Gere outra composição para estes mesmos pixels.' : 'Opções alteradas. Forneça uma captura validada ou escolha o PNG novamente.'); });
   enabled.addEventListener('change', () => invalidate('Destino da captura alterado. Uma próxima captura só ocorre por sua ação explícita.'));
 
+  const alive = (mine: number, operation: AbortController) => mine === epoch && !operation.signal.aborted && !disposed;
+  const contextCurrent = (source: StudioCompositionInput) => source.source.kind !== 'validated-studio-capture' || !dependencies.contextKey || dependencies.contextKey() === source.source.receipt.contextKey;
+  const changedContext = () => new Error('A aba ou o contexto real da captura mudou ou não pôde ser verificado. Capture novamente antes de compor ou baixar.');
+  async function verifyContext(source: StudioCompositionInput, mine: number, operation: AbortController): Promise<boolean> {
+    if (!alive(mine, operation)) return false;
+    if (!contextCurrent(source)) throw changedContext();
+    if (source.source.kind !== 'validated-studio-capture' || !dependencies.validateContext) return true;
+    let valid: boolean;
+    try { valid = await dependencies.validateContext(source.source.receipt.contextKey); }
+    catch { if (!alive(mine, operation)) return false; throw changedContext(); }
+    if (!alive(mine, operation)) return false;
+    if (!contextCurrent(source) || valid !== true) throw changedContext();
+    return true;
+  }
+
   async function accept(next: StudioCompositionInput): Promise<void> {
     clearOutput(); input = undefined; render.disabled = true; const mine = epoch, current = new AbortController(); controller = current;
     get('source').textContent = 'Validando nova imagem fornecida…'; message('Validando o PNG fornecido localmente…');
     try {
+      if (!contextCurrent(next)) throw changedContext();
       await preflightImage(next.image, { ...STUDIO_COMPOSITION_LIMITS, signal: current.signal, deadline: performance.now() + STUDIO_COMPOSITION_LIMITS.durationMs });
-      if (mine !== epoch || current.signal.aborted || disposed) return;
-      if (next.source.kind === 'validated-studio-capture' && dependencies.contextKey && dependencies.contextKey() !== next.source.receipt.contextKey) throw new Error('A aba ou o contexto da captura mudou. Capture novamente antes de compor.');
+      if (!alive(mine, current)) return;
+      if (!contextCurrent(next)) throw changedContext();
+      if (!await verifyContext(next, mine, current)) return;
+      if (!alive(mine, current)) return;
+      if (!contextCurrent(next)) throw changedContext();
       input = next; get('source').textContent = studioCompositionSourceLabel(next.source); render.disabled = false;
       message('Pixels aceitos. Revise o layout e os metadados; clique em Gerar para compor.');
-    } catch (error) { if (mine === epoch && !current.signal.aborted && !disposed) { get('source').textContent = 'Imagem recusada.'; message(error instanceof Error ? error.message : 'Não foi possível validar o PNG.', true); throw error; } }
+    } catch (error) { if (alive(mine, current)) { invalidate(error instanceof Error ? error.message : 'Não foi possível validar o PNG.'); dependencies.notice?.(status.textContent ?? '', true); throw error; } }
     finally { if (controller === current) controller = undefined; }
   }
   file.addEventListener('change', () => {
@@ -61,27 +87,49 @@ export function mountStudioComposition(host: HTMLElement, dependencies: { contex
     const source = input; clearOutput(); const mine = epoch, current = new AbortController(); controller = current; render.disabled = true;
     const value = (id: string) => get<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(id).value;
     const options: StudioCompositionOptions = { layout: value('layout') as StudioCompositionOptions['layout'], theme: value('theme') as StudioCompositionOptions['theme'], background: value('background') as StudioCompositionOptions['background'], color: value('color'), scale: Number(value('scale')) as 1 | 2, metadata: { title: value('title'), period: value('period'), note: value('note') } };
-    const contextCurrent = () => source.source.kind !== 'validated-studio-capture' || !dependencies.contextKey || dependencies.contextKey() === source.source.receipt.contextKey;
     message('Compondo os pixels fornecidos neste navegador…');
     void (async () => {
       try {
-        if (!contextCurrent()) { invalidate(); return; }
+        if (!await verifyContext(source, mine, current)) return;
+        if (!alive(mine, current)) return;
+        if (!contextCurrent(source)) throw changedContext();
         const deadline = performance.now() + STUDIO_COMPOSITION_LIMITS.durationMs;
         const blob = await composeStudioCapture(source, options, { signal: current.signal, deadline });
-        if (mine !== epoch || current.signal.aborted || disposed) return;
-        if (!contextCurrent()) { invalidate(); return; }
+        if (!alive(mine, current)) return;
+        if (!contextCurrent(source)) throw changedContext();
+        if (!await verifyContext(source, mine, current)) return;
+        if (!alive(mine, current)) return;
+        if (!contextCurrent(source)) throw changedContext();
         const image = doc.createElement('img'); image.alt = 'Composição local com pixels fornecidos e metadados declarados'; image.style.cssText = 'max-width:100%;height:auto';
         const preview = await prepareImagePreview(image, blob, { signal: current.signal, deadline, maxBytes: STUDIO_COMPOSITION_LIMITS.maxBytes, maxPixels: 4_000_000, maxDimension: 2400 });
-        if (mine !== epoch || current.signal.aborted || disposed) { preview.release(); return; }
-        if (!contextCurrent()) { preview.release(); invalidate(); return; }
+        if (!alive(mine, current)) { preview.release(); return; }
+        try {
+          if (!contextCurrent(source)) throw changedContext();
+          if (!await verifyContext(source, mine, current)) { preview.release(); return; }
+          if (!alive(mine, current)) { preview.release(); return; }
+          if (!contextCurrent(source)) throw changedContext();
+        } catch (error) { preview.release(); throw error; }
         owner = preview; result = blob; output.replaceChildren(image); download.disabled = false;
         message(`Composição local pronta · ${options.layout === 'analytics-only' ? 'AnalyticsOnly' : 'VideoInfo'} · ${options.scale}× · PNG. Revise os pixels antes de compartilhar.`);
-      } catch (error) { if (mine === epoch && !current.signal.aborted && !disposed) { clearOutput(); message(error instanceof Error ? error.message : 'A composição local falhou.', true); } }
+      } catch (error) { if (alive(mine, current)) { invalidate(error instanceof Error ? error.message : 'A composição local falhou.'); dependencies.notice?.(status.textContent ?? '', true); } }
       finally { if (controller === current) controller = undefined; if (mine === epoch && !disposed) render.disabled = !input; }
     })();
   });
   get('cancel').addEventListener('click', () => invalidate('Composição cancelada e pixels descartados. Nenhuma captura ou arquivo novo foi enviado.'));
-  download.addEventListener('click', () => { if (result) downloadBlob(result, 'prevlev-studio-composicao.png'); });
+  download.addEventListener('click', () => {
+    if (!result || !input || disposed || downloading) return;
+    const blob = result, source = input, mine = epoch, current = new AbortController(), token = {};
+    downloading = token; controller = current; download.disabled = true;
+    void (async () => {
+      try {
+        if (!await verifyContext(source, mine, current)) return;
+        if (!alive(mine, current)) return;
+        if (!contextCurrent(source)) throw changedContext();
+        downloadBlob(blob, 'prevlev-studio-composicao.png');
+      } catch (error) { if (alive(mine, current)) { invalidate(error instanceof Error ? error.message : 'Não foi possível validar o contexto antes de baixar.'); dependencies.notice?.(status.textContent ?? '', true); } }
+      finally { if (downloading === token) { downloading = undefined; if (controller === current) controller = undefined; if (alive(mine, current) && result === blob && input === source) download.disabled = false; } }
+    })();
+  });
   syncOptions();
   return {
     wantsComposition: () => !disposed && enabled.checked,
