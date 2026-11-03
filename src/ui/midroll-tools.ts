@@ -1,4 +1,5 @@
-import { analyzePcm, MIDROLL_INTERVAL_PRESETS, planAdvancedMidrolls, type AdvancedMidrollMode, type PcmAnalysis } from "../core/midroll";
+import { analyzePcm, MIDROLL_INTERVAL_PRESETS, MIDROLL_POSITION_FPS, midrollPositionGrid, planAdvancedMidrolls, type AdvancedMidrollMode, type MidrollPositionPrecision, type PcmAnalysis } from "../core/midroll";
+import { mountMidrollTimeline } from './midroll-timeline';
 
 const MAX_PCM_SAMPLES = 16_000_000;
 const WAV_ERROR = "Use um arquivo WAV local PCM ou IEEE float válido; formatos comprimidos não são aceitos.";
@@ -58,7 +59,10 @@ export function mountMidrollTools(doc: Document, onChange: () => void) {
     <label><input id="midroll-include-start" type="checkbox"> Incluir início (1 s)</label>
     <label><input id="midroll-include-end" type="checkbox"> Incluir fim (duração − 1 s)</label>
     <label><input id="midroll-include-playhead" type="checkbox"> Incluir playhead informado</label>
-    <label>Playhead em segundos <input id="midroll-playhead" type="number" min="1" step="0.01"></label>
+    <label>Playhead em segundos <input id="midroll-playhead" type="number" min="1" step="1"></label>
+    <label>Precisão das posições <select id="midroll-position-precision"><option value="seconds">Segundos inteiros (posições geradas arredondadas)</option><option value="frames">Frames com FPS declarado</option></select></label>
+    <label>FPS das posições, independente da análise PCM <input id="midroll-position-fps" type="number" min="24" max="60" placeholder="${MIDROLL_POSITION_FPS.join(', ')}" disabled></label>
+    <p>Playhead e início informados devem respeitar a grade escolhida; frações manuais nunca são arredondadas silenciosamente. O editor legado aceita apenas segundos inteiros.</p>
     <label>Limite de silêncio (% amplitude RMS) <input id="midroll-threshold" type="number" min="0" max="100" step="0.1" value="1"></label>
     <label>Silêncio mínimo (ms) <input id="midroll-min-silence" type="number" min="1" value="500"></label>
     <label>FPS da análise PCM <input id="midroll-analysis-fps" type="number" min="1" max="120" value="30"></label>
@@ -73,17 +77,45 @@ export function mountMidrollTools(doc: Document, onChange: () => void) {
   const progress = panel.querySelector<HTMLProgressElement>("#midroll-progress")!;
   const cancel = panel.querySelector<HTMLButtonElement>("#midroll-cancel")!;
   const wave = panel.querySelector<HTMLElement>("#midroll-waveform")!;
+  const precision = panel.querySelector<HTMLSelectElement>('#midroll-position-precision')!;
+  const timeline = mountMidrollTimeline(doc, panel);
+  const usePlayhead = doc.createElement('button'); usePlayhead.type = 'button'; usePlayhead.id = 'midroll-use-local-playhead'; usePlayhead.textContent = 'Incluir cursor local como playhead informado'; panel.append(usePlayhead);
   let analysis: PcmAnalysis | undefined;
   let controller: AbortController | undefined;
-  const invalidateAudio = () => { controller?.abort(); analysis = undefined; wave.replaceChildren(); progress.value = 0; info.textContent = "Análise PCM anterior descartada; analise o arquivo novamente."; onChange(); };
-  panel.addEventListener("change", event => {
+  const getPlan = () => {
+    const videoDuration = Number(duration.value);
+    const selectedMode = mode.value as AdvancedMidrollMode;
+    const grid = midrollPositionGrid(precision.value as MidrollPositionPrecision, precision.value === 'frames' ? Number(input('midroll-position-fps').value) : undefined);
+    const matching = analysis && Math.abs(analysis.durationSeconds - videoDuration) < 0.01 ? analysis : undefined;
+    const positions = planAdvancedMidrolls({ mode: selectedMode, durationSeconds: videoDuration, intervalSeconds: Number(interval.value), quantity: Number(input("midroll-quantity").value), ...(input("midroll-start").value ? { startSeconds: Number(input("midroll-start").value) } : {}), includeStart: input("midroll-include-start").checked, includeEnd: input("midroll-include-end").checked, includePlayhead: input("midroll-include-playhead").checked, ...(input("midroll-playhead").value ? { playheadSeconds: Number(input("midroll-playhead").value) } : {}), silences: matching?.silences, precision: grid.precision, ...(grid.fps !== undefined ? { fps: grid.fps } : {}) });
+    return { positions, mode: selectedMode, durationSeconds: videoDuration, source: selectedMode === "smart" ? `PCM local: ${audioFile.files?.[0]?.name ?? "arquivo selecionado"}; ${matching!.silences.length} silêncios; limite ${input("midroll-threshold").value}% RMS, mínimo ${input("midroll-min-silence").value} ms; posições sem silêncio próximo mantêm intervalo` : "duração e parâmetros informados", targets: positions.length, playheadSource: input("midroll-include-playhead").checked ? "posição informada manualmente; sem leitura de cursor do Studio" : "não incluído", analysisFps: selectedMode === "smart" ? Number(input("midroll-analysis-fps").value) : undefined, positionPrecision: grid.precision, positionFps: grid.fps, positionResolution: grid.precision === 'frames' ? `grade de 1/${grid.fps} segundo; posições geradas quantizadas, posições manuais validadas` : 'grade de segundos inteiros; posições geradas arredondadas, posições manuais fracionárias recusadas' };
+  };
+  function refreshTimeline() {
+    try { const plan = getPlan(); timeline.render({ durationSeconds: plan.durationSeconds, positions: plan.positions, precision: plan.positionPrecision, fps: plan.positionFps, ...(input('midroll-include-playhead').checked ? { playheadSeconds: Number(input('midroll-playhead').value) } : {}) }); usePlayhead.disabled = false; }
+    catch (error) { timeline.clear(error instanceof Error ? error.message : 'Plano local inválido.'); usePlayhead.disabled = true; }
+  }
+  const changed = () => { refreshTimeline(); onChange(); };
+  const invalidateAudio = () => { controller?.abort(); analysis = undefined; wave.replaceChildren(); progress.value = 0; info.textContent = "Análise PCM anterior descartada; analise o arquivo novamente."; changed(); };
+  panel.addEventListener("input", event => {
+    if (!(event.target instanceof Element) || event.target.closest('#midroll-local-timeline')) return;
     if (event.target === preset) interval.value = preset.value;
+    if (event.target === precision) input('midroll-position-fps').disabled = precision.value !== 'frames';
+    if (event.target === precision || event.target === input('midroll-position-fps')) {
+      let step = 'any';
+      try { step = String(1 / midrollPositionGrid(precision.value as MidrollPositionPrecision, precision.value === 'frames' ? Number(input('midroll-position-fps').value) : undefined).ticksPerSecond); } catch { /* Invalid FPS remains visible and the plan stays unavailable. */ }
+      input('midroll-start').step = step; input('midroll-playhead').step = step;
+    }
     if ([input("midroll-threshold"), input("midroll-min-silence"), input("midroll-analysis-fps")].includes(event.target as HTMLInputElement)) invalidateAudio();
-    else onChange();
+    else changed();
   });
   audioFile.addEventListener("change", invalidateAudio);
-  duration.addEventListener("change", onChange);
-  interval.addEventListener("change", onChange);
+  duration.addEventListener("input", invalidateAudio);
+  interval.addEventListener("input", changed);
+  usePlayhead.addEventListener('click', () => {
+    const position = timeline.getPosition();
+    if (position === undefined || position < 1 || position > Number(duration.value) - 1) { info.textContent = 'Cursor local fora da faixa para anúncios (1 segundo até duração − 1 segundo).'; return; }
+    input('midroll-playhead').value = String(position); input('midroll-include-playhead').checked = true; changed();
+  });
   cancel.addEventListener("click", () => controller?.abort());
   audioButton.addEventListener("click", async () => {
     if (controller) return;
@@ -110,7 +142,7 @@ export function mountMidrollTools(doc: Document, onChange: () => void) {
         fps: Number(input("midroll-analysis-fps").value), signal: current.signal, onProgress: fraction => { progress.value = fraction; },
       });
       if (current.signal.aborted) throw new DOMException("Análise cancelada.", "AbortError");
-      analysis = result; duration.value = String(result.durationSeconds); onChange();
+      analysis = result; duration.value = String(result.durationSeconds); changed();
       const bars = result.waveform.map(level => { const bar = doc.createElement("span"); bar.style.cssText = `display:inline-block;width:2px;height:${Math.max(1, Math.round(level * 40))}px;background:currentColor;vertical-align:bottom`; return bar; });
       wave.replaceChildren(...bars);
       info.textContent = `PCM local: ${result.silences.length} silêncios em ${result.durationSeconds.toFixed(2)} s. Arquivo não enviado; silêncio é estimado por RMS.`;
@@ -122,13 +154,6 @@ export function mountMidrollTools(doc: Document, onChange: () => void) {
       cancel.disabled = true; audioButton.disabled = false;
     }
   });
-  return {
-    getPlan() {
-      const videoDuration = Number(duration.value);
-      const selectedMode = mode.value as AdvancedMidrollMode;
-      const matching = analysis && Math.abs(analysis.durationSeconds - videoDuration) < 0.01 ? analysis : undefined;
-      const positions = planAdvancedMidrolls({ mode: selectedMode, durationSeconds: videoDuration, intervalSeconds: Number(interval.value), quantity: Number(input("midroll-quantity").value), ...(input("midroll-start").value ? { startSeconds: Number(input("midroll-start").value) } : {}), includeStart: input("midroll-include-start").checked, includeEnd: input("midroll-include-end").checked, includePlayhead: input("midroll-include-playhead").checked, ...(input("midroll-playhead").value ? { playheadSeconds: Number(input("midroll-playhead").value) } : {}), silences: matching?.silences });
-      return { positions, mode: selectedMode, durationSeconds: videoDuration, source: selectedMode === "smart" ? `PCM local: ${audioFile.files?.[0]?.name ?? "arquivo selecionado"}; ${matching!.silences.length} silêncios; limite ${input("midroll-threshold").value}% RMS, mínimo ${input("midroll-min-silence").value} ms; posições sem silêncio próximo mantêm intervalo` : "duração e parâmetros informados", targets: positions.length, playheadSource: input("midroll-include-playhead").checked ? "posição informada manualmente" : "não incluído", analysisFps: selectedMode === "smart" ? Number(input("midroll-analysis-fps").value) : undefined };
-    },
-  };
+  refreshTimeline();
+  return { getPlan, refreshTimeline };
 }

@@ -14,8 +14,24 @@ describe("independent midroll planning", () => {
     expect(() => planAdvancedMidrolls({ mode: "custom", durationSeconds: 600, intervalSeconds: 60, includePlayhead: true, playheadSeconds: 600 })).toThrow();
     expect(() => planAdvancedMidrolls({ mode: "smart", durationSeconds: 600, intervalSeconds: 180 })).toThrow(/PCM/);
   });
-  it("keeps rounded end, playhead and snapped positions inside fractional duration", () => {
-    expect(planAdvancedMidrolls({ mode: "smart", durationSeconds: 480.9, intervalSeconds: 470, startSeconds: 470, silences: [{ start: 479.7, end: 479.9 }], includeEnd: true, includePlayhead: true, playheadSeconds: 479.8 })).toEqual([479]);
+  it("keeps generated positions within fractional duration and preserves frame-aligned manual positions", () => {
+    const options = { mode: 'smart' as const, durationSeconds: 480.9, intervalSeconds: 470, startSeconds: 470, silences: [{ start: 479.7, end: 479.9 }], includeEnd: true };
+    expect(planAdvancedMidrolls(options)).toEqual([479]);
+    expect(() => planAdvancedMidrolls({ ...options, includePlayhead: true, playheadSeconds: 479.8 })).toThrow('fracionária');
+    expect(planAdvancedMidrolls({ ...options, precision: 'frames', fps: 30, includePlayhead: true, playheadSeconds: 479.8 })).toEqual([479.8, 479.9]);
+  });
+  it('preserves fractional playheads and starts only on an explicitly declared frame grid', () => {
+    expect(planAdvancedMidrolls({ mode: 'quantity', durationSeconds: 600, quantity: 2, includePlayhead: true, playheadSeconds: 250.5, precision: 'frames', fps: 30 })).toEqual([200, 250.5, 400]);
+    expect(planAdvancedMidrolls({ mode: 'custom', durationSeconds: 480, intervalSeconds: 120, startSeconds: 30.5, fps: 30 })).toEqual([30.5, 150.5, 270.5, 390.5]);
+    expect(() => planAdvancedMidrolls({ mode: 'quantity', durationSeconds: 600, quantity: 2, includePlayhead: true, playheadSeconds: 250.5 })).toThrow('FPS');
+    expect(() => planAdvancedMidrolls({ mode: 'quantity', durationSeconds: 600, quantity: 2, includePlayhead: true, playheadSeconds: 250.51, fps: 30 })).toThrow('grade');
+    expect(() => planAdvancedMidrolls({ mode: 'custom', durationSeconds: 480, intervalSeconds: 120, startSeconds: 30.5 })).toThrow('frações');
+  });
+  it('requires valid FPS for frame precision and never rounds outside the declared boundaries', () => {
+    for (const fps of [undefined, 0, 29.97, Number.NaN, Infinity, 120]) expect(() => planAdvancedMidrolls({ mode: 'quantity', durationSeconds: 600, quantity: 2, precision: 'frames', fps })).toThrow('FPS');
+    expect(() => planAdvancedMidrolls({ mode: 'quantity', durationSeconds: 600, quantity: 2, precision: 'seconds', fps: 30 })).toThrow('FPS');
+    expect(planAdvancedMidrolls({ mode: 'quantity', durationSeconds: 480.5, quantity: 1, includeStart: true, includeEnd: true, includePlayhead: true, playheadSeconds: 479.5, fps: 30 })).toEqual([1, 240.266666666667, 479.5]);
+    for (const playheadSeconds of [0.99, 479.51]) expect(() => planAdvancedMidrolls({ mode: 'quantity', durationSeconds: 480.5, quantity: 1, includePlayhead: true, playheadSeconds, fps: 30 })).toThrow('limites');
   });
   it("snaps to measured silence and keeps interval where none is nearby", () => {
     expect(planAdvancedMidrolls({ mode: "smart", durationSeconds: 600, intervalSeconds: 180, silences: [{ start: 184, end: 186 }, { start: 30, end: 31 }] })).toEqual([185, 360, 540]);

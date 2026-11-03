@@ -47,6 +47,12 @@ describe('native period edits fail closed on readonly or stale DOM',()=>{
 });
 
 describe('modern toolbar midroll actions with explicit FPS',()=>{
+ it('preserves distinct frames within the same second and refuses off-grid fractions',()=>{
+  const doc=modern(),click=vi.fn();doc.querySelector('#add-ad-break')!.addEventListener('click',click);
+  const ready=previewStudioAction('midrolls',{positions:[250.5,250+16/30],fps:30},doc);expect(ready).toMatchObject({status:'ready',positions:['0:04:10:15','0:04:10:16']});cancelStudioPlan(ready.id);
+  const invalid=previewStudioAction('midrolls',{positions:[250.51],fps:30},doc);expect(invalid.status).toBe('unsupported');expect(invalid.warnings.join(' ')).toContain('grade');expect(click).not.toHaveBeenCalled();
+  expect(previewStudioAction('midrolls',{positions:[250.5,250.500000000001],fps:30},doc).status).toBe('unsupported');
+ });
  it('requires a declared compatible FPS and previews without any click',()=>{
   const doc=modern(),click=vi.fn();doc.querySelector('#add-ad-break')!.addEventListener('click',click);
   for(const fps of [undefined,29.97,25])expect(previewStudioAction('midrolls',{positions:[180],fps},doc).status).toBe('unsupported');

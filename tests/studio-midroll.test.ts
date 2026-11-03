@@ -26,6 +26,13 @@ function fixture(initial = 0) {
 afterEach(() => vi.useRealTimers());
 
 describe("creating midroll draft intervals through recognized controls", () => {
+  it('refuses fractional positions in the seconds-only adapter before any write or click', () => {
+    const { doc, add } = fixture(1), click = vi.fn(); add.addEventListener('click', click);
+    const input = doc.querySelector<HTMLInputElement>('input')!;
+    const plan = previewStudioAction('midrolls', { positions: [250.5], fps: 30 }, doc);
+    expect(plan.status).toBe('unsupported'); expect(plan.warnings.join(' ')).toContain('HH:MM:SS');
+    expect(plan.targets).toEqual([]); expect(input.value).toBe('00:02:00'); expect(click).not.toHaveBeenCalled();
+  });
   it("previews all positions and creation count without clicking", () => {
     const { doc, add } = fixture();
     const click = vi.fn();

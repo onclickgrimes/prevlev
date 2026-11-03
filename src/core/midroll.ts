@@ -101,6 +101,23 @@ export function detectSilences(
 
 export type AdvancedMidrollMode = "auto" | "quantity" | "custom" | "smart";
 export const MIDROLL_INTERVAL_PRESETS = [10, 20, 30, 60, 120, 180, 240, 300, 600, 900, 1200] as const;
+export const MIDROLL_POSITION_FPS = [24, 25, 30, 48, 50, 60] as const;
+export type MidrollPositionPrecision = 'seconds' | 'frames';
+export interface MidrollPositionGrid { precision: MidrollPositionPrecision; fps?: number; ticksPerSecond: number; }
+/** Planning precision is explicit and separate from the FPS used to scan a PCM file. */
+export function midrollPositionGrid(precision?: MidrollPositionPrecision, fps?: number): MidrollPositionGrid {
+  const selected = precision ?? (fps === undefined ? 'seconds' : 'frames');
+  if (selected !== 'seconds' && selected !== 'frames') throw new Error('Precisão do plano inválida.');
+  if (selected === 'seconds') {
+    if (fps !== undefined) throw new Error('FPS exige precisão em frames; não será ignorado no modo de segundos inteiros.');
+    return { precision: selected, ticksPerSecond: 1 };
+  }
+  if (fps === undefined || !MIDROLL_POSITION_FPS.includes(fps as typeof MIDROLL_POSITION_FPS[number])) throw new Error('Frames exigem FPS declarado: 24, 25, 30, 48, 50 ou 60.');
+  return { precision: selected, fps, ticksPerSecond: fps };
+}
+function onGrid(value: number, grid: MidrollPositionGrid): boolean {
+  return Math.abs(value * grid.ticksPerSecond - Math.round(value * grid.ticksPerSecond)) < 1e-7;
+}
 export interface AdvancedMidrollOptions {
   mode: AdvancedMidrollMode;
   durationSeconds: number;
@@ -113,6 +130,8 @@ export interface AdvancedMidrollOptions {
   playheadSeconds?: number;
   silences?: readonly Silence[];
   snapWindowSeconds?: number;
+  precision?: MidrollPositionPrecision;
+  fps?: number;
 }
 
 /** Independent proposal. Start/end mean one second inside the video, as Studio requires positive positions. */
@@ -122,11 +141,15 @@ export function planAdvancedMidrolls(options: AdvancedMidrollOptions): number[] 
     throw new Error("Informe uma duração entre 480 e 7200 segundos.");
   if (!["auto", "quantity", "custom", "smart"].includes(mode))
     throw new Error("Modo de planejamento inválido.");
+  const grid = midrollPositionGrid(options.precision, options.fps);
   const positions: number[] = [];
-  const add = (position: number) => {
+  const add = (position: number, manual = false) => {
     if (!Number.isFinite(position) || position < 1 || position > duration - 1)
       throw new Error("Posição fora dos limites do vídeo (1 segundo até duração − 1 segundo).");
-    positions.push(Math.min(Math.floor(duration - 1), Math.round(position)));
+    if (manual && !onGrid(position, grid)) throw new Error(grid.precision === 'seconds' ? 'Posição manual fracionária exige precisão em frames e FPS declarado; segundos inteiros não arredondam o playhead informado.' : 'Posição manual não está na grade do FPS declarado.');
+    const lastTick = Math.floor((duration - 1) * grid.ticksPerSecond + 1e-7);
+    const tick = Math.min(lastTick, Math.max(grid.ticksPerSecond, Math.round(position * grid.ticksPerSecond)));
+    positions.push(Number((tick / grid.ticksPerSecond).toFixed(12)));
     if (positions.length > 100) throw new Error("Mais de 50 posições solicitadas; aumente o intervalo ou reduza a quantidade.");
   };
   if (mode === "auto" || mode === "quantity") {
@@ -139,6 +162,7 @@ export function planAdvancedMidrolls(options: AdvancedMidrollOptions): number[] 
     const start = options.startSeconds ?? interval;
     if (!Number.isFinite(interval) || interval! < 10 || !Number.isFinite(start) || start! < 1 || start! > duration - 1)
       throw new Error("Informe intervalo de pelo menos 10 segundos e início dentro do vídeo.");
+    if (!onGrid(interval!, grid) || !onGrid(start!, grid)) throw new Error('Intervalo e início devem respeitar a precisão declarada; frações exigem frames e FPS compatível.');
     const snapWindow = options.snapWindowSeconds ?? 20;
     if (!Number.isFinite(snapWindow) || snapWindow < 0) throw new Error("Janela de silêncio inválida.");
     if (mode === "smart" && !options.silences)
@@ -153,7 +177,7 @@ export function planAdvancedMidrolls(options: AdvancedMidrollOptions): number[] 
   if (options.includeEnd) add(duration - 1);
   if (options.includePlayhead) {
     if (options.playheadSeconds === undefined) throw new Error("Informe a posição do playhead em segundos.");
-    add(options.playheadSeconds);
+    add(options.playheadSeconds, true);
   }
   const result = [...new Set(positions)].sort((a, b) => a - b);
   if (result.length > 50) throw new Error("Mais de 50 posições solicitadas; aumente o intervalo ou reduza a quantidade.");

@@ -528,11 +528,11 @@ export function previewStudioAction(
         (value, index) =>
           !Number.isFinite(value) ||
           value < 1 ||
-          (index > 0 && Math.floor(value) <= Math.floor(positions[index - 1])),
+          (index > 0 && value <= positions[index - 1]),
       )
     ) {
       unsupported =
-        "Informe de 1 a 50 posições positivas em segundos, distintas após arredondamento e em ordem crescente.";
+        "Informe de 1 a 50 posições positivas em segundos, distintas e em ordem crescente.";
     } else {
       // Frame-based controls must never fall through to the seconds-only adapter.
       const modernPresent=!!doc.querySelector('ytve-ad-breaks-editor-options-panel, ytve-toolbar ytcp-media-timestamp-input, #add-ad-break');
@@ -540,6 +540,8 @@ export function previewStudioAction(
       if(modernPresent){
         if(!modern)unsupported='O editor moderno exige um painel, um timestamp H:MM:SS:FF editável e um único controle #add-ad-break visível.';
         else if(!validModernFps(modern,input.fps))unsupported='O timestamp usa frames. Informe explicitamente FPS 24, 25, 30, 48, 50 ou 60 e confira se corresponde ao editor; FPS ausente, fracionário ou divergente não é presumido.';
+        else if(positions.some(value=>Math.abs(value*input.fps!-Math.round(value*input.fps!))>1e-7))unsupported='Uma posição está fora da grade do FPS declarado. A prévia não arredonda posições manuais para outro frame.';
+        else if(positions.some((value,index)=>index>0&&Math.round(value*input.fps!)<=Math.round(positions[index-1]*input.fps!)))unsupported='As posições devem ocupar frames distintos e em ordem crescente na grade do FPS declarado.';
         else{
           modernMidroll={...modern,fingerprint:modernFingerprint(modern,doc),addSignature:signature(modern.addButton),fieldSignature:signature(modern.field),positions:Object.freeze([...positions]),fps:input.fps};
           description=`Posicionar o cursor e solicitar ${positions.length} intervalos a ${input.fps} FPS: ${positions.map(value=>frameTimestamp(value,input.fps!)).join(', ')}.`;
@@ -547,7 +549,8 @@ export function previewStudioAction(
         }
       }else{
       const editors = midrollEditors(doc);
-      if (editors.length !== 1)
+      if(positions.some(value=>!Number.isInteger(value)))unsupported='O editor legado HH:MM:SS não aceita posições fracionárias. Escolha segundos inteiros explicitamente ou abra um editor com frames e FPS comprovado.';
+      else if (editors.length !== 1)
         unsupported = `Abra um único editor de intervalos reconhecido. Foram encontrados ${editors.length} editores visíveis.`;
       else if(Array.from(editors[0].querySelectorAll<HTMLInputElement>('input')).some(field=>visible(field)&&/^\d{1,3}:\d{2}:\d{2}:\d{2}$/.test(field.value||field.placeholder)))unsupported='O editor contém timestamps com frames, mas não possui o conjunto de controles modernos reconhecido. Nenhum FPS foi presumido.';
       else {
