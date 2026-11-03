@@ -50,6 +50,14 @@ describe('MCP optional local protocol',()=>{
    await expect(client.callTool({name:'history_delete',arguments:{}})).rejects.toThrow();
    const excluded=await client.callTool({name:'analyze_dataset',arguments:{feature:'channel-report',videos:[{...videos[0],source:'youtube-data-api'}]}});expect(excluded.isError).toBe(true);expect(JSON.stringify(excluded)).toContain('youtube-data-api');expect(analyze).not.toHaveBeenCalled();
  });
+ it('preserves validated text provenance without accepting undeclared transcript or metadata fields',async()=>{
+   const fetcher=vi.fn().mockRejectedValue(new Error('network forbidden'));vi.stubGlobal('fetch',fetcher);
+   const client=await connect();
+   const result=structured(await client.callTool({name:'analyze_dataset',arguments:{feature:'sponsorships',text:'Sponsored by Acme.',source:'public-page'}}));
+   expect(result).toMatchObject({status:'ok',data:{inputSource:'public-page'}});
+   for(const extra of [{metadata:{source:'user-provided'}},{transcript:{videoId:'abcdefghijk',segments:[{start:10,text:'Sponsored by Acme.'}]}}])expect((await client.callTool({name:'analyze_dataset',arguments:{feature:'sponsorships',text:'Sponsored by Acme.',source:'user-provided',...extra}})).isError).toBe(true);
+   expect(fetcher).not.toHaveBeenCalled();
+ });
  it('history methods share only read helper, cap output, never expose paths or inherited provider keys',async()=>{
    const dataDir=await directory(),read=vi.fn<NonNullable<McpDependencies['readHistory']>>().mockResolvedValue({status:'ok',source:'prevlev:history',data:{records:[{videoId:'dQw4w9WgXcQ',views:40,source:'youtube-dom'}],total:1},limitations:['Fixture local']});
    const client=await connect({readHistory:read},dataDir);

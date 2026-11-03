@@ -51,3 +51,30 @@ test('bounds the evidence list and clears source text/results/export state expli
  await page.locator('#sponsor-text').fill('Sponsored by Acme. Use code SAVE20.\n'.repeat(150));await page.locator('#sponsor-analyze').click();await expect(page.locator('#sponsor-evidence tr')).toHaveCount(200);await expect(page.locator('#sponsor-limits')).toContainText('Limite de 200');
  await page.locator('#sponsor-clear').click();await expect(page.locator('#sponsor-text')).toHaveValue('');await expect(page.locator('#sponsor-result')).toBeHidden();await expect(page.locator('#sponsor-evidence tr')).toHaveCount(0);await expect(page.locator('#sponsor-export-json')).toBeDisabled();
 });
+
+test('maps only explicitly applied segments to declared video times and exports their limits',async()=>{
+ const segments=[{start:0,duration:4,text:'🪐 Abertura.'},{start:12.5,duration:3,text:'Sponsored by Acme Studio.'},{start:40,text:'Use code SAVE20.'}];
+ await page.locator('#sponsor-text').fill('00:12 Sponsored by Acme.');await page.locator('#sponsor-analyze').click();await expect(page.locator('#sponsor-evidence')).toContainText('Desconhecidos');
+ await page.locator('#sponsor-timed-input summary').click();await page.locator('#sponsor-video-id').fill('abcdefghijk');await page.locator('#sponsor-coverage').selectOption('partial');await page.locator('#sponsor-segments').fill(JSON.stringify(segments));
+ await expect(page.locator('#sponsor-result')).toBeHidden();await page.locator('#sponsor-apply-segments').click();await expect(page.locator('#sponsor-result')).toBeHidden();await expect(page.locator('#sponsor-text')).toHaveValue(segments.map(segment=>segment.text).join('\n'));
+ await page.locator('#sponsor-analyze').click();await expect(page.locator('#sponsor-evidence')).toContainText('Vídeo abcdefghijk');await expect(page.locator('#sponsor-evidence')).toContainText('12.5s a 15.5s');await expect(page.locator('#sponsor-evidence')).toContainText('40s a fim desconhecido');await expect(page.locator('#sponsor-evidence')).toContainText('Nome literal após marcador');
+ for(const format of ['json','csv','markdown']as const){const waiting=page.waitForEvent('download');await page.locator(`#sponsor-export-${format}`).click();const content=await readFile((await(await waiting).path())!,'utf8');
+   if(format==='json'){const report=JSON.parse(content)as SponsorshipReport;const brand=report.evidence.find(proof=>proof.kind==='brand')!;expect(brand.timing).toMatchObject({status:'provided-segments',videoId:'abcdefghijk',coverage:'partial',segments:[{index:2,startSeconds:12.5,endSeconds:15.5}]});expect(brand.method).toBe('literal-name-after-marker');expect(brand.limitations).not.toHaveLength(0);expect(content).not.toContain('"confidence"');}
+   if(format==='csv'){expect(content).toContain('timing_status');expect(content).toContain('startSeconds');}
+   if(format==='markdown'){expect(content).toContain('Vídeo declarado: abcdefghijk');expect(content).toContain('fim desconhecido');expect(content).toContain('não localizam palavras');}
+ }
+});
+
+test('refuses invalid or official API segment provenance before applying any timed result',async()=>{
+ await page.locator('#sponsor-timed-input summary').click();await page.locator('#sponsor-video-id').fill('abcdefghijk');await page.locator('#sponsor-coverage').selectOption('unknown');
+ await page.locator('#sponsor-segments').fill(JSON.stringify([{start:2,text:'Sponsored by Acme.',metadata:{source:'youtube-data-api'}}]));await page.locator('#sponsor-apply-segments').click();await expect(page.locator('#sponsor-status')).toContainText('youtube-data-api');await expect(page.locator('#sponsor-result')).toBeHidden();
+ await page.locator('#sponsor-segments').fill(JSON.stringify([{start:-2,text:'Sponsored by Acme.'}]));await page.locator('#sponsor-apply-segments').click();await expect(page.locator('#sponsor-status')).toContainText('start deve');await expect(page.locator('#sponsor-text')).toHaveValue('');
+ await page.locator('#sponsor-segments').fill(JSON.stringify([{start:2,text:'Sponsored by Acme.'}]));await page.locator('#sponsor-video-id').fill('bad');await page.locator('#sponsor-apply-segments').click();await expect(page.locator('#sponsor-status')).toContainText('11 caracteres');await expect(page.locator('#sponsor-export-json')).toBeDisabled();
+});
+
+test('edits remove the timing association and stale inputs cannot export a previous timed result',async()=>{
+ await page.locator('#sponsor-timed-input summary').click();await page.locator('#sponsor-video-id').fill('abcdefghijk');await page.locator('#sponsor-coverage').selectOption('partial');await page.locator('#sponsor-segments').fill(JSON.stringify([{start:10,text:'Sponsored by Acme.'}]));await page.locator('#sponsor-apply-segments').click();await page.locator('#sponsor-analyze').click();await expect(page.locator('#sponsor-evidence')).toContainText('10s a fim desconhecido');
+ await page.locator('#sponsor-text').fill('Texto editado: Sponsored by Acme.');await expect(page.locator('#sponsor-result')).toBeHidden();await expect(page.locator('#sponsor-export-json')).toBeDisabled();await page.locator('#sponsor-analyze').click();await expect(page.locator('#sponsor-evidence')).toContainText('Desconhecidos');
+ await page.locator('#sponsor-apply-segments').click();await page.locator('#sponsor-analyze').click();await page.evaluate(()=>{(document.querySelector('#sponsor-video-id')as HTMLInputElement).value='bcdefghijkl';});await page.locator('#sponsor-export-json').click();await expect(page.locator('#sponsor-status')).toContainText('Analise novamente antes de exportar');await expect(page.locator('#sponsor-result')).toBeHidden();
+ await page.locator('#sponsor-clear').click();await expect(page.locator('#sponsor-video-id')).toHaveValue('');await expect(page.locator('#sponsor-segments')).toHaveValue('');await expect(page.locator('#sponsor-coverage')).toHaveValue('');
+});

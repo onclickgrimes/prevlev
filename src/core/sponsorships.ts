@@ -1,13 +1,16 @@
 /** Pure literal evidence extraction. Never fetches links, infers contracts or estimates money. */
 export type SponsorshipKind = 'sponsor-marker'|'brand'|'coupon-code'|'affiliate'|'disclosure'|'url';
-export interface SponsorshipEvidence {id:string;kind:SponsorshipKind;quote:string;start:number;end:number;line:number;column:number;negated:boolean;}
+export interface SponsorshipTranscript {videoId:string;coverage:'complete'|'partial'|'unknown';source?:unknown;segments:readonly {start:number;duration?:number;text:string}[];}
+export type SponsorshipTiming={status:'unknown';reason:string}|{status:'provided-segments';videoId:string;coverage:SponsorshipTranscript['coverage'];source:string;segments:{index:number;startSeconds:number;endSeconds:number|null;textStart:number;textEnd:number}[];omittedSegments:number;};
+export interface SponsorshipEvidence {id:string;kind:SponsorshipKind;quote:string;start:number;end:number;line:number;column:number;negated:boolean;method:'literal-pattern'|'literal-name-after-marker'|'literal-code-after-marker'|'literal-http-url';limitations:string[];timing:SponsorshipTiming;}
 export interface SponsorshipEntity {id:string;value:string;evidenceIds:string[];}
 export interface SponsorshipLink extends SponsorshipEntity {url:string;contextBrandIds:string[];contextEvidenceIds:string[];contextBasis:'same-line-text'|'unattributed';}
 export interface SponsorshipMention {evidenceId:string;brandId:string|null;brandState:'literal-name'|'unknown'|'negated';}
 export interface SponsorshipReport {version:1;source:'literal-text-evidence';inputSource:string;inputCharacters:number;evidence:SponsorshipEvidence[];brands:SponsorshipEntity[];coupons:SponsorshipEntity[];links:SponsorshipLink[];indicators:(SponsorshipEntity&{kind:'affiliate'|'disclosure';negated:boolean})[];sponsorMentions:SponsorshipMention[];mentions:{excerpt:string;start:number;end:number;line:number;evidenceIds:string[]}[];estimatedRevenue:null;truncated:boolean;ignoredUnsafeLinks:number;limitations:string[];warnings:string[];}
-export interface SponsorshipInput {text:string;source?:unknown;metadata?:unknown;provenance?:unknown;}
+export interface SponsorshipInput {text:string;source?:unknown;metadata?:unknown;provenance?:unknown;transcript?:SponsorshipTranscript;}
 interface Candidate {key:string;kind:SponsorshipKind;start:number;end:number;negated:boolean;}
 const MAX_TEXT=100000, MAX_EVIDENCE=200;
+export const SPONSORSHIP_TIMING_LIMITS=Object.freeze({segments:1000,referencesPerEvidence:20,jsonCharacters:1000000});
 const plain=(value:unknown):Record<string,unknown>=>value!==null&&typeof value==='object'&&!Array.isArray(value)?value as Record<string,unknown>:{};
 function guardApi(value:unknown):void {
   const stack:{value:unknown;tagged:boolean}[]=[{value,tagged:false}], seen=new WeakSet<object>();let count=0;
@@ -18,6 +21,39 @@ function guardApi(value:unknown):void {
     else for(const [key,child]of Object.entries(current.value))if(child&&typeof child==='object'||/source|provenance|origin/i.test(key))stack.push({value:child,tagged:current.tagged||/source|provenance|origin/i.test(key)});
   }
 }
+const declaredSource=(value:unknown)=>typeof value==='string'&&['youtube-dom','public-page','user-provided'].includes(value)?value:'unspecified';
+/** Explicitly supplied timings only. Reconstructs exact segment text with one newline between segments. */
+export function prepareSponsorshipTranscript(value:unknown):{text:string;transcript:SponsorshipTranscript} {
+  guardApi(value);const input=plain(value);
+  if(typeof input.videoId!=='string'||!/^\s*[A-Za-z0-9_-]{11}\s*$/.test(input.videoId))throw new Error('Informe o ID exato do vídeo dos segmentos, com 11 caracteres.');
+  if(typeof input.coverage!=='string'||!['complete','partial','unknown'].includes(input.coverage))throw new Error('Informe a cobertura declarada dos segmentos.');
+  if(!Array.isArray(input.segments)||!input.segments.length||input.segments.length>SPONSORSHIP_TIMING_LIMITS.segments)throw new Error('Forneça de 1 a 1000 segmentos explícitos.');
+  let characters=0;
+  const segments=input.segments.map((raw,index)=>{
+    const segment=plain(raw);
+    if(typeof segment.text!=='string')throw new Error(`Segmento ${index+1}: text deve ser uma string.`);
+    if(typeof segment.start!=='number'||!Number.isFinite(segment.start)||segment.start<0||segment.start>604800)throw new Error(`Segmento ${index+1}: start deve ser um número explícito de 0 a 604800 segundos.`);
+    if(segment.duration!==undefined&&(typeof segment.duration!=='number'||!Number.isFinite(segment.duration)||segment.duration<0||segment.start+segment.duration>604800))throw new Error(`Segmento ${index+1}: duration inválida ou fim acima de 604800 segundos.`);
+    characters+=segment.text.length+(index?1:0);if(characters>MAX_TEXT)throw new Error('O texto completo dos segmentos excede 100 mil caracteres; nada foi truncado.');
+    return {start:segment.start,...(typeof segment.duration==='number'?{duration:segment.duration}:{}),text:segment.text};
+  });
+  const text=segments.map(segment=>segment.text).join('\n');if(!text.trim())throw new Error('Os segmentos precisam conter texto real.');
+  return {text,transcript:{videoId:input.videoId.trim(),coverage:input.coverage as SponsorshipTranscript['coverage'],source:declaredSource(input.source),segments}};
+}
+function timingForInput(input:SponsorshipInput,text:string):(start:number,end:number)=>SponsorshipTiming {
+  if(input.transcript===undefined)return ()=>({status:'unknown',reason:'Nenhum segmento temporal explicitamente vinculado; horários no texto não são interpretados.'});
+  const provided=prepareSponsorshipTranscript(input.transcript);
+  if(provided.text!==text)throw new Error('O texto deve corresponder exatamente aos segmentos unidos por uma quebra de linha. Reaplique os segmentos após editar.');
+  let offset=0;
+  const spans=provided.transcript.segments.map((segment,index)=>{const start=offset;offset+=segment.text.length+1;return {index:index+1,startSeconds:segment.start,endSeconds:segment.duration&&segment.duration>0?segment.start+segment.duration:null,textStart:start,textEnd:start+segment.text.length};});
+  return (start,end)=>{
+    const matches=spans.filter(span=>span.textEnd>span.textStart&&span.textStart<end&&span.textEnd>start);
+    if(!matches.length)return {status:'unknown',reason:'O trecho não está contido em texto de segmento explícito.'};
+    return {status:'provided-segments',videoId:provided.transcript.videoId,coverage:provided.transcript.coverage,source:declaredSource(provided.transcript.source),segments:matches.slice(0,SPONSORSHIP_TIMING_LIMITS.referencesPerEvidence).map(span=>({...span})),omittedSegments:Math.max(0,matches.length-SPONSORSHIP_TIMING_LIMITS.referencesPerEvidence)};
+  };
+}
+function evidenceMethod(kind:SponsorshipKind):SponsorshipEvidence['method'] {return kind==='brand'?'literal-name-after-marker':kind==='coupon-code'?'literal-code-after-marker':kind==='url'?'literal-http-url':'literal-pattern';}
+function evidenceLimitations(kind:SponsorshipKind):string[] {return [kind==='brand'?'Nome literal após marcador; a associação comercial não foi verificada.':kind==='coupon-code'?'Código literal após marcador; validade do cupom não foi verificada.':kind==='url'?'URL literal validada apenas como formato; não prova propriedade ou vínculo comercial.':'Marcador textual literal, sem confirmação de contrato ou patrocínio.','Horários, quando fornecidos, pertencem aos segmentos completos; não localizam palavras dentro do segmento e não foram verificados no vídeo.'];}
 const normalized=(value:string)=>value.normalize('NFKC').replace(/\s+/g,' ').trim().toLocaleLowerCase('pt-BR');
 function lineStarts(text:string):number[]{const starts=[0];for(let i=0;i<text.length;i++)if(text[i]==='\r'){if(text[i+1]==='\n')i++;starts.push(i+1);}else if(text[i]==='\n')starts.push(i+1);return starts;}
 function location(starts:number[],offset:number){let low=0,high=starts.length;while(low+1<high){const middle=(low+high)>>1;if(starts[middle]<=offset)low=middle;else high=middle;}return {line:low+1,column:offset-starts[low]+1};}
@@ -55,6 +91,7 @@ function sentence(text:string,offset:number):{start:number;end:number} {let star
 
 export function extractSponsorships(input:SponsorshipInput):SponsorshipReport {
   guardApi(input);const text=plain(input).text;if(typeof text!=='string'||!text.trim())throw new Error('Cole texto real para examinar as evidências de divulgação.');if(text.length>MAX_TEXT)throw new Error('O texto excede o limite de 100 mil caracteres; ele não foi truncado.');
+  const timing=timingForInput(input,text);
   const starts=lineStarts(text),candidates:Candidate[]=[],counts=new Map<SponsorshipKind,number>(),unsafeSpans:{start:number;end:number}[]=[];let serial=0,truncated=false,ignoredUnsafeLinks=0;
   const add=(kind:SponsorshipKind,start:number,end:number,negative=false)=>{const count=counts.get(kind)??0;if(count>=MAX_EVIDENCE){truncated=true;return undefined;}counts.set(kind,count+1);const key=`candidate-${++serial}`;candidates.push({key,kind,start,end,negated:negative});return key;};
   const rawMentions:{markerKey:string;brandKey?:string;brandValue?:string;negated:boolean}[]=[];
@@ -77,7 +114,7 @@ export function extractSponsorships(input:SponsorshipInput):SponsorshipReport {
     if(!value){ignoredUnsafeLinks++;unsafeSpans.push({start:match.index,end:match.index+raw.length});continue;}const key=add('url',match.index,match.index+raw.length);if(!key)break;urls.set(key,value);
   }
   candidates.sort((a,b)=>a.start-b.start||a.end-b.end||a.kind.localeCompare(b.kind));if(candidates.length>MAX_EVIDENCE)truncated=true;const chosen=candidates.slice(0,MAX_EVIDENCE);
-  const evidence:SponsorshipEvidence[]=chosen.map((candidate,index)=>({id:`evidence-${index+1}`,kind:candidate.kind,quote:text.slice(candidate.start,candidate.end),start:candidate.start,end:candidate.end,...location(starts,candidate.start),negated:candidate.negated})), byKey=new Map(chosen.map((candidate,index)=>[candidate.key,evidence[index]]));
+  const evidence:SponsorshipEvidence[]=chosen.map((candidate,index)=>({id:`evidence-${index+1}`,kind:candidate.kind,quote:text.slice(candidate.start,candidate.end),start:candidate.start,end:candidate.end,...location(starts,candidate.start),negated:candidate.negated,method:evidenceMethod(candidate.kind),limitations:evidenceLimitations(candidate.kind),timing:timing(candidate.start,candidate.end)})), byKey=new Map(chosen.map((candidate,index)=>[candidate.key,evidence[index]]));
   const brands:SponsorshipEntity[]=[],coupons:SponsorshipEntity[]=[],links:SponsorshipLink[]=[],indicators:SponsorshipReport['indicators']=[],sponsorMentions:SponsorshipMention[]=[];
   const brandMap=new Map<string,SponsorshipEntity>();
   const attach=(entity:SponsorshipEntity,ids:string[])=>{for(const id of ids)if(!entity.evidenceIds.includes(id))entity.evidenceIds.push(id);};
@@ -93,13 +130,13 @@ export function extractSponsorships(input:SponsorshipInput):SponsorshipReport {
     }
   }
   const mentionMap=new Map<string,SponsorshipReport['mentions'][number]>();for(const proof of evidence)if(!['brand','url'].includes(proof.kind)){let span=sentence(text,proof.start);if(unsafeSpans.some(unsafe=>unsafe.start<span.end&&unsafe.end>span.start))span={start:proof.start,end:proof.end};const key=`${span.start}:${span.end}`;let mention=mentionMap.get(key);if(!mention){mention={excerpt:text.slice(span.start,span.end),...span,line:location(starts,span.start).line,evidenceIds:[]};mentionMap.set(key,mention);}if(!mention.evidenceIds.includes(proof.id))mention.evidenceIds.push(proof.id);}
-  const warnings:string[]=[];if(truncated)warnings.push('Limite de 200 evidências atingido; resultados posteriores podem ter sido omitidos.');if(ignoredUnsafeLinks)warnings.push(`${ignoredUnsafeLinks} links com formato inseguro, credenciais ou parâmetros sensíveis foram omitidos.`);
+  const warnings:string[]=[];if(truncated)warnings.push('Limite de 200 evidências atingido; resultados posteriores podem ter sido omitidos.');if(ignoredUnsafeLinks)warnings.push(`${ignoredUnsafeLinks} links com formato inseguro, credenciais ou parâmetros sensíveis foram omitidos.`);if(evidence.some(item=>item.timing.status==='provided-segments'&&item.timing.omittedSegments))warnings.push('Algumas evidências cruzam mais de 20 segmentos; as primeiras 20 referências temporais foram preservadas, com contagem explícita das omitidas.');
   return {version:1,source:'literal-text-evidence',inputSource:['youtube-dom','public-page','user-provided'].includes(String(input.source))?String(input.source):'unspecified',inputCharacters:text.length,evidence,brands,coupons,links,indicators,sponsorMentions,mentions:[...mentionMap.values()].slice(0,MAX_EVIDENCE),estimatedRevenue:null,truncated,ignoredUnsafeLinks,limitations:['Somente marcadores e nomes literais no texto fornecido; não comprova patrocínio, contrato, afiliação ou receita.','Marca desconhecida permanece desconhecida. Domínios não são usados para adivinhar marcas.','Contexto de link na mesma linha é uma referência textual para revisão, não prova de propriedade ou relação comercial.','Links não são abertos e nenhum serviço remoto é consultado. Não estima valores de contratos.','Índices start/end usam [início,fim) em unidades UTF-16 do texto original; linhas e colunas começam em 1.'],warnings};
 }
 
-export function sponsorshipRows(report:SponsorshipReport):Record<string,unknown>[] {return report.evidence.map(proof=>({id:proof.id,kind:proof.kind,line:proof.line,column:proof.column,start:proof.start,end:proof.end,quote:proof.quote,negated:proof.negated,brands:report.brands.filter(entity=>entity.evidenceIds.includes(proof.id)).map(entity=>entity.value).join('; '),coupons:report.coupons.filter(entity=>entity.evidenceIds.includes(proof.id)).map(entity=>entity.value).join('; '),links:report.links.filter(entity=>entity.evidenceIds.includes(proof.id)).map(entity=>entity.url).join('; ')}));}
+export function sponsorshipRows(report:SponsorshipReport):Record<string,unknown>[] {return report.evidence.map(proof=>({id:proof.id,kind:proof.kind,line:proof.line,column:proof.column,start:proof.start,end:proof.end,quote:proof.quote,negated:proof.negated,method:proof.method,limitations:proof.limitations,timing_status:proof.timing.status,timing:proof.timing,brands:report.brands.filter(entity=>entity.evidenceIds.includes(proof.id)).map(entity=>entity.value).join('; '),coupons:report.coupons.filter(entity=>entity.evidenceIds.includes(proof.id)).map(entity=>entity.value).join('; '),links:report.links.filter(entity=>entity.evidenceIds.includes(proof.id)).map(entity=>entity.url).join('; ')}));}
 export function sponsorshipMarkdown(report:SponsorshipReport):string {
   const lines=['# Evidências textuais de divulgação','',`Origem declarada: ${JSON.stringify(report.inputSource)}`,`Texto: ${report.inputCharacters} unidades UTF-16. Receita estimada: desconhecida.`,...report.limitations.map(value=>`- ${value}`),''];
-  for(const proof of report.evidence){const fence='`'.repeat(Math.max(3,...[...proof.quote.matchAll(/`+/g)].map(match=>match[0].length+1)));lines.push(`## ${proof.id} · ${proof.kind}`,`Linha ${proof.line}, coluna ${proof.column}; intervalo [${proof.start}, ${proof.end}). Negação literal: ${proof.negated?'sim':'não'}.`,'',`${fence}text`,proof.quote,fence,'');}
+  for(const proof of report.evidence){const fence='`'.repeat(Math.max(3,...[...proof.quote.matchAll(/`+/g)].map(match=>match[0].length+1)));lines.push(`## ${proof.id} · ${proof.kind}`,`Linha ${proof.line}, coluna ${proof.column}; intervalo [${proof.start}, ${proof.end}). Negação literal: ${proof.negated?'sim':'não'}.`,`Método: ${proof.method}.`,proof.timing.status==='unknown'?`Horário desconhecido: ${proof.timing.reason}`:`Vídeo declarado: ${proof.timing.videoId}; origem: ${proof.timing.source}; cobertura: ${proof.timing.coverage}. Segmentos explícitos: ${proof.timing.segments.map(segment=>`#${segment.index} ${segment.startSeconds}s a ${segment.endSeconds===null?'fim desconhecido':`${segment.endSeconds}s`}`).join('; ')}. ${proof.timing.omittedSegments} referências omitidas.`,...proof.limitations.map(limit=>`- ${limit}`),'',`${fence}text`,proof.quote,fence,'');}
   return lines.join('\n');
 }

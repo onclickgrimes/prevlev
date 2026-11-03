@@ -57,7 +57,7 @@ export function createPrevlevMcpServer(config={},dependencies={}) {
   },async input=>{
     if(input.source==='youtube-data-api'||input.videos?.some(video=>video.source==='youtube-data-api')) return failed('Dados marcados como youtube-data-api não podem ser usados nesta análise derivada local.');
     if(input.feature==='sponsorships'?!input.text?.trim():!input.videos?.length) return failed(input.feature==='sponsorships'?'Forneça texto real para examinar possíveis divulgações comerciais.':'Forneça de 1 a 500 vídeos observados para a análise.');
-    try {const value=await analyze(input.feature,{videos:input.videos,text:input.text,query:input.query,targetId:input.targetId});return result(value,value.status!=='ok');}
+    try {const value=await analyze(input.feature,{videos:input.videos,text:input.text,query:input.query,targetId:input.targetId,source:input.source});return result(value,value.status!=='ok');}
     catch {return failed('Não foi possível analisar os dados locais. Confira os campos e limites; nenhuma consulta externa foi feita.');}
   });
   const history=async(input,exporting=false)=>{
