@@ -3279,5 +3279,28 @@
   ],
   "completionRule": "Não considerar esgotados os gaps independentes enquanto houver item implementable_now sem aceite/verificação registrado. Um comportamento implementado pode continuar com runtime bloqueado; registrar ambos, sem esconder trabalho em needs configuration.",
   "workingTreeIsChanging": true,
-  "relationshipNote": "Mapeamentos ligam diferenças aos fluxos/controles compartilhados de cada recurso; não redefinem cada função como dependente de todos os extras. Categoria/partes e estado de aceite são separados."
+  "relationshipNote": "Mapeamentos ligam diferenças aos fluxos/controles compartilhados de cada recurso; não redefinem cada função como dependente de todos os extras. Categoria/partes e estado de aceite são separados.",
+  "independentSafetyFollowup": {
+    "baseLocalCommit": "a8f22192db751b9ce52e846f6ceb756d7f8125a6",
+    "areas": [
+      "pending-collection-context",
+      "image-byte-dimension-preflight",
+      "no-silent-ai-input-truncation",
+      "mixed-source-metrics-and-ordering"
+    ],
+    "runtimeVerified": false,
+    "githubWrites": false,
+    "details": "docs/LOCAL_SAFETY_FOLLOWUP.md",
+    "validation": {
+      "automatedPassed": 628,
+      "automatedFiles": 54,
+      "browserPassed": 124,
+      "browserSkipped": 2,
+      "typecheck": "passed",
+      "lint": "passed",
+      "build": "passed",
+      "review": "completed_no_remaining_P1_P2",
+      "runtimeVerified": false
+    }
+  }
 }

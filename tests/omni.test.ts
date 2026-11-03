@@ -407,7 +407,7 @@ describe("modelo exato e geração de texto", () => {
         empty,
       ),
     ).toMatchObject({ status: "error" });
-    expect(empty).toHaveBeenCalledOnce();
+    expect(empty).not.toHaveBeenCalled();
     const rate = transport(
       catalog(),
       new Response("PRIVATE_SECRET", { status: 429 }),
@@ -668,6 +668,26 @@ describe("imagem Omni via artefato autenticado na mesma origem", () => {
       await analyzeOmni("thumbnail-generation", imagePayload, config, changed),
     ).toMatchObject({ status: "error" });
     expect(changed).toHaveBeenCalledTimes(2);
+  });
+  it("recusa um PNG pequeno com dimensões acima de32MP antes de retornar bytes", async () => {
+    const oversized = Buffer.from(png);
+    oversized.writeUInt32BE(8000, 16);
+    oversized.writeUInt32BE(8000, 20);
+    const fetcher = transport(
+      catalog([imageDescriptor()]),
+      imageResult(),
+      new Response(oversized, { headers: { "Content-Type": "image/png" } }),
+    );
+    const result = await analyzeOmni("thumbnail-generation", imagePayload, config, fetcher);
+    expect(oversized.byteLength).toBeLessThan(100);
+    expect(result).toMatchObject({ status: "error", error: expect.stringContaining("32 milhões") });
+    expect(result).not.toHaveProperty("data");
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
+  it("recusa múltiplos artefatos sem truncar ou buscar a primeira imagem", async () => {
+    const fetcher = transport(catalog([imageDescriptor()]), json({ model: imageModel, data: [artifact(), artifact()] }));
+    expect(await analyzeOmni("thumbnail-generation", imagePayload, config, fetcher)).toMatchObject({ status: "error" });
+    expect(fetcher).toHaveBeenCalledTimes(2);
   });
 });
 

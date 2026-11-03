@@ -1,4 +1,5 @@
 import {fitDimensions,loadImage} from './media';
+import {decodeImageBitmap} from './image-preflight';
 import type {VideoRecord} from '../shared/types';
 
 export type ImageFormat='image/jpeg'|'image/png'|'image/webp';
@@ -91,14 +92,13 @@ export async function findCompressionCandidate(source:{width:number;height:numbe
 
 interface Decoded {source:CanvasImageSource;width:number;height:number;close:()=>void;}
 async function decode(blob:Blob,signal:AbortSignal|undefined,deadline:number):Promise<Decoded>{
-  if(!(blob instanceof Blob)||!/^image\/(png|jpeg|webp|avif|gif)$/.test(blob.type)||blob.size<1||blob.size>50*1024*1024)throw new Error('Escolha uma imagem local PNG, JPEG, WebP, AVIF ou GIF de até 50 MiB.');
   check(signal,deadline);
   let result:Decoded;
   if(typeof createImageBitmap==='function'){
-    const bitmap=await controlled(createImageBitmap(blob,{imageOrientation:'from-image'}),signal,deadline,value=>value.close());
+    const bitmap=await decodeImageBitmap(blob,{signal,deadline});
     result={source:bitmap,width:bitmap.width,height:bitmap.height,close:()=>bitmap.close()};
   }else{
-    const image=await controlled(loadImage(blob),signal,deadline);
+    const image=await loadImage(blob,{signal,deadline});
     result={source:image,width:image.naturalWidth,height:image.naturalHeight,close:()=>{}};
   }
   try{dimensions(result.width,result.height);check(signal,deadline);return result;}catch(error){result.close();throw error;}

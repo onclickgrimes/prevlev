@@ -1,5 +1,7 @@
 # Auditoria de gaps · 40 recursos e extras
 
+Revisão local adicional de segurança e correção: [coleta, imagens, transcrições e fontes](LOCAL_SAFETY_FOLLOWUP.md). Publicação suspensa; aceite por fixtures permanece separado do runtime real.
+
 Base inspecionada: `e22c7bf0c7d1ccf964390ab4db159bd8d70b0b46` (v0.4.0); 2026-11-03. A auditoria é uma fila de trabalho, não declaração de paridade ou encerramento da reconstrução.
 
 Inspeção do código próprio, UI e testes; reprodução local de AF02;33 diferenças de referência transmitidas pelo coordenador a partir de análise estática. Nenhuma execução local da extensão original ou chamada a serviço/conta/credencial.

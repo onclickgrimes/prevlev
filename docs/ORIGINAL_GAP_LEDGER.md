@@ -1,5 +1,7 @@
 # Ledger de diferenças comprovadas da referência
 
+Revisão local adicional de segurança e correção: [coleta, imagens, transcrições e fontes](LOCAL_SAFETY_FOLLOWUP.md). Publicação suspensa; aceite por fixtures permanece separado do runtime real.
+
 Este ledger registra as33 diferenças transmitidas pelo coordenador. A evidência da referência é **estática e relatada pelo parent**; não foi executada a extensão original neste executor. IDs de módulos abaixo são os identificadores informados, não Evidence IDs inventados ou links para bundles publicados.
 
 Estado Prevlev inspecionado sobre `e22c7bf0c7d1ccf964390ab4db159bd8d70b0b46` (v0.4.0). Trabalho em andamento pode resolver itens depois desse instante; registrar o aceite antes de fechar um item.

@@ -11,23 +11,28 @@ export function median(values: readonly number[]): number | undefined {
     : undefined;
 }
 
-/** Lifetime average, not the views received in the last 60 minutes. */
+/** Lifetime average of a non-API observation, not views received in the last 60 minutes.
+ * Missing source remains unspecified; it does not establish provenance.
+ */
 export function lifetimeVph(
-  video: Pick<VideoRecord, "views" | "publishedAt">,
+  video: Pick<VideoRecord, "views" | "publishedAt" | "source">,
   now = Date.now(),
 ): number | undefined {
+  if (video.source === "youtube-data-api") return undefined;
   return observedLifetimeVph(video, now);
 }
 
 /**
  * Excludes the target and requires at least three known comparable videos.
- * Known channels use their own identity; only an identity-free target uses the whole dataset.
+ * Known channels use their own identity; only an identity-free target uses the eligible dataset.
+ * Official API targets and peers are excluded even when called outside the research wrapper.
  */
 export function outlierScore(
   video: VideoRecord,
   baseline: readonly VideoRecord[],
 ): number | undefined {
   if (
+    video.source === "youtube-data-api" ||
     video.views === undefined ||
     !Number.isFinite(video.views) ||
     video.views < 0
@@ -37,6 +42,7 @@ export function outlierScore(
   const values = baseline
     .filter(
       (other) =>
+        other.source !== "youtube-data-api" &&
         other.id !== video.id &&
         other.isShort === video.isShort &&
         comparableChannel(channel, channelIdentity(other)),
@@ -51,28 +57,30 @@ export function outlierScore(
   return reference && reference > 0 ? video.views / reference : undefined;
 }
 
+/** Summary of non-API observations only; official rows never affect counts or denominators. */
 export function summarizeVideos(
   videos: readonly VideoRecord[],
   now = Date.now(),
 ) {
-  const views = videos
+  const eligible = videos.filter(video => video.source !== "youtube-data-api");
+  const views = eligible
     .map((video) => video.views)
     .filter(
       (value): value is number =>
         value !== undefined && Number.isFinite(value) && value >= 0,
     );
-  const rates = videos
+  const rates = eligible
     .map((video) => lifetimeVph(video, now))
     .filter((value): value is number => value !== undefined);
   const sum = views.reduce((total, value) => total + value, 0);
   return {
-    count: videos.length,
+    count: eligible.length,
     knownViews: views.length,
     totalViews: sum,
     meanViews: views.length ? sum / views.length : undefined,
     medianViews: median(views),
     medianVph: median(rates),
-    shorts: videos.filter((video) => video.isShort).length,
+    shorts: eligible.filter((video) => video.isShort).length,
     coverage: "loaded-videos" as const,
   };
 }
@@ -170,6 +178,7 @@ export function validateVideoFilter(filter: VideoFilter): void {
     throw new Error("Selecione um filtro de Shorts válido.");
 }
 
+/** Local observation filter. The official API view owns its separate raw records and API order. */
 export function filterVideos(
   videos: readonly VideoRecord[],
   filter: VideoFilter,
@@ -185,7 +194,8 @@ export function filterVideos(
       ? undefined
       : isoBoundary(filter.publishedBefore, true);
   const query = normalize(filter.query ?? "");
-  return videos.filter((video) => {
+  const eligible = videos.filter(video => video.source !== "youtube-data-api");
+  return eligible.filter((video) => {
     if (
       query &&
       !normalize(`${video.title} ${video.channel ?? ""}`).includes(query)
@@ -227,7 +237,7 @@ export function filterVideos(
         filter.maxDurationSeconds,
       ],
       [lifetimeVph(video, now), filter.minVph, filter.maxVph],
-      [outlierScore(video, videos), filter.minOutlier, filter.maxOutlier],
+      [outlierScore(video, eligible), filter.minOutlier, filter.maxOutlier],
     ];
     return constraints.every(
       ([value, min, max]) =>
@@ -241,6 +251,10 @@ export function filterVideos(
   });
 }
 
+/** Sorts eligible observations, including raw-key fallback sorts. Official API rows are
+ * excluded from every key rather than mixed into local rankings as unknown values.
+ * Ties and unknown/unknown pairs retain input order. The official view retains API order.
+ */
 export function sortVideos(
   videos: readonly VideoRecord[],
   by:
@@ -254,8 +268,9 @@ export function sortVideos(
   now = Date.now(),
   baseline: readonly VideoRecord[] = videos,
 ): VideoRecord[] {
+  const eligible = videos.filter(video => video.source !== "youtube-data-api");
   if (by === "title")
-    return [...videos].sort((a, b) => a.title.localeCompare(b.title));
+    return eligible.sort((a, b) => a.title.localeCompare(b.title));
   const get = (video: VideoRecord): number | undefined => {
     if (by === "recent")
       return video.publishedAt
@@ -275,7 +290,7 @@ export function sortVideos(
       ? value
       : undefined;
   };
-  return [...videos].sort((a, b) => {
+  return eligible.sort((a, b) => {
     const left = get(a),
       right = get(b);
     const knownLeft = left !== undefined && Number.isFinite(left),

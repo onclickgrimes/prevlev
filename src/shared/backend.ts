@@ -31,6 +31,7 @@ export async function callBackend(
       error: "Configure um backend próprio na aba Conexão.",
     };
   const origin = backendOrigin(settings.backendUrl);
+  const signal = AbortSignal.timeout(isAiFeature(feature) ? 305000 : 45000);
   let response: Response;
   try {
     response = await fetch(`${origin}/v1/analyze`, {
@@ -44,7 +45,7 @@ export async function callBackend(
       body: JSON.stringify({ feature, payload }),
       credentials: "omit",
       redirect: "error",
-      signal: AbortSignal.timeout(isAiFeature(feature) ? 305000 : 45000),
+      signal,
     });
   } catch {
     throw new Error(
@@ -53,8 +54,9 @@ export async function callBackend(
   }
   let body: RemoteResponse;
   try {
-    body = (await response.json()) as RemoteResponse;
-  } catch {
+    body = (await boundedBackendJson(response, feature === "thumbnail-generation" ? 24 * 1024 * 1024 : 2 * 1024 * 1024,signal)) as RemoteResponse;
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("Resposta do backend excede")) throw error;
     throw new Error(
       "O backend Prevlev não devolveu uma resposta JSON completa. O resultado da solicitação é incerto; nenhuma repetição foi enviada.",
     );
@@ -69,6 +71,30 @@ export async function callBackend(
   )
     throw new Error("Resposta incompatível com o contrato Prevlev.");
   return body;
+}
+
+/** Image JSON carries base64 overhead; bound the HTTP body before JSON/string allocation. */
+async function boundedBackendJson(response:Response,maxBytes:number,signal:AbortSignal):Promise<unknown> {
+  const oversized=()=>new Error("Resposta do backend excede o limite de leitura. O resultado é incerto; nenhuma repetição foi enviada.");
+  if(Number(response.headers.get("content-length"))>maxBytes) {void response.body?.cancel().catch(()=>{});throw oversized();}
+  const reader=response.body?.getReader();if(!reader)throw new Error("Resposta vazia.");
+  const decoder=new TextDecoder();let text="",bytes=0,done=false;
+  try {
+    for(;;) {
+      signal.throwIfAborted();
+      const chunk=await new Promise<ReadableStreamReadResult<Uint8Array>>((resolve,reject)=>{
+        const abort=()=>reject(signal.reason);signal.addEventListener("abort",abort,{once:true});
+        reader.read().then(resolve,reject).finally(()=>signal.removeEventListener("abort",abort));
+        if(signal.aborted)abort();
+      });
+      if(chunk.done) {done=true;break;}
+      bytes+=chunk.value.byteLength;if(bytes>maxBytes)throw oversized();
+      text+=decoder.decode(chunk.value,{stream:true});
+    }
+    text+=decoder.decode();signal.throwIfAborted();return JSON.parse(text);
+  } finally {
+    if(!done)void reader.cancel().catch(()=>{}).finally(()=>reader.releaseLock());else reader.releaseLock();
+  }
 }
 export function isAiFeature(feature: string): boolean {
   return [

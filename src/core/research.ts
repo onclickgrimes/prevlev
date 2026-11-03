@@ -16,9 +16,10 @@ export interface ResearchFilter extends VideoFilter {
   hideShortsOnFeed?: boolean;
   hideShortsOnSearch?: boolean;
 }
-export interface ResearchComparison { score?: number; reference?: number; referenceCount: number; positiveReferenceCount: number; method: "sample-median" | "sample-channel-mean" | "sample-shorts-median"; provenance: "loaded-observations"; limitation: string }
+export interface ResearchComparison { score?: number; reference?: number; referenceCount: number; positiveReferenceCount: number; method: "sample-median" | "sample-channel-mean" | "sample-shorts-median" | "not-applicable"; provenance: "loaded-observations" | "excluded-api"; limitation: string }
 /** Counts are observations, not unique video IDs; all copies of the target ID are excluded. */
 export function describeResearchComparison(comparison: ResearchComparison, mode: ResearchComparisonMode = "sample-median"): string {
+  if (comparison.provenance === "excluded-api") return `API oficial excluída. Nenhum método, referência ou métrica derivada foi aplicado. ${comparison.limitation}`;
   return `Modo: ${mode}; método previsto: ${comparison.method}; referência: ${comparison.reference ?? "desconhecida"}; ${comparison.referenceCount} observações candidatas (${comparison.positiveReferenceCount} positivas). Fonte: observações carregadas anteriores aos filtros; formato declarado igual ou formato desconhecido em ambos, e canal comparável. Alvo sem identidade usa candidatos da amostra geral, mas o modo de canal não calcula referência sem identidade. Alvo excluído por ID; outras observações repetidas podem ser contadas. API oficial excluída. ${comparison.limitation}`;
 }
 export const researchSortKeys: readonly ResearchSortKey[] = ["views", "vph", "outlier", "recent", "duration", "subscribers", "title", "viewsPerSubscriber"];
@@ -69,13 +70,13 @@ export function viewsPerSubscriber(video: VideoRecord): number | undefined {
 
 /** Optional sample formula. It cannot recover a complete channel's server-provided reference. */
 export function researchComparison(video: VideoRecord, fullBaseline: readonly VideoRecord[], mode: ResearchComparisonMode = "sample-median"): ResearchComparison {
+  if (video.source === "youtube-data-api") return { referenceCount: 0, positiveReferenceCount: 0, method: "not-applicable", provenance: "excluded-api", limitation: "Dados da API oficial não recebem métricas derivadas." };
   const baseline = fullBaseline.filter(item => item.source !== "youtube-data-api");
   const identity = channelIdentity(video);
   const peers = baseline.filter(peer => peer.id !== video.id && peer.isShort === video.isShort && comparableChannel(identity, channelIdentity(peer)) && count(peer.views) !== undefined);
   const values = peers.map(peer => peer.views!);
   const positive = values.filter(value => value > 0);
   const limitation = "Comparação aproximada de observações carregadas. A referência completa do canal não é conhecida; não equivale ao índice proprietário da Nexlev.";
-  if (video.source === "youtube-data-api") return { referenceCount: 0, positiveReferenceCount: 0, method: "sample-median", provenance: "loaded-observations", limitation: "Dados da API oficial não recebem métricas derivadas." };
   if (mode === "sample-median") {
     const reference = values.length >= 3 ? sampleMedian(values) : undefined, views = count(video.views);
     return { score: views !== undefined && reference !== undefined && reference > 0 ? finite(views / reference) : undefined, reference, referenceCount: values.length, positiveReferenceCount: positive.length, method: "sample-median", provenance: "loaded-observations", limitation };

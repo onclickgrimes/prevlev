@@ -2,8 +2,9 @@
 export interface ChannelInput {channelId?: string;channelUrl?: string;channel?: string;}
 const normalizedName = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase();
 
-export function observedLifetimeVph(video: {views?:number;publishedAt?:string}, now=Date.now()): number|undefined {
-  if (video.views===undefined || !Number.isFinite(video.views) || video.views<0 || !video.publishedAt) return undefined;
+/** Defends the low-level export too: a structurally typed API record is never eligible. */
+export function observedLifetimeVph(video: {views?:number;publishedAt?:string;source?:string}, now=Date.now()): number|undefined {
+  if (video.source==='youtube-data-api' || video.views===undefined || !Number.isFinite(video.views) || video.views<0 || !video.publishedAt) return undefined;
   const published=knownPublication(video.publishedAt,now);
   if(published===undefined || published>=now)return undefined;
   const result=video.views/((now-published)/3600000);

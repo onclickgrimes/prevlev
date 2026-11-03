@@ -1,3 +1,13 @@
+# Validação do follow-up local de segurança
+
+Em 3 de novembro de 2026, `npm run check` passou: **typecheck, lint, 628 testes em 54 arquivos e build**. A regressão completa final de navegador passou em **124 cenários**, com **2 ignorados** por política de instalação da extensão, sem contorno. Saída de testes exclusiva; código congelado durante esta rodada. `git diff --check`, leitura dos JSONs e auditoria dos pontos de criação de imagens passaram.
+
+O follow-up parte do commit local `a8f22192db751b9ce52e846f6ceb756d7f8125a6`. Os testes novos verificam START_COLLECTION tardio após troca de aba/pagehide/cancelamento, ausência de corte da transcrição antes de qualquer chamada de catálogo/provedor, exclusão oficial nos helpers genéricos e ordenação estável de fontes elegíveis. As regressões de imagens verificam cabeçalhos minúsculos de 8000×8000 antes do decoder, formatos/MIME/contêiner, corpo HTTP e base64 limitados, fila física de leitura/decode, substituição/cancelamento e descarte após apagar a coleta.
+
+A revisão encontrou e resolveu prazo reiniciado entre leitura e decode, atualização tardia de status remoto e liberação prematura de fontes ainda em decodificação. A primeira rodada automatizada encontrou duas fixtures antigas que usavam bytes fictícios como PNG; foram substituídas por fixtures de imagem reconhecíveis. A rodada final passou completa. A corrida de atualização rápida da prévia também foi reproduzida, corrigida e verificada repetidamente antes da suíte final.
+
+Esta é implementação independente neste checkout. Não se presumiu nem recuperou o conteúdo do executor principal. Nenhum serviço real, geração paga, conta/canal, credencial ou política do usuário foi utilizado/alterado; nenhuma operação GitHub pendente foi repetida. Adapters e runtime reais continuam nos limites já registrados. [Escopo do follow-up](LOCAL_SAFETY_FOLLOWUP.md).
+
 # Validação do patch local independente · D22/D23/D25/D28/D32
 
 Em 3 de novembro de 2026, no checkout separado baseado em `58fb1477ff333eaac7a8bdd3f6a3edc10cd67050`, `npm run check` passou integralmente: **typecheck, lint, 517 testes automatizados em 50 arquivos e build**. A suíte completa final de navegador passou em **112 cenários**, com **2 cenários de extensão instalada ignorados** pela política gerenciada, sem contorno. Ignorados não contam como aprovados. `git diff --check` e a leitura dos JSONs de cobertura também passaram.

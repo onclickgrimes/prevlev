@@ -1,5 +1,7 @@
 /* global AbortSignal */
 import { analyzeOmni } from "./omni.mjs";
+import { encodeAiTextInput } from "./ai-input.mjs";
+import { directProviderImageDescriptor } from "./image-results.mjs";
 const features = new Set([
   "comment-analysis",
   "thumbnail-generation",
@@ -202,37 +204,7 @@ export async function analyzeAi(feature, payload, config, fetcher = fetch) {
       "transcript-script":
         "Reorganize a transcrição fornecida em um roteiro legível sem acrescentar fatos.",
     };
-    let input;
-    if (feature === "comment-analysis") {
-      if (!Array.isArray(payload.comments) || !payload.comments.length)
-        throw new Error("Envie payload.comments com comentários reais.");
-      input = payload.comments.slice(0, 1000).map((c) => ({
-        text: typeof c.text === "string" ? c.text.slice(0, 2000) : "",
-        likes: typeof c.likes === "number" ? c.likes : undefined,
-      }));
-    } else {
-      input =
-        typeof payload.text === "string"
-          ? payload.text.slice(0, 100000)
-          : Array.isArray(payload.transcript)
-            ? payload.transcript.slice(0, 5000).map((segment) => ({
-                start: segment.start,
-                text:
-                  typeof segment.text === "string"
-                    ? segment.text.slice(0, 2000)
-                    : "",
-              }))
-            : null;
-      if (!input || (Array.isArray(input) && !input.length))
-        throw new Error(
-          "Envie payload.text ou payload.transcript com transcrição real.",
-        );
-    }
-    const encoded = JSON.stringify(input);
-    if (encoded.length > 150000)
-      throw new Error(
-        "Texto muito longo para esta análise (máximo 150 mil caracteres).",
-      );
+    const encoded = encodeAiTextInput(feature, payload);
     path = "/chat/completions";
     body = {
       model,
@@ -265,34 +237,7 @@ export async function analyzeAi(feature, payload, config, fetcher = fetch) {
       throw new Error(
         "O modelo informado na resposta de imagem difere do modelo solicitado.",
       );
-    const images = Array.isArray(result.data)
-      ? result.data.slice(0, 1).flatMap((image) => {
-          if (!image || typeof image !== "object" || Array.isArray(image))
-            return [];
-          if (
-            typeof image.b64_json === "string" &&
-            /^[A-Za-z0-9+/=]+$/.test(image.b64_json)
-          )
-            return [{ base64: image.b64_json, mime: "image/png" }];
-          if (typeof image.url === "string") {
-            try {
-              const url = new URL(image.url);
-              if (
-                url.protocol === "https:" &&
-                !url.username &&
-                !url.password &&
-                !/nexlev/i.test(url.hostname)
-              )
-                return [{ url: url.href }];
-            } catch {
-              /* Invalid provider URL. */
-            }
-          }
-          return [];
-        })
-      : [];
-    if (!images.length)
-      throw new Error("O provedor não retornou uma imagem compatível.");
+    const images = [directProviderImageDescriptor(result)];
     return {
       status: "ok",
       source: "prevlev:ai",

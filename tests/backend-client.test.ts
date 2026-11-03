@@ -42,6 +42,15 @@ afterEach(() => {
 });
 
 describe("cliente browser para a ponte Prevlev/Omni, sem rede real", () => {
+  it("limita JSON de imagens antes da leitura e cancela stream que excede o teto sem repetir",async()=>{
+    const cancel=vi.fn();let reads=0;
+    const hugeHeader=new Response(new ReadableStream({cancel}),{headers:{'content-length':String(24*1024*1024+1)}});
+    const streamed=new Response(new ReadableStream({pull(controller){reads++;controller.enqueue(new Uint8Array(1024*1024));},cancel}));
+    const fetcher=vi.fn<typeof fetch>().mockResolvedValueOnce(hugeHeader).mockResolvedValueOnce(streamed);vi.stubGlobal('fetch',fetcher);
+    await expect(callBackend(settings,'thumbnail-generation',{prompt:'fixture'})).rejects.toThrow('limite de leitura');
+    await expect(callBackend(settings,'thumbnail-generation',{prompt:'fixture'})).rejects.toThrow('limite de leitura');
+    expect(reads).toBeLessThanOrEqual(27);expect(cancel).toHaveBeenCalledTimes(2);expect(fetcher).toHaveBeenCalledTimes(2);
+  });
   it("não consulta nem gera antes de configurar o backend", async () => {
     const fetcher = vi.fn<typeof fetch>();
     vi.stubGlobal("fetch", fetcher);

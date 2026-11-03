@@ -1,4 +1,5 @@
 import { analyzeWaveformRaster, readWaveformCanvas, type RasterColor, type VisualWaveformAnalysis, type WaveformRasterOptions } from "../core/waveform";
+import { decodeImageBitmap, withImageDecodeSlot } from '../core/image-preflight';
 
 /** Local PNG only. No Studio canvas/geometry is discovered or assumed by this module. */
 export function mountWaveformTools(doc: Document, onChange: () => void = () => {}) {
@@ -47,8 +48,9 @@ export function mountWaveformTools(doc: Document, onChange: () => void = () => {
   let sourceName = "";
   let queuedImage: { file: File; revision: number } | undefined;
   let decoding = false;
+  let imageController: AbortController | undefined;
   const invalidate = () => {
-    revision++; controller?.abort(); analysis = undefined; queuedImage = undefined;
+    revision++; controller?.abort(); imageController?.abort(); analysis = undefined; queuedImage = undefined;
     button("export").disabled = true; button("cancel").disabled = true;
     button("analyze").disabled = !loaded; button("analyze").textContent = "Analisar desenho local";
     output.replaceChildren(); progress.value = 0;
@@ -69,17 +71,21 @@ export function mountWaveformTools(doc: Document, onChange: () => void = () => {
         const { file, revision: currentRevision } = queuedImage;
         queuedImage = undefined;
         if (currentRevision !== revision) continue;
+        const imageWork = new AbortController(); imageController = imageWork;
+        const imageOptions = { signal: imageWork.signal, deadline: performance.now() + 15_000, maxBytes: 10 * 1024 * 1024, maxPixels: 4_000_000 };
         let bitmap: ImageBitmap | undefined;
         try {
           if (file.size < 24 || file.size > 10 * 1024 * 1024) throw new Error("Escolha um PNG local de até 10 MB.");
-          const header = new DataView(await file.slice(0, 24).arrayBuffer());
+          const header = new DataView(await withImageDecodeSlot(() => file.slice(0, 24).arrayBuffer(), imageOptions));
           const signature = [137, 80, 78, 71, 13, 10, 26, 10];
           const width = header.getUint32(16), height = header.getUint32(20);
           if (!signature.every((value, i) => header.getUint8(i) === value) || header.getUint32(8) !== 13 || header.getUint32(12) !== 0x49484452 || width < 1 || height < 1 || width * height > 4_000_000)
             throw new Error("PNG inválido ou maior que 4 milhões de pixels.");
           // Header reads and decoding are asynchronous; a newer selection may supersede either.
           if (currentRevision !== revision) continue;
-          bitmap = await createImageBitmap(file);
+          // The shared decoder validates the complete static PNG container and retains its
+          // physical slot after cancellation until the native decode really finishes.
+          bitmap = await decodeImageBitmap(file, imageOptions);
           if (currentRevision !== revision) continue;
           if (bitmap.width !== width || bitmap.height !== height) throw new Error("Dimensões decodificadas divergem do cabeçalho PNG.");
           const context = preview.getContext("2d");
@@ -94,7 +100,7 @@ export function mountWaveformTools(doc: Document, onChange: () => void = () => {
           status.textContent = `${width} × ${height} pixels locais. Informe linha central, escala, tempos e FPS; depois confira todos os campos.`;
         } catch (error) {
           if (currentRevision === revision) status.textContent = error instanceof Error ? error.message : "Falha na imagem local.";
-        } finally { bitmap?.close(); }
+        } finally { bitmap?.close(); if (imageController === imageWork) imageController = undefined; }
       }
     } finally { decoding = false; }
   };

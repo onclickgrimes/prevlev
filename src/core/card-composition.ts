@@ -1,4 +1,4 @@
-import { inspectImageHeader } from './visual-similarity';
+import { decodeImageBitmap } from './image-preflight';
 
 /** An independent illustration generated entirely from a local image and supplied metadata. */
 export type CardFormat = 'card' | 'short';
@@ -50,45 +50,10 @@ function lines(ctx: CanvasRenderingContext2D, input: string, width: number, maxi
   });
 }
 
-/** Extract dimensions only after inspectImageHeader validates container bounds and rejects animation. */
-function assertComposerDimensions(buffer: ArrayBuffer, type: string): void {
-  const b = new Uint8Array(buffer), view = new DataView(buffer);
-  const limit = (width: number, height: number) => {
-    if (!width || !height || width > MAX_SIDE || height > MAX_SIDE || width * height > MAX_PIXELS) throw new Error('Imagem excede 20 megapixels ou 8192 pixels por lado.');
-  };
-  if (type === 'image/png') { limit(view.getUint32(16), view.getUint32(20)); return; }
-  if (type === 'image/jpeg') {
-    let offset = 2;
-    while (offset < b.length) {
-      offset++; while (b[offset] === 0xff) offset++;
-      const marker = b[offset++];
-      if (marker === 0xda) break;
-      if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) continue;
-      const size = view.getUint16(offset);
-      if ([0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf].includes(marker)) { limit(view.getUint16(offset + 5), view.getUint16(offset + 3)); return; }
-      offset += size;
-    }
-    throw new Error('Cabeçalho de imagem inválido.');
-  }
-  let offset = 12;
-  const tag = (pos: number) => String.fromCharCode(...b.subarray(pos, pos + 4));
-  const u24 = (pos: number) => b[pos] + b[pos + 1] * 256 + b[pos + 2] * 65536;
-  while (offset < b.length) {
-    const kind = tag(offset), size = view.getUint32(offset + 4, true), pos = offset + 8;
-    if (kind === 'VP8X') limit(1 + u24(pos + 4), 1 + u24(pos + 7));
-    if (kind === 'VP8 ') limit(view.getUint16(pos + 6, true) & 0x3fff, view.getUint16(pos + 8, true) & 0x3fff);
-    if (kind === 'VP8L') { const packed = view.getUint32(pos + 1, true); limit((packed & 0x3fff) + 1, ((packed >>> 14) & 0x3fff) + 1); }
-    offset = pos + size + (size % 2);
-  }
-}
-
 /** No URLs or network requests: preflight bounded still-image bytes before decoding. */
 export async function composeCard(image: Blob, options: CardCompositionOptions): Promise<Blob> {
   validateCardComposition(image, options);
-  const bytes = await image.arrayBuffer();
-  inspectImageHeader(bytes, image.type);
-  assertComposerDimensions(bytes, image.type);
-  const bitmap = await createImageBitmap(new Blob([bytes], { type: image.type }));
+  const bitmap = await decodeImageBitmap(image, { maxBytes: MAX_BYTES, maxPixels: MAX_PIXELS, maxDimension: MAX_SIDE });
   try {
     if (!bitmap.width || !bitmap.height || bitmap.width > MAX_SIDE || bitmap.height > MAX_SIDE || bitmap.width * bitmap.height > MAX_PIXELS) throw new Error('Imagem decodificada excede 20 megapixels ou 8192 pixels por lado.');
     const dimensions = cardCompositionDimensions(options.format, options.scale);

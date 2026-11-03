@@ -55,6 +55,7 @@ let sidecarRequests: string[];
 let models: AiCatalogModel[];
 let catalogOrigin: string;
 let catalogMode: "ok" | "offline" | "auth";
+let delayedImageReply: Promise<void> | undefined;
 const analyses = () =>
   requests.filter(
     (request) =>
@@ -84,6 +85,7 @@ test.beforeEach(async () => {
   models = [textModel, imageModel];
   catalogOrigin = sidecarOrigin;
   catalogMode = "ok";
+  delayedImageReply = undefined;
   context = await browser.newContext({
     viewport: { width: 1440, height: 1100 },
   });
@@ -140,7 +142,8 @@ test.beforeEach(async () => {
           }),
         });
       }
-      if (url.pathname === "/v1/analyze")
+      if (url.pathname === "/v1/analyze") {
+        if (requests.at(-1)?.body?.feature === "thumbnail-generation") await delayedImageReply;
         return route.fulfill({
           headers,
           body: JSON.stringify({
@@ -156,6 +159,7 @@ test.beforeEach(async () => {
             },
           }),
         });
+      }
       return route.fulfill({
         status: 404,
         headers,
@@ -572,4 +576,18 @@ test("workspace Thumbnail Lab pins the saved backend, sends only briefing text a
   await expect(page.locator("#thumbnail-lab-status")).toContainText("Solicitação não enviada");
   await expect(page.locator("#thumbnail-lab-history li").first()).toContainText("Erro da solicitação");
   expect(analyses()).toHaveLength(1);
+});
+
+test("clearing the collection discards a pending backend image preview", async () => {
+  await connect();await discover();await selectModel("fixture:image");
+  let release!:()=>void;delayedImageReply=new Promise<void>(resolve=>{release=resolve;});
+  await page.locator('[data-page="remote"]').click();await page.locator("#remote-feature").selectOption("thumbnail-generation");
+  await page.locator("#remote-query").fill("Imagem própria em fixture");await page.locator("#remote-run").click();
+  await expect.poll(()=>analyses().length).toBe(1);
+  page.on('dialog',dialog=>dialog.accept());
+  await page.locator('[data-page="connection"]').click();await page.locator('#clear-data').click();
+  await expect(page.locator('#notice')).toContainText('Dados locais apagados');release();
+  await page.locator('[data-page="remote"]').click();await expect(page.locator('#remote-run')).toBeEnabled();
+  await expect(page.locator('#remote-images img')).toHaveCount(0);
+  await expect(page.locator('#notice')).toContainText('Dados locais apagados');
 });

@@ -44,6 +44,7 @@ import { mountThumbnailLab } from "./thumbnail-lab";
 import { mountMcpGuide } from "./mcp-guide";
 import { mountWaveformTools } from "./waveform";
 import { mountMidrollRemoval } from "./midroll-removal";
+import { mountRemoteImages } from "./remote-images";
 import type { MidrollRemovalObservation } from "../core/midroll-removal";
 import { initOfficialSearch } from "./official-search";
 import { initAnalyticsTools } from "./analytics";
@@ -100,6 +101,8 @@ let savedBackendOrigin = "";
 let selectedAiStreaming = false;
 let aiSelectionSaving = false;
 let aiRequestRunning = false;
+let remoteOutputEpoch = 0;
+function invalidateRemoteOutput() { remoteOutputEpoch++; remoteImages.invalidate(); $("remote-result").textContent=""; }
 const transcriptExtras=initTranscriptExtras({segments:()=>segments,text:transcriptContent,metadata:()=>snapshot,aiContext:()=>JSON.stringify([selectedAiOrigin,selectedAiModel,selectedAiStreaming])});
 const commentTools = initCommentTools({snapshot: () => snapshot, onAi: async () => {showPage("remote"); await remote("comment-analysis");}});
 const swipeTools = initSwipeTools();
@@ -246,6 +249,8 @@ on("enrich", async () => {
     });
     if (result.status !== "ok") throw new Error(result.error);
     snapshot.videos = result.videos as VideoRecord[];
+    imageTools.invalidateContext();
+    invalidateRemoteOutput();
     nicheTools.invalidate(); cardComposer.invalidateSnapshot(); channelReport.invalidate();
     await chrome.tabs.sendMessage(tabId, {
       type: "SET_ENRICHMENT",
@@ -373,6 +378,9 @@ function renderMetrics(videos: VideoRecord[]) {
   }
 }
 function render() {
+  imageTools.invalidateContext();
+  swipeTools.invalidatePreviews();
+  invalidateRemoteOutput();
   studioOverview.render();
   renderVideos();
   renderComments();
@@ -872,53 +880,26 @@ for (const id of [
 $("studio").addEventListener("input", event => {
   if (event.target instanceof Element && (event.target.closest("#midroll-tools") || event.target.id === "midroll-audio")) invalidateStudioPreview();
 });
-function displayRemote(response: RemoteResponse, output: string) {
-  $("remote-images").replaceChildren();
+async function displayRemote(response: RemoteResponse, output: string) {
   const data =
     response.data && typeof response.data === "object"
       ? (response.data as Record<string, unknown>)
       : undefined;
   const images = Array.isArray(data?.images) ? data.images : [];
-  for (const raw of images.slice(0, 1)) {
-    if (!raw || typeof raw !== "object") continue;
-    const result = raw as Record<string, unknown>;
-    const base64 =
-      typeof result.base64 === "string" &&
-      result.base64.length < 24_000_000 &&
-      /^[A-Za-z0-9+/=]+$/.test(result.base64)
-        ? result.base64
-        : undefined;
-    const url = base64
-      ? `data:${["image/png", "image/jpeg", "image/webp"].includes(String(result.mime)) ? result.mime : "image/png"};base64,${base64}`
-      : typeof result.url === "string" && result.url.startsWith("https://")
-        ? safeLink(result.url)
-        : undefined;
-    if (!url || url === "#") continue;
-    const image = element("img");
-    image.alt = "Thumbnail gerada pelo provedor configurado";
-    image.src = url;
-    image.style.cssText = "max-width:100%;max-height:500px;border-radius:8px";
-    const link = element("a", "Abrir / salvar imagem gerada");
-    link.href = url;
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
-    if (base64)
-      link.download = `prevlev-gerada.${result.mime === "image/jpeg" ? "jpg" : result.mime === "image/webp" ? "webp" : "png"}`;
-    $("remote-images").append(image, element("p"), link);
-  }
   $(output).textContent = JSON.stringify(
     images.length
       ? {
           ...response,
           data: {
             ...data,
-            images: images.map(() => ({ image: "Veja a imagem acima." })),
+            images: images.map(() => ({ image: "Bytes omitidos; prévia sujeita à validação local." })),
           },
         }
       : response,
     null,
     2,
   );
+  await remoteImages.show(response);
 }
 async function remote(
   feature: RemoteFeature,
@@ -936,6 +917,9 @@ async function remote(
     updateAiButtons();
   }
   try {
+    const requestEpoch=++remoteOutputEpoch;
+    remoteImages.invalidate();
+    if(output!==null)$(output).textContent="";
     const query = value("remote-query");
     const current = snapshot.videos.find((v) => v.id === snapshot.videoId);
     let payload: Record<string, unknown>;
@@ -984,7 +968,10 @@ async function remote(
           }
         : {}),
     });
-    if (output !== null) displayRemote(response, output);
+    if (feature === "thumbnail-generation" && response.status === "ok") await remoteImages.validate(response,true);
+    if (requestEpoch !== remoteOutputEpoch) return response;
+    if (output !== null) await displayRemote(response, output);
+    if (requestEpoch !== remoteOutputEpoch) return response;
     notice(
       response.status === "ok"
         ? `Análise concluída · ${response.source}`
@@ -1230,6 +1217,7 @@ on("save-settings", async () => {
     ...(old.backendUrl !== origin ? { aiModel: "", aiStreaming: false } : {}),
   });
   savedBackendOrigin = origin;
+  invalidateRemoteOutput();
   if (old.backendUrl !== origin) {
     aiCatalog = undefined;
     selectedAiModel = "";
@@ -1252,6 +1240,7 @@ on("clear-connection", async () => {
     aiStreaming: false,
   });
   savedBackendOrigin = "";
+  invalidateRemoteOutput();
   aiCatalog = undefined;
   selectedAiModel = "";
   selectedAiStreaming = false;
@@ -1304,7 +1293,7 @@ const thumbnailLab = mountThumbnailLab($("thumbnail-lab"), {
     backendOrigin: savedBackendOrigin,
   }),
   generate: payload => remote("thumbnail-generation", null, {prompt:payload.prompt}, {model:payload.model,origin:payload.expectedOrigin,backendOrigin:savedBackendOrigin}),
-  showResult: response => { displayRemote(response,"remote-result"); showPage("remote"); },
+  showResult: response => { void displayRemote(response,"remote-result").catch(fail); showPage("remote"); },
 });
 const studioOverview = initStudioOverview({snapshot:()=>snapshot});
 mountDailyObservations($("daily-observations"));
@@ -1312,7 +1301,8 @@ const channelReport = mountChannelReport($("channel-report"),()=>snapshot.videos
 const nicheTools = initNicheTools({snapshot:()=>snapshot});
 const cardComposer = initCardCompositionTools({snapshot:()=>snapshot});
 initVisualSimilarityTools();
-initImageTools({notice,contextVideos:()=>snapshot.videos});
+const imageTools = initImageTools({notice,contextVideos:()=>snapshot.videos});
+const remoteImages = mountRemoteImages($("remote-images"));
 initCollectionTools({targetTab,snapshot:()=>snapshot,notice,adopt:async(next)=>{snapshot=next;nicheTools.invalidate(); cardComposer.invalidateSnapshot(); channelReport.invalidate();segments=next.transcript;await chrome.storage.local.set({snapshot});render();}});
 initSponsorshipTools();
 const researchTools = initResearchTools({ getUrl: () => snapshot.url, getVisibleVideos: visibleVideos, getAllVideos: () => snapshot.videos, onChange: () => { try { renderVideos(); if ($("notice").classList.contains("error")) notice("Filtros de pesquisa atualizados."); } catch (error) { fail(error); } } });

@@ -1,4 +1,5 @@
 import {toCsv} from './export';
+import {decodeImageBitmap, ImageResourceTimeout, inspectImageBytes, withImageDecodeSlot} from './image-preflight';
 
 /** dHash compares neighboring luminance values after compositing onto white and resizing to 9×8.
  * It measures coarse structure, not color, semantics, or identity. Only still PNG, JPEG and WebP are accepted. */
@@ -43,75 +44,18 @@ function validateDimensions(width:number,height:number):void {
 }
 /** Inspect the actual container before invoking an image decoder; reject animation and ambiguous containers. */
 export function inspectImageHeader(buffer:ArrayBuffer,type:string,checkWork:()=>void=()=>{}):void {
-  const b=new Uint8Array(buffer),view=new DataView(buffer);
-  const bad=():never=>{throw new Error('Cabeçalho de imagem inválido ou formato incompatível.');};
-  const tag=(offset:number,text:string)=>offset+text.length<=b.length&&Array.from(text).every((c,i)=>b[offset+i]===c.charCodeAt(0));
-  const bounds=(pos:number,size:number)=>pos>=0&&size>=0&&pos+size<=b.length;
-  const u24=(pos:number)=>b[pos]+b[pos+1]*256+b[pos+2]*65536;
-  if(type==='image/png'){
-    if(b.length<33||![137,80,78,71,13,10,26,10].every((v,i)=>b[i]===v)||view.getUint32(8)!==13||!tag(12,'IHDR'))return bad();
-    validateDimensions(view.getUint32(16),view.getUint32(20));
-    let offset=8,ihdr=0,idat=false,ended=false,iterations=0;
-    while(bounds(offset,12)){
-      if((iterations++&1023)===0)checkWork();
-      const size=view.getUint32(offset);if(!bounds(offset+8,size+4))return bad();
-      if(tag(offset+4,'IHDR')&&++ihdr!==1)return bad();
-      if(tag(offset+4,'acTL')||tag(offset+4,'fcTL')||tag(offset+4,'fdAT'))throw new Error('Imagens animadas não são suportadas.');
-      if(tag(offset+4,'IDAT'))idat=true;
-      offset+=size+12;
-      if(tag(offset-size-8,'IEND')){if(size!==0) return bad();ended=true;break;}
-    }
-    if(!ended||!idat||offset!==b.length)return bad();
-    return;
-  }
-  if(type==='image/jpeg'){
-    if(b.length<4||b[0]!==0xff||b[1]!==0xd8)return bad();
-    let offset=2,found=false,iterations=0;
-    while(offset<b.length){
-      if((iterations++&1023)===0)checkWork();
-      if(b[offset++]!==0xff)return bad();while(offset<b.length&&b[offset]===0xff)offset++;
-      if(offset>=b.length)return bad();const marker=b[offset++];
-      if(marker===0xda){if(!found||!bounds(offset,2)||view.getUint16(offset)<2||!bounds(offset,view.getUint16(offset)))return bad();return;}
-      if(marker===0xd9||marker===0x00||marker===0xd8)return bad();
-      if(marker===0x01||(marker>=0xd0&&marker<=0xd7))continue;
-      if(!bounds(offset,2))return bad();const size=view.getUint16(offset);if(size<2||!bounds(offset,size))return bad();
-      if([0xc0,0xc1,0xc2,0xc3,0xc5,0xc6,0xc7,0xc9,0xca,0xcb,0xcd,0xce,0xcf].includes(marker)){
-        if(found||size<8)return bad();validateDimensions(view.getUint16(offset+5),view.getUint16(offset+3));found=true;
-      }
-      offset+=size;
-    }
-    return bad();
-  }
-  if(type==='image/webp'){
-    if(b.length<20||!tag(0,'RIFF')||!tag(8,'WEBP')||view.getUint32(4,true)+8!==b.length)return bad();
-    let offset=12,canvasWidth=0,canvasHeight=0,imageWidth=0,imageHeight=0,extended=false,iterations=0;
-    while(bounds(offset,8)){
-      if((iterations++&1023)===0)checkWork();
-      const size=view.getUint32(offset+4,true),pos=offset+8;if(!bounds(pos,size+(size%2)))return bad();
-      if(tag(offset,'VP8X')){if(extended||offset!==12||size!==10)return bad();extended=true;if(b[pos]&2)throw new Error('Imagens animadas não são suportadas.');canvasWidth=1+u24(pos+4);canvasHeight=1+u24(pos+7);validateDimensions(canvasWidth,canvasHeight);}
-      if(tag(offset,'ANIM')||tag(offset,'ANMF'))throw new Error('Imagens animadas não são suportadas.');
-      if(tag(offset,'VP8 ')||tag(offset,'VP8L')){
-        if(imageWidth)return bad();
-        if(tag(offset,'VP8 ')){if(size<10||(b[pos]&1)!==0||b[pos+3]!==0x9d||b[pos+4]!==0x01||b[pos+5]!==0x2a)return bad();imageWidth=view.getUint16(pos+6,true)&0x3fff;imageHeight=view.getUint16(pos+8,true)&0x3fff;}
-        else{if(size<5||b[pos]!==0x2f)return bad();const packed=view.getUint32(pos+1,true);imageWidth=(packed&0x3fff)+1;imageHeight=((packed>>>14)&0x3fff)+1;}
-        validateDimensions(imageWidth,imageHeight);
-      }
-      offset=pos+size+(size%2);
-    }
-    if(offset!==b.length||!imageWidth||(extended&&(imageWidth!==canvasWidth||imageHeight!==canvasHeight)))return bad();
-    return;
-  }
-  return bad();
+  inspectImageBytes(buffer,type,{maxBytes:VISUAL_LIMITS.fileBytes,maxPixels:VISUAL_LIMITS.pixels,maxDimension:VISUAL_LIMITS.dimension,check:checkWork});
 }
+
 async function inspect(file:File,signal:AbortSignal|undefined,deadline:number):Promise<{hash:string;digest:string}>{
   check(signal,deadline);validateFile(file);
-  const bytes=await controlled(file.arrayBuffer(),signal,deadline);check(signal,deadline);
+  const bytes=await withImageDecodeSlot(()=>file.arrayBuffer(),{signal,deadline});check(signal,deadline);
   inspectImageHeader(bytes,file.type,()=>check(signal,deadline));check(signal,deadline);
   const digestBytes=await controlled(crypto.subtle.digest('SHA-256',bytes),signal,deadline);
   const digest=Array.from(new Uint8Array(digestBytes),b=>b.toString(16).padStart(2,'0')).join('');
   let bitmap:ImageBitmap;
-  try{bitmap=await controlled(createImageBitmap(new Blob([bytes],{type:file.type})),signal,deadline,value=>value.close());}
-  catch(error){if(error instanceof TimeLimit || (error instanceof DOMException&&error.name==='AbortError'))throw error;throw new Error('Imagem inválida ou não decodificável.');}
+  try{bitmap=await decodeImageBitmap(new Blob([bytes],{type:file.type}),{signal,deadline,maxBytes:VISUAL_LIMITS.fileBytes,maxPixels:VISUAL_LIMITS.pixels,maxDimension:VISUAL_LIMITS.dimension});}
+  catch(error){if(error instanceof ImageResourceTimeout)throw new TimeLimit();if(error instanceof TimeLimit || (error instanceof DOMException&&error.name==='AbortError'))throw error;throw new Error('Imagem inválida ou não decodificável.');}
   try{
     check(signal,deadline);
     validateDimensions(bitmap.width,bitmap.height);

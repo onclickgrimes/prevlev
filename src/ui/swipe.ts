@@ -1,9 +1,11 @@
 import {getSwipe,updateSwipe} from '../shared/storage';
 import {createSwipeReference,editSwipeReference,ensureSwipeBudget,exportSwipeCsv,exportSwipeJson,filterSwipe,mergeSwipeImport,normalizeSwipeItem,parseSwipeCsv,parseSwipeImport,parseSwipeTags,swipeIdentity,SWIPE_MAX_BYTES,type SwipeFields,type SwipeType} from '../core/swipe';
 import {downloadBlob} from '../core/media';
+import {fetchBoundedImage,imageBlobFromDataUrl} from '../core/image-preflight';
+import {prepareImagePreview,type ImagePreview} from './image-preview';
 import type {VideoRecord} from '../shared/types';
 
-export interface SwipeTools {render:()=>Promise<void>;saveVideo:(video:VideoRecord,folder?:string)=>Promise<void>;}
+export interface SwipeTools {render:()=>Promise<void>;saveVideo:(video:VideoRecord,folder?:string)=>Promise<void>;invalidatePreviews:()=>void;}
 const mounted=new WeakMap<HTMLElement,SwipeTools>();
 export function initSwipeTools():SwipeTools{
  const section=document.getElementById('swipe');if(!section)throw new Error('A seção da biblioteca não está disponível.');const existing=mounted.get(section);if(existing)return existing;
@@ -12,13 +14,15 @@ export function initSwipeTools():SwipeTools{
  const value=(name:string)=>field<HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement>(name).value;
  const text=<K extends keyof HTMLElementTagNameMap>(tag:K,value:string)=>{const node=document.createElement(tag);node.textContent=value;return node;};
  let editingId:string|undefined,editingOriginal:string|undefined,renderEpoch=0,visibleLimit=100;
+ let previewController:AbortController|undefined,previewOwner:ImagePreview|undefined,previewImage:HTMLImageElement|undefined,previewButton:HTMLButtonElement|undefined;
+ const invalidatePreviews=()=>{previewController?.abort();previewController=undefined;previewOwner?.release();previewOwner=undefined;previewImage?.remove();previewImage=undefined;if(previewButton)previewButton.textContent='Ver prévia da imagem';previewButton=undefined;};
  const status=(message:string,error=false)=>{field('status').textContent=message;field('status').classList.toggle('error',error);const notice=document.getElementById('notice');if(notice){notice.textContent=message;notice.classList.toggle('error',error);}};
  const fail=(error:unknown)=>status(error instanceof Error?error.message:'Não foi possível atualizar a biblioteca.',true);
  function resetForm(){editingId=undefined;editingOriginal=undefined;field('form-title').textContent='Salvar referência';field('add').textContent='Salvar referência';field('cancel-edit').hidden=true;for(const key of ['title','url','tags','notes','thumbnail'])field<HTMLInputElement>(key).value='';field<HTMLSelectElement>('type').value='';}
  function fields():SwipeFields{return {title:value('title'),url:value('url'),folder:value('folder'),...(value('type')?{type:value('type') as SwipeType}:{}),tags:parseSwipeTags(value('tags')),notes:value('notes'),thumbnail:value('thumbnail')};}
  function choices(id:string,values:string[]){const select=field<HTMLSelectElement>(id),selected=select.value;select.replaceChildren();const all=text('option','Todas');all.value='';select.append(all);for(const name of [...new Set([...values,...(selected?[selected]:[])])].sort((a,b)=>a.localeCompare(b))){const option=text('option',name);option.value=name;select.append(option);}select.value=selected;}
  async function render():Promise<void>{
-  const epoch=++renderEpoch,items=await getSwipe();if(epoch!==renderEpoch)return;
+  const epoch=++renderEpoch;invalidatePreviews();const items=await getSwipe();if(epoch!==renderEpoch)return;
   choices('filter-folder',items.map(item=>item.folder));choices('filter-tag',items.flatMap(item=>item.tags??[]));
   field('folders').replaceChildren(...[...new Set(items.map(item=>item.folder))].sort().map(folder=>{const option=document.createElement('option');option.value=folder;return option;}));
   field('storage').textContent=`${items.length} de 5000 referências · ${(ensureSwipeBudget(items)/1024/1024).toFixed(2)} de 4 MiB. A leitura não regrava nem migra dados antigos.`;
@@ -35,7 +39,17 @@ export function initSwipeTools():SwipeTools{
    actions.append(edit,remove);
    const move=text('details',''),summary=text('summary','Mover para pasta');move.append(summary);const folderInput=document.createElement('input');folderInput.value=item.folder;folderInput.maxLength=120;folderInput.setAttribute('aria-label','Nova pasta');folderInput.setAttribute('list','swipe-folders');const moveButton=text('button','Aplicar pasta');moveButton.addEventListener('click',()=>{const folder=folderInput.value;void updateSwipe(current=>current.map(existing=>existing.id===item.id?editSwipeReference(existing,{title:existing.title,url:existing.url,folder}):existing)).then(async()=>{await render();status('Referência movida para a pasta informada.');}).catch(fail);});move.append(folderInput,moveButton);content.append(actions,move);
    const previewUrl=item.thumbnail??item.image;
-   if(previewUrl){const preview=text('button','Ver prévia da imagem');let image:HTMLImageElement|undefined;preview.addEventListener('click',()=>{if(image){image.removeAttribute('src');image.remove();image=undefined;preview.textContent='Ver prévia da imagem';return;}image=document.createElement('img');image.alt=`Prévia de ${item.title}`;image.referrerPolicy='no-referrer';image.crossOrigin='anonymous';image.style.cssText='display:block;max-width:280px;max-height:180px;margin-top:12px';image.onerror=()=>status('A imagem não pôde ser carregada pelo navegador. Confira a URL e as permissões de origem.',true);image.src=previewUrl;content.append(image);preview.textContent='Ocultar prévia';});content.append(preview);}
+   if(previewUrl){const preview=text('button','Ver prévia da imagem');preview.addEventListener('click',()=>{
+    if(previewButton===preview){invalidatePreviews();return;}invalidatePreviews();const active=new AbortController();previewController=active;previewButton=preview;preview.textContent='Cancelar carregamento da prévia';
+    void(async()=>{try{
+     const options={signal:active.signal,deadline:performance.now()+15000,maxBytes:10*1024*1024,maxPixels:32_000_000,maxDimension:16384};
+     const blob=previewUrl.startsWith('data:')?await imageBlobFromDataUrl(previewUrl,options):await fetchBoundedImage(previewUrl,{...options,allowedOrigins:[new URL(previewUrl).origin]});
+     if(active.signal.aborted||epoch!==renderEpoch||!row.isConnected)return;
+     const image=document.createElement('img');image.alt=`Prévia de ${item.title}`;image.style.cssText='display:block;max-width:280px;max-height:180px;margin-top:12px';previewImage=image;
+     const owner=await prepareImagePreview(image,blob,options);if(active.signal.aborted||epoch!==renderEpoch||!row.isConnected){owner.release();return;}
+     previewOwner=owner;content.append(image);preview.textContent='Ocultar prévia';status('Prévia validada localmente: PNG, JPEG ou WebP estático; até 10 MiB e 32 megapixels.');
+    }catch(error){if(active.signal.aborted||epoch!==renderEpoch)return;invalidatePreviews();status(error instanceof Error?error.message:'Não foi possível validar a imagem antes de exibir.',true);}})();
+   });content.append(preview);}
    row.append(content);list.append(row);
   }
   if(!filtered.length)list.append(text('p',items.length?'Nenhuma referência corresponde aos filtros.':'Sua biblioteca está vazia. Salve um vídeo na pesquisa ou adicione um link.'));
@@ -55,5 +69,5 @@ export function initSwipeTools():SwipeTools{
  field('more').addEventListener('click',()=>{visibleLimit+=100;void render().catch(fail);});
  field('import').addEventListener('change',()=>{void(async()=>{const input=field<HTMLInputElement>('import'),file=input.files?.[0];if(!file)return;try{if(file.size>SWIPE_MAX_BYTES)throw new Error('O arquivo de importação excede 4 MiB. Nenhuma referência foi alterada.');const raw=await file.text();let incoming;if(/\.csv$/i.test(file.name)||file.type==='text/csv')incoming=parseSwipeCsv(raw);else{let parsed:unknown;try{parsed=JSON.parse(raw);}catch{throw new Error('O arquivo não contém JSON válido. Nenhuma referência foi alterada.');}incoming=parseSwipeImport(parsed);}let summary={added:0,duplicates:0,conflicts:0};await updateSwipe(current=>{const merged=mergeSwipeImport(current,incoming);summary=merged;return merged.items;});await render();status(`${summary.added} referências importadas; ${summary.duplicates} duplicatas e ${summary.conflicts} conflitos de ID preservaram a versão local.`);}finally{input.value='';}})().catch(fail);});
  for(const format of ['json','csv'] as const)field(format==='json'?'export':'export-csv').addEventListener('click',()=>{void(async()=>{const items=await getSwipe(),data=format==='json'?exportSwipeJson(items):exportSwipeCsv(items);downloadBlob(new Blob([data],{type:format==='json'?'application/json':'text/csv;charset=utf-8'}),`prevlev-swipe.${format}`);status(`${items.length} referências exportadas em ${format.toUpperCase()}.`);})().catch(fail);});
- const tools={render,saveVideo};mounted.set(section,tools);return tools;
+ const tools={render,saveVideo,invalidatePreviews};mounted.set(section,tools);return tools;
 }

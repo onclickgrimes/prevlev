@@ -1,3 +1,4 @@
+import { fetchBoundedImage, imageBlobFromDataUrl, preflightImage, withImageDecodeSlot, type ImageWorkOptions } from './image-preflight';
 /** Local media tools. Images and video frames are never uploaded by this module. */
 export interface Rect {
   x: number;
@@ -13,7 +14,6 @@ export interface CompressionOptions {
 }
 const MAX_PIXELS = 32_000_000;
 const MAX_DIMENSION = 16_384;
-const MAX_BYTES = 50 * 1024 * 1024;
 
 function positive(value: number, name: string): number {
   if (!Number.isFinite(value) || value <= 0)
@@ -96,72 +96,26 @@ function mediaError(error: unknown): Error {
 }
 
 /** For remote images only the public YouTube thumbnail CDN is accepted. */
-export function loadImage(input: Blob | string): Promise<HTMLImageElement> {
-  let ownedUrl: string | undefined;
-  let source: string;
-  if (typeof input === "string") {
-    if (/^data:image\/(?:png|jpe?g|webp);base64,/i.test(input)) source = input;
-    else {
-      let url: URL;
-      try {
-        url = new URL(input);
-      } catch {
-        return Promise.reject(new Error("URL de imagem inválida."));
-      }
-      if (
-        url.protocol !== "https:" ||
-        url.hostname !== "i.ytimg.com" ||
-        url.username ||
-        url.password
-      )
-        return Promise.reject(
-          new Error(
-            "Use uma imagem local ou uma thumbnail pública do YouTube.",
-          ),
-        );
-      source = url.href;
-    }
-  } else {
-    if (!/^image\/(?:png|jpeg|webp|avif|gif)$/.test(input.type))
-      return Promise.reject(
-        new Error(
-          "Formato de imagem não suportado. Use PNG, JPEG, WebP, AVIF ou GIF.",
-        ),
-      );
-    if (input.size === 0 || input.size > MAX_BYTES)
-      return Promise.reject(
-        new Error("A imagem deve ter entre 1 byte e 50 MB."),
-      );
-    ownedUrl = URL.createObjectURL(input);
-    source = ownedUrl;
-  }
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    const cleanup = () => {
-      image.onload = null;
-      image.onerror = null;
-      if (ownedUrl) URL.revokeObjectURL(ownedUrl);
-    };
-    image.crossOrigin = "anonymous";
+export async function loadImage(input: Blob | string, options: ImageWorkOptions = {}): Promise<HTMLImageElement> {
+  const config = { ...options, deadline: options.deadline ?? performance.now() + 15_000 };
+  const blob = typeof input === 'string'
+    ? /^data:/i.test(input) ? await imageBlobFromDataUrl(input, config) : await fetchBoundedImage(input, config)
+    : input;
+  const info = await preflightImage(blob, config);
+  return withImageDecodeSlot(() => new Promise<HTMLImageElement>((resolve, reject) => {
+    const ownedUrl = URL.createObjectURL(blob), image = new Image();
+    const cleanup = () => { image.onload = null; image.onerror = null; URL.revokeObjectURL(ownedUrl); };
+    image.crossOrigin = 'anonymous';
     image.onload = () => {
       cleanup();
-      try {
-        validateDimensions(image.naturalWidth, image.naturalHeight);
-        resolve(image);
-      } catch (error) {
-        reject(mediaError(error));
-      }
+      const agrees = image.naturalWidth === info.width && image.naturalHeight === info.height;
+      const rotated = info.type === 'image/jpeg' && image.naturalWidth === info.height && image.naturalHeight === info.width;
+      if (!agrees && !rotated) { reject(new Error('Dimensões decodificadas divergem do cabeçalho da imagem.')); return; }
+      resolve(image);
     };
-    image.onerror = () => {
-      cleanup();
-      reject(
-        new Error(
-          "Não foi possível abrir a imagem. Verifique o arquivo ou as permissões do CDN.",
-        ),
-      );
-    };
-    image.src = source;
-  });
+    image.onerror = () => { cleanup(); reject(new Error('Não foi possível abrir a imagem local validada.')); };
+    try { image.src = ownedUrl; } catch (error) { cleanup(); reject(mediaError(error)); }
+  }), config, image => image.removeAttribute?.('src'));
 }
 
 export async function compressImage(
@@ -231,17 +185,10 @@ export async function fetchThumbnail(
   videoId: string,
   signal?: AbortSignal,
 ): Promise<Blob> {
-  const deadline=AbortSignal.timeout(12000), combined=signal?AbortSignal.any([signal,deadline]):deadline;
+  const deadline=performance.now()+12000;
   for (const url of thumbnailUrls(videoId)) {
-    let response: Response;
-    try {response=await fetch(url,{credentials:"omit",redirect:"error",signal:combined});}
-    catch(error){if(combined.aborted)throw error;continue;}
-    if(!response.ok)continue;
-    const type=(response.headers.get("content-type")??"").split(";")[0].toLowerCase();
-    if(!["image/jpeg","image/png","image/webp","image/gif","image/avif"].includes(type)||Number(response.headers.get("content-length"))>5*1024*1024){await response.body?.cancel();continue;}
-    const reader=response.body?.getReader();if(!reader)continue;const chunks:Uint8Array<ArrayBuffer>[]= [];let bytes=0,tooLarge=false;
-    try{for(;;){const next=await reader.read();if(next.done)break;bytes+=next.value.byteLength;if(bytes>5*1024*1024){tooLarge=true;await reader.cancel();break;}chunks.push(new Uint8Array(next.value));}}finally{reader.releaseLock();}
-    combined.throwIfAborted();if(!tooLarge&&bytes>0)return new Blob(chunks,{type});
+    try { return await fetchBoundedImage(url,{signal,deadline,maxBytes:5*1024*1024}); }
+    catch(error){if(signal?.aborted||performance.now()>=deadline)throw error;}
   }
   throw new Error("Nenhuma thumbnail pública pôde ser obtida do YouTube.");
 }
@@ -370,6 +317,7 @@ export async function cropScreenshot(
 }
 
 export async function copyImage(blob: Blob): Promise<void> {
+  await preflightImage(blob);
   if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined")
     throw new Error(
       "Cópia de imagem indisponível. Baixe o arquivo ou permita acesso à área de transferência.",

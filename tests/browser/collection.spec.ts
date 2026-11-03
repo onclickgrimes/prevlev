@@ -1,6 +1,7 @@
 import {test,expect,chromium,type Browser,type BrowserContext,type Page} from '@playwright/test';
 import {existsSync} from 'node:fs';
 import {resolve} from 'node:path';
+import {build} from 'esbuild';
 
 const url='https://www.youtube.com/watch?v=abcdefghijk';
 type Message={type:string;[key:string]:unknown};
@@ -51,4 +52,65 @@ test('mensagens confiáveis limitam comentários, cancelam SPA e preservam o con
   const active=await send({type:'START_COLLECTION',kind:'comments',maxItems:500,maxSteps:30,timeoutMs:60000});await page.evaluate(()=>{document.dispatchEvent(new Event('yt-navigate-start'));history.pushState({},'','/watch?v=zzzzzzzzzzz');document.querySelector('ytd-watch-flexy')!.setAttribute('video-id','zzzzzzzzzzz');document.querySelector('ytd-watch-metadata h1')!.textContent='Título novo da navegação';});
   const cancelled=await send({type:'COLLECTION_STATUS',jobId:active.collection.jobId,includeResults:true});expect(cancelled.collection.phase).toBe('cancelled');expect(cancelled.snapshot?.url).toBe(url);const steps=cancelled.collection.steps;await page.waitForTimeout(700);expect((await send({type:'COLLECTION_STATUS',jobId:active.collection.jobId})).collection.steps).toBe(steps);
   expect(await send({type:'GET_CURRENT_METADATA'})).toMatchObject({status:'ok',metadata:{title:'Título novo da navegação',id:'zzzzzzzzzzz',url:'https://www.youtube.com/watch?v=zzzzzzzzzzz'}});expect(await page.evaluate(()=>(window as unknown as FixtureWindow).__collectionStore.snapshot)).toBeUndefined();expect(await page.evaluate(()=>(window as unknown as FixtureWindow).__collectionAccountClicks)).toBe(0);expect(unexpected).toEqual([]);
+});
+
+interface CollectionRaceWindow extends Window {
+ __resolveCollectionStart:(index:number,jobId:string)=>void;
+ __rejectCollectionStart:(index:number)=>void;
+ __raceMessages:{type:string;tabId:number;jobId?:string}[];
+ __raceAdopted:PageSnapshotForRace[];
+}
+interface PageSnapshotForRace {videos:{id:string}[];}
+async function collectionRacePage() {
+ const racePage=await browser.newPage();
+ await racePage.setContent('<select id="tab-select"><option value="1">Primeira aba</option><option value="2">Segunda aba</option></select><section id="research"></section>');
+ const bundle=await build({stdin:{contents:`import {initCollectionTools} from './src/ui/collection';
+  const pending=[];window.__raceMessages=[];window.__raceAdopted=[];
+  const base={url:'https://www.youtube.com/results?search_query=fixture',title:'Fixture',videos:[],comments:[],transcript:[],warnings:[]};
+  const reply=(jobId)=>({status:'ok',collection:{jobId,kind:'videos',phase:'completed',collectedCount:1,steps:1,maxItems:100,maxSteps:10,url:base.url,limitations:[]},snapshot:{...base,videos:[{id:jobId,title:jobId,url:'https://www.youtube.com/watch?v=abcdefghijk'}]}});
+  Object.defineProperty(globalThis,'chrome',{value:{tabs:{sendMessage:(tabId,message)=>{
+   window.__raceMessages.push({tabId,...message});
+   if(message.type==='START_COLLECTION')return new Promise((resolve,reject)=>pending.push({resolve,reject}));
+   return Promise.resolve(reply(message.jobId));
+  }}}});
+  window.__resolveCollectionStart=(index,jobId)=>pending[index].resolve(reply(jobId));
+  window.__rejectCollectionStart=(index)=>pending[index].reject(new Error('Resposta antiga descartada'));
+  initCollectionTools({targetTab:()=>Number(document.querySelector('#tab-select').value),snapshot:()=>base,adopt:async(snapshot)=>{window.__raceAdopted.push(snapshot);},notice:()=>{}});`,resolveDir:process.cwd(),loader:'ts'},bundle:true,write:false,format:'iife'});
+ await racePage.addScriptTag({content:bundle.outputFiles[0].text});
+ return racePage;
+}
+
+test('painel descarta START tardio após trocar a aba e preserva o início mais novo',async()=>{
+ const racePage=await collectionRacePage();
+ await racePage.locator('#collection-start').click();
+ await expect(racePage.locator('#collection-start')).toBeDisabled();await expect(racePage.locator('#collection-cancel')).toBeEnabled();await expect(racePage.locator('#collection-max')).toBeDisabled();
+ await racePage.locator('#tab-select').selectOption('2');await racePage.locator('#collection-start').click();
+ await racePage.evaluate(()=>(window as unknown as CollectionRaceWindow).__resolveCollectionStart(0,'old-job'));
+ await expect(racePage.locator('#collection-start')).toBeDisabled();await expect(racePage.locator('#collection-use')).toBeDisabled();
+ expect(await racePage.evaluate(()=>(window as unknown as CollectionRaceWindow).__raceMessages)).toMatchObject([{type:'START_COLLECTION',tabId:1},{type:'START_COLLECTION',tabId:2},{type:'CANCEL_COLLECTION',tabId:1,jobId:'old-job'}]);
+ await racePage.evaluate(()=>(window as unknown as CollectionRaceWindow).__resolveCollectionStart(1,'new-job'));
+ await expect(racePage.locator('#collection-use')).toBeEnabled();await racePage.locator('#collection-use').click();
+ expect(await racePage.evaluate(()=>(window as unknown as CollectionRaceWindow).__raceAdopted.map(snapshot=>snapshot.videos.map(video=>video.id)))).toEqual([['new-job']]);
+ await racePage.close();
+});
+
+test('pagehide invalida START pendente e sua rejeição antiga não libera o início após pageshow',async()=>{
+ const racePage=await collectionRacePage();await racePage.locator('#collection-start').click();
+ await racePage.evaluate(()=>window.dispatchEvent(new PageTransitionEvent('pagehide',{persisted:true})));
+ await expect(racePage.locator('#collection-start')).toBeDisabled();await expect(racePage.locator('#collection-use')).toBeDisabled();
+ await racePage.evaluate(()=>window.dispatchEvent(new PageTransitionEvent('pageshow',{persisted:true})));await racePage.locator('#collection-start').click();
+ await racePage.evaluate(()=>(window as unknown as CollectionRaceWindow).__rejectCollectionStart(0));
+ await expect(racePage.locator('#collection-start')).toBeDisabled();await expect(racePage.locator('#collection-cancel')).toBeEnabled();
+ await racePage.evaluate(()=>(window as unknown as CollectionRaceWindow).__resolveCollectionStart(1,'new-job'));await expect(racePage.locator('#collection-use')).toBeEnabled();
+ await racePage.locator('#collection-use').click();expect(await racePage.evaluate(()=>(window as unknown as CollectionRaceWindow).__raceAdopted.map(snapshot=>snapshot.videos.map(video=>video.id)))).toEqual([['new-job']]);
+ await racePage.close();
+});
+
+test('cancelar enquanto START aguarda impede adotar sua resposta tardia',async()=>{
+ const racePage=await collectionRacePage();await racePage.locator('#collection-start').click();await racePage.locator('#collection-cancel').click();
+ await expect(racePage.locator('#collection-start')).toBeEnabled();await expect(racePage.locator('#collection-cancel')).toBeDisabled();
+ await racePage.evaluate(()=>(window as unknown as CollectionRaceWindow).__resolveCollectionStart(0,'cancelled-start'));
+ await expect(racePage.locator('#collection-use')).toBeDisabled();expect(await racePage.evaluate(()=>(window as unknown as CollectionRaceWindow).__raceAdopted)).toEqual([]);
+ expect(await racePage.evaluate(()=>(window as unknown as CollectionRaceWindow).__raceMessages.at(-1))).toEqual({type:'CANCEL_COLLECTION',tabId:1,jobId:'cancelled-start'});
+ await racePage.close();
 });

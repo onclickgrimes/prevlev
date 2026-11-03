@@ -12,6 +12,14 @@ import {
 
 afterEach(() => vi.restoreAllMocks());
 
+function pngDataUrl(width: number, height: number): string {
+  const bytes = Buffer.alloc(57);
+  Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(bytes);
+  bytes.writeUInt32BE(13, 8); bytes.write('IHDR', 12); bytes.writeUInt32BE(width, 16); bytes.writeUInt32BE(height, 20); bytes[24] = 8; bytes[25] = 6;
+  bytes.write('IDAT', 37); bytes.write('IEND', 49);
+  return `data:image/png;base64,${bytes.toString('base64')}`;
+}
+
 describe("local media boundaries", () => {
   it("fits wide and tall sources without stretching or enlargement", () => {
     expect(fitDimensions(1920, 1080, 1280, 720)).toEqual({
@@ -52,6 +60,18 @@ describe("local media boundaries", () => {
       compressImage(new Blob(["x"], { type: "image/png" }), { quality: 0 }),
     ).rejects.toThrow("Qualidade");
   });
+  it('rejects declared 64MP sources before any Image object or source assignment', async () => {
+    const created = vi.fn(), assigned = vi.fn();
+    vi.stubGlobal('Image', class {
+      constructor() { created(); }
+      set src(value: string) { assigned(value); }
+    });
+    try {
+      await expect(loadImage(pngDataUrl(8000, 8000))).rejects.toThrow('32 megapixels');
+      for (const type of ['image/gif', 'image/avif']) await expect(loadImage(new Blob(['unsupported'], { type }))).rejects.toThrow('Formato');
+      expect(created).not.toHaveBeenCalled(); expect(assigned).not.toHaveBeenCalled();
+    } finally { vi.unstubAllGlobals(); }
+  });
   it("refuses a frame until the video has actual image data", async () => {
     const video = document.createElement("video");
     await expect(captureFrame(video)).rejects.toThrow("frame");
@@ -90,9 +110,13 @@ describe("visible tab crop and redaction", () => {
         }
       },
     );
+    vi.stubGlobal('URL', class extends URL {
+      static createObjectURL = vi.fn(() => 'blob:validated-local-image');
+      static revokeObjectURL = vi.fn();
+    });
     try {
       const blob = await cropScreenshot(
-        "data:image/png;base64,AA==",
+        pngDataUrl(2000, 1200),
         { x: 10, y: 20, width: 300, height: 100 },
         2,
         [{ x: 25, y: 30, width: 40, height: 20 }],
@@ -104,7 +128,7 @@ describe("visible tab crop and redaction", () => {
       expect(fillRect).toHaveBeenCalledWith(30, 20, 80, 40);
       await expect(
         cropScreenshot(
-          "data:image/png;base64,AA==",
+          pngDataUrl(2000, 1200),
           { x: 1500, y: 20, width: 300, height: 100 },
           2,
         ),

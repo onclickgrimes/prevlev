@@ -467,7 +467,7 @@ describe("adaptador de IA configurável sem consumo externo nos testes", () => {
         },
         empty,
       ),
-    ).rejects.toThrow("imagem compatível");
+    ).rejects.toThrow("exatamente uma imagem");
   });
   it("aceita texto somente com modelo confirmado, uma escolha completa e nenhuma chamada de ferramenta", async () => {
     const model = "fixture-exact-model";
@@ -540,7 +540,7 @@ describe("adaptador de IA configurável sem consumo externo nos testes", () => {
       aiBaseUrl: "http://localhost:9000/v1",
       aiImageModel: model,
     };
-    const image = { data: [{ b64_json: "aW1hZ2UtZml4dHVyZQ==" }] };
+    const image = { data: [{ b64_json: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aGZkAAAAASUVORK5CYII=" }] };
     const fetcher = vi
       .fn<typeof fetch>()
       .mockImplementation(

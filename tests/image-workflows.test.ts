@@ -1,9 +1,16 @@
 import {afterEach,describe,expect,it,vi} from 'vitest';
-import {buildCyclicVersions,findCompressionCandidate,type CompressionCandidate} from '../src/core/image-workflows';
+import {buildCyclicVersions,compressToTarget,findCompressionCandidate,type CompressionCandidate} from '../src/core/image-workflows';
 
 afterEach(()=>vi.useRealTimers());
 const blob=(bytes:number,type='image/jpeg')=>new Blob([new Uint8Array(bytes)],{type});
 describe('bounded search for actual encoded byte sizes',()=>{
+  it('rejects a tiny 64MP PNG before invoking the browser decoder or allocating a canvas',async()=>{
+    const data=new Uint8Array(57),view=new DataView(data.buffer);
+    data.set([137,80,78,71,13,10,26,10]);view.setUint32(8,13);data.set(new TextEncoder().encode('IHDR'),12);view.setUint32(16,8000);view.setUint32(20,8000);data[24]=8;data[25]=6;data.set(new TextEncoder().encode('IDAT'),37);data.set(new TextEncoder().encode('IEND'),49);
+    const decode=vi.fn();vi.stubGlobal('createImageBitmap',decode);
+    try{await expect(compressToTarget(new Blob([data],{type:'image/png'}),{targetBytes:10000})).rejects.toThrow('32 megapixels');expect(decode).not.toHaveBeenCalled();}
+    finally{vi.unstubAllGlobals();}
+  });
   it('uses actual bytes, aspect-preserving dimensions and stops once target is met',async()=>{
     const encode=vi.fn(async()=>blob(900));
     const result=await findCompressionCandidate({width:1920,height:1080},{targetBytes:1000,maxWidth:1280,maxHeight:720,quality:0.9},encode);

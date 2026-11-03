@@ -1,5 +1,7 @@
 # Cobertura dos 40 recursos · v0.6.5
 
+Revisão local adicional de segurança e correção: [coleta, imagens, transcrições e fontes](LOCAL_SAFETY_FOLLOWUP.md). Publicação suspensa; aceite por fixtures permanece separado do runtime real.
+
 Implementação independente; não há declaração de paridade completa com Nexlev 3.12.6.
 
 O detalhamento por linha registra a base v0.4 e as ampliações de v0.6; outros limites estão em [GAP_AUDIT.md](GAP_AUDIT.md) e [ORIGINAL_GAP_LEDGER.md](ORIGINAL_GAP_LEDGER.md). O estado de implementação descreve o escopo entregue; validação de runtime e configuração de produto são eixos separados. “Implementado” não declara paridade ou teste com extensão instalada. Dados faltantes permanecem desconhecidos. Os estados dos 40 recursos foram preservados nesta etapa; ampliar um relatório local não equivale a entregar a base de pesquisa e os serviços privados da referência.

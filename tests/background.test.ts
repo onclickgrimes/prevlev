@@ -128,9 +128,10 @@ afterEach(() => {
 
 describe("service worker e autorização de mensagens", () => {
   it("obtém thumbnail somente por ação confiável em CDN fixo, sem cookies ou redirecionamentos", async () => {
-    fetcher.mockImplementation(async()=>new Response(new Uint8Array([1,2,3]),{headers:{"Content-Type":"image/png"}}));
+    const png="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aGv8AAAAASUVORK5CYII=";
+    fetcher.mockImplementation(async()=>new Response(Buffer.from(png,'base64'),{headers:{"Content-Type":"image/png"}}));
     const listener=await importBackground();
-    expect(await send(listener,{type:"FETCH_THUMBNAIL",videoId:"abcdefghijk"},contentSender)).toMatchObject({status:"ok",dataUrl:"data:image/png;base64,AQID"});
+    expect(await send(listener,{type:"FETCH_THUMBNAIL",videoId:"abcdefghijk"},contentSender)).toMatchObject({status:"ok",dataUrl:`data:image/png;base64,${png}`});
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(fetcher.mock.calls[0][0]).toBe("https://i.ytimg.com/vi/abcdefghijk/maxresdefault.jpg");
     expect(fetcher.mock.calls[0][1]).toMatchObject({credentials:"omit",redirect:"error"});
