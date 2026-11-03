@@ -1,4 +1,4 @@
-import {normalizeSwipeLibrary,ensureSwipeBudget} from '../src/core/swipe.ts';
+import {normalizeSwipeLibrary,parseSwipeImport,ensureSwipeBudget} from '../src/core/swipe.ts';
 import {open,mkdir,rename,unlink} from 'node:fs/promises';
 import {constants} from 'node:fs';import {join,resolve} from 'node:path';import {createHash,randomUUID} from 'node:crypto';
 class LibraryError extends Error {}
@@ -16,7 +16,7 @@ export async function handleLibrary(payload,options={}){
   if(payload.action!=='commit')return failure('Ação de biblioteca desconhecida.');
   if(typeof payload.baseRevision!=='string'||!/^[a-f0-9]{64}$/.test(payload.baseRevision))return failure('Consulte a biblioteca e informe a revisão exata antes de substituir dados.');
   if(!Array.isArray(payload.items))return failure('Envie uma lista explícita de referências, inclusive para esvaziar a biblioteca.');
-  let items;try{items=normalizeSwipeLibrary(payload.items);ensureSwipeBudget(items);}catch{return failure('Biblioteca inválida: use referências locais válidas, até 5000 itens e 4 MiB, sem origem youtube-data-api.');}
+  let items;try{items=parseSwipeImport(payload.items);ensureSwipeBudget(items);}catch{return failure('Biblioteca inválida: use referências locais válidas, até 5000 itens e 4 MiB, sem origem youtube-data-api.');}
   return await serialized(directory,async()=>{const current=await read(directory);if(payload.baseRevision!==revision(current))return{status:'error',source,error:'A biblioteca do backend mudou. Consulte e revise novamente; nenhum dado foi sobrescrito.',data:{conflict:true,revision:revision(current)}};await write(directory,items);return ok(items,{saved:items.length});});
  }catch(error){return failure(error instanceof LibraryError?error.message:'Não foi possível acessar a biblioteca pessoal. Nenhum caminho ou conteúdo privado é exposto.');}
 }
