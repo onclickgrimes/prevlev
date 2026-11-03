@@ -1,0 +1,15 @@
+# Verificação de conteúdo do pacote local
+
+Antes de criar diretório de saída, ZIP ou hashes, o empacotador verifica os oito arquivos permitidos do build, recusa links simbólicos, arquivos vazios/maiores que 50 MiB e arquivos extras (incluindo `.map`), e valida a versão MV3. A leitura dos arquivos alimenta a mesma lista que será empacotada; o conteúdo não é reescrito.
+
+A verificação adicional usa assinaturas específicas, não palavras genéricas. Recusa blocos PEM privados completos (PKCS#8, RSA, EC, DSA, OpenSSH e privado criptografado), incluindo quebras de linha escapadas em strings JS/JSON, e os formatos fixos reconhecidos de GitHub clássico/fine-grained, Google API key, identificador de acesso AWS e chave OpenAI legada. As fixtures fabricam esses formatos; nenhuma credencial real ou serviço é utilizado. Mensagens legítimas com `Nexlev`, `secret`, `secrets`, nomes de variáveis de ambiente, placeholders ou um cabeçalho PEM citado sem material de chave continuam permitidas.
+
+Os erros mencionam somente a categoria e o nome de arquivo permitido; não incluem o material reconhecido, o trecho do código ou o valor de uma referência externa. JSON inválido também recebe mensagem estática. Um arquivo permitido chamado `content.js` não dispensa a inspeção de seu conteúdo.
+
+O conjunto de fontes é fechado: referências do manifesto apontam somente aos arquivos permitidos e com o tipo esperado; scripts das páginas apontam ao bundle correspondente, folhas de estilo a `ui.css`, e frames/objetos a HTML incluído. Um `base href` que alteraria a resolução das fontes é recusado. Imports estáticos/dinâmicos e `importScripts` reconhecidos no JavaScript precisam ter fontes literais da lista. Imports CSS adicionais e diretivas reais `sourceMappingURL` são recusados, inclusive mapas inline, pois este build próprio não produz mapas. Strings que apenas citam uma diretiva ou um carregador como mensagem não são interpretadas como código.
+
+O JavaScript é analisado com o TypeScript já usado no desenvolvimento; HTML é analisado pelo jsdom sem habilitar execução de scripts ou carregamento de recursos. Nenhum código do build é executado, import seguido ou URL consultada para verificar o pacote. Isso não configura contas, clientes, permissões ou serviços.
+
+Esta é a verificação material de distribuição AF08, com limites explícitos. Não é um scanner universal de segredos, uma análise de fluxo de dados ou uma certificação contra código malicioso/obfuscado. Formatos não reconhecidos, strings construídas dinamicamente ou valores arbitrários sem assinatura de credencial exigem revisão do código. A lista permitida não autentica a autoria de código copiado; o build continua restrito às fontes próprias do repositório. O pacote não deve conter referência proprietária ou fixtures apresentadas como dados reais.
+
+`tests/distribution.test.ts` injeta material inteiramente fabricado em arquivos permitidos, verifica recusa antes da criação do diretório de artefatos, ausência do segredo nas mensagens, fontes adicionais, sourcemaps e preservação da reprodutibilidade do ZIP.
