@@ -2,6 +2,8 @@
 
 O editor de metadados da prévia guarda uma confirmação local de canal, visualizações, data, duração e avatar. Concluir confirma esses campos somente para a simulação; Redefinir restaura a última confirmação, incluindo o arquivo de avatar. Os valores iniciais são a primeira base, antes de qualquer confirmação. Nada entra na coleção, histórico ou relatórios.
 
+Trocar/restaurar somente metadados ou avatar preserva a variação selecionada para a composição e a compressão. A seleção volta à primeira variação quando mudam os arquivos original/candidatos; a quantidade atual de combinações continua limitando o índice válido.
+
 A tela abre em modo ilustrativo e não lê/coleta fontes automaticamente. Para usar uma amostra, o usuário escolhe a coleção congelada ou uma aba YouTube explicitamente autorizada e clica em Usar amostra da fonte escolhida. Escolher a fonte, abrir a tela, gerar uma composição ou trocar o feed visual não inicia a coleta.
 
 A captura mantém identidade, URL exata, superfície inferida da URL, título/horário quando fornecidos e uma cópia de até 500 linhas locais elegíveis de uma entrada de até 5000. A composição mostra até 8 cards de contexto, sem buscar suas imagens. Registros da API oficial recusam a amostra. Coleções não recebem uma origem única presumida: a URL é apresentada como contexto associado e não comprova a origem de todas as linhas. Para a aba, a superfície observada prevalece sobre o feed visual solicitado; outro contexto usa apresentação genérica. Fontes sem dados elegíveis falham sem substituir por números ou cards inventados.

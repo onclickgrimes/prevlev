@@ -1,6 +1,7 @@
 import { test, expect, chromium, type Browser, type BrowserContext, type Page } from '@playwright/test';
 import { build } from 'esbuild';
 import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 
 interface FixtureState {
   calls: { source: string; expectedIdentity: string }[];
@@ -26,7 +27,7 @@ const bitmap=window.createImageBitmap;window.createImageBitmap=async(...args)=>{
 });
 test.afterAll(async () => { await browser?.close(); });
 test.beforeEach(async () => {
-  unexpected = []; context = await browser.newContext();
+  unexpected = []; context = await browser.newContext({ acceptDownloads: true });
   await context.route('**/*', route => {
     if (route.request().url() === `${origin}/`) return route.fulfill({ contentType: 'text/html', body: '<section id="images"></section><script src="/bundle.js"></script>' });
     if (route.request().url() === `${origin}/bundle.js`) return route.fulfill({ contentType: 'text/javascript', body: bundle });
@@ -49,6 +50,22 @@ test('Done confirms metadata/avatar A and Reset restores A after editing B, with
   await page.locator('#image-preview').click(); await expect(page.locator('#image-output')).toBeVisible();
   const text = await page.evaluate(() => (window as unknown as FixtureWindow).fixture.text.join('\n')); expect(text).toContain('Canal A'); expect(text).toContain('100 views simuladas A'); expect(text).not.toContain('999 views simuladas B'); expect(await calls()).toEqual([]);
   expect(await page.evaluate(() => (window as unknown as FixtureWindow).fixture.samples.collection.videos[0].views)).toBe(11);
+});
+
+test('metadata/avatar Reset preserves candidate two for both the preview and compression until image files change', async () => {
+  await upload('#image-file', 'original.png', '#00ff00'); const red = await png('#ff0000'), blue = await png('#0000ff');
+  await page.locator('#candidate-file').setInputFiles([{ name: 'first-red.png', mimeType: 'image/png', buffer: red }, { name: 'second-blue.png', mimeType: 'image/png', buffer: blue }]); await expect(page.locator('#image-preview')).toBeEnabled();
+  await page.locator('#preview-channel').fill('Confirmado A'); await upload('#preview-avatar', 'avatar-A.png', '#ffff00'); await page.locator('#preview-mode').selectOption('candidate');
+  await page.locator('#image-preview').click(); await expect(page.locator('#image-output')).toBeVisible(); await page.locator('#image-variants button').nth(1).click(); await expect(page.locator('#preview-status')).toContainText('candidata 2');
+  await page.locator('#metadata-done').click(); await expect(page.locator('#preview-status')).toContainText('candidata 2');
+  await page.locator('#preview-metadata summary').click(); await page.locator('#preview-channel').fill('Rascunho B'); await upload('#preview-avatar', 'avatar-B.png', '#ff00ff');
+  await expect(page.locator('#image-variants button').nth(1)).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('#metadata-reset').click(); await expect(page.locator('#preview-channel')).toHaveValue('Confirmado A'); await expect(page.locator('#image-variants button').nth(1)).toHaveAttribute('aria-pressed', 'true');
+  expect(await page.locator('#preview-avatar').evaluate((input: HTMLInputElement) => input.files?.[0]?.name)).toBe('avatar-A.png');
+  await page.locator('#image-preview').click(); await expect(page.locator('#preview-status')).toContainText('candidata 2');
+  const pixel = await page.locator('#image-output').evaluate((image: HTMLImageElement) => { const canvas = document.createElement('canvas'); canvas.width = image.naturalWidth; canvas.height = image.naturalHeight; const ctx = canvas.getContext('2d')!; ctx.drawImage(image, 0, 0); return [...ctx.getImageData(110, 310, 1, 1).data]; }); expect(pixel[2]).toBeGreaterThan(240); expect(pixel[0]).toBeLessThan(10);
+  await page.locator('#compression-source').selectOption('candidate'); await page.locator('#compression-format').selectOption('image/png'); const pending = page.waitForEvent('download'); await page.locator('#compress').click(); const downloaded = await pending; expect(await readFile((await downloaded.path())!)).toEqual(blue);
+  await page.locator('#candidate-file').setInputFiles([{ name: 'new-first.png', mimeType: 'image/png', buffer: red }, { name: 'new-second.png', mimeType: 'image/png', buffer: blue }]); await expect(page.locator('#image-variants button').nth(0)).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('loading collection versus selected tab is explicit and uses separate frozen rows and exact observed context', async () => {

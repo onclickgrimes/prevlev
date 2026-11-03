@@ -30,6 +30,7 @@ export function initImageTools(options:ImageToolsOptions={}):ImageTools {
   const limits={maxBytes:10*1024*1024,maxPixels:32_000_000,maxDimension:16384};
   let disposed=false,selectionValid=false,selectionPending=false;
   let original:File|undefined,candidates:File[]=[],avatar:File|undefined,variants:PreviewVersion[]=[],selected=0,seed=17;
+  let previousOriginalInput:File|undefined,previousCandidateInputs:File[]=[];
   let boundContext:BoundImageContext|undefined,contextAbort:AbortController|undefined,contextEpoch=0;
   let previewAbort:AbortController|undefined,galleryAbort:AbortController|undefined,selectionAbort:AbortController|undefined,compressionAbort:AbortController|undefined;
   let previewOwner:ImagePreview|undefined,previewBlob:Blob|undefined,last:TargetCompressionResult|undefined,galleryOwners:ImagePreview[]=[];
@@ -69,10 +70,12 @@ export function initImageTools(options:ImageToolsOptions={}):ImageTools {
     }catch(error){for(const owner of owners)owner.release();if(galleryAbort===controller){galleryAbort=undefined;$('image-variants').replaceChildren();}throw error;}
   }
   function validateSelection(){
-    clearPreview();clearGallery();clearCompression();selectionAbort?.abort();
-    original=undefined;candidates=[];avatar=undefined;selectionValid=false;selected=0;
-    const controller=new AbortController();selectionAbort=controller;selectionPending=true;syncButtons();$('preview-status').textContent='Validando cabeçalhos e dimensões antes de exibir imagens…';
     const proposedOriginal=$<HTMLInputElement>('image-file').files?.[0],proposedCandidates=Array.from($<HTMLInputElement>('candidate-file').files??[]),proposedAvatar=$<HTMLInputElement>('preview-avatar').files?.[0];
+    const variantFilesChanged=proposedOriginal!==previousOriginalInput||proposedCandidates.length!==previousCandidateInputs.length||proposedCandidates.some((file,index)=>file!==previousCandidateInputs[index]);
+    previousOriginalInput=proposedOriginal;previousCandidateInputs=proposedCandidates;if(variantFilesChanged)selected=0;
+    clearPreview();clearGallery();clearCompression();selectionAbort?.abort();
+    original=undefined;candidates=[];avatar=undefined;selectionValid=false;
+    const controller=new AbortController();selectionAbort=controller;selectionPending=true;syncButtons();$('preview-status').textContent='Validando cabeçalhos e dimensões antes de exibir imagens…';
     const task=async()=>{
       if(controller.signal.aborted||disposed)return;
       let headersReady=false;
