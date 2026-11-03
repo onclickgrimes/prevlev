@@ -5,9 +5,14 @@ import { toCsv } from "../core/export";
 import { downloadBlob } from "../core/media";
 import { videoIdFromUrl } from "../core/parse";
 
-export function initAnalyticsTools(deps: { snapshot: () => PageSnapshot; filter: () => ResearchFilter }): void {
+export interface AnalyticsTools { invalidate(): void; }
+const mountedAnalytics = new WeakMap<HTMLElement, AnalyticsTools>();
+
+export function initAnalyticsTools(deps: { snapshot: () => PageSnapshot; filter: () => ResearchFilter }): AnalyticsTools {
   const section = document.getElementById("analytics");
-  if (!section || section.dataset.analyticsReady) return;
+  if (!section) return { invalidate() {} };
+  const existing = mountedAnalytics.get(section); if (existing) return existing;
+  if (section.dataset.analyticsReady) return { invalidate() {} };
   section.dataset.analyticsReady = "true";
   section.innerHTML = `
     <div class="card"><span class="eyebrow">DADOS OBSERVADOS NO NAVEGADOR</span><h2>Analytics local</h2>
@@ -31,32 +36,56 @@ export function initAnalyticsTools(deps: { snapshot: () => PageSnapshot; filter:
   const status = get("status");
   const result = get("result");
   const exports = ["json", "csv", "markdown"].map(format => get<HTMLButtonElement>(`export-${format}`));
-  let report: AnalyticsReport | undefined;
+  let report: AnalyticsReport | undefined, reportStamp: string | undefined;
+  const capture = () => {
+    const snapshot = deps.snapshot(), mode = source.value;
+    if (mode !== "all" && mode !== "filtered") throw new Error("Escolha um escopo válido para o relatório.");
+    return { mode, url: snapshot.url, videoId: snapshot.videoId, title: snapshot.title,
+      videos: snapshot.videos.map(video => ({ ...video })), warnings: [...snapshot.warnings],
+      filter: mode === "filtered" ? structuredClone(deps.filter()) : undefined };
+  };
+  // Preserve invalid numbers in the binding so NaN/Infinity cannot match a previous null.
+  const stamp = (input: ReturnType<typeof capture>) => JSON.stringify(input, (_key, value: unknown) => typeof value === "number" && !Number.isFinite(value) ? { invalidNumber: String(value) } : value);
   const disableExports = (disabled: boolean) => exports.forEach(button => { button.disabled = disabled; });
   const invalidate = () => {
-    report = undefined; result.hidden = true; disableExports(true);
-    status.textContent = "Escopo alterado. Atualize para recalcular o relatório.";
+    report = undefined; reportStamp = undefined; result.hidden = true; disableExports(true);
+    for (const id of ["scope", "provenance", "filter-summary", "comparison", "totals", "coverage", "formats", "channels", "months", "top", "limitations"]) get(id).replaceChildren();
+    status.textContent = "Coleção, contexto ou filtros alterados. Atualize para recalcular; o relatório anterior não está disponível para exportação. A coleção original foi preservada.";
     status.classList.remove("error");
   };
-  source.addEventListener("change", invalidate);
+  for (const event of ["input", "change"]) source.addEventListener(event, invalidate);
+  const checkContext = () => {
+    if (!report) return;
+    try { if (reportStamp !== stamp(capture())) invalidate(); }
+    catch { invalidate(); }
+  };
+  for (const event of ["input", "change"]) document.getElementById("research")?.addEventListener(event, checkContext);
   get("refresh").addEventListener("click", () => {
+    invalidate();
     try {
-      const snapshot = deps.snapshot();
-      report = buildAnalyticsReport(snapshot.videos, source.value === "filtered" ? { filter: deps.filter() } : {});
-      renderReport(report, snapshot.warnings);
+      const input = capture(), signature = stamp(input);
+      const next = buildAnalyticsReport(input.videos, input.mode === "filtered" ? { filter: input.filter } : {});
+      if (signature !== stamp(capture())) throw new Error("A fonte ou os filtros mudaram durante o cálculo. O resultado foi descartado; atualize novamente.");
+      renderReport(next, input.warnings); report = next; reportStamp = signature;
       status.textContent = `Relatório atualizado em ${new Date(report.generatedAt).toLocaleString("pt-BR", { timeZone: "UTC" })} UTC. ${report.scope.includedCount} vídeos incluídos.`;
       status.classList.remove("error"); result.hidden = false; disableExports(false);
     } catch (error) {
-      report = undefined; result.hidden = true; disableExports(true);
+      invalidate();
       status.textContent = error instanceof Error ? error.message : "Não foi possível calcular o relatório.";
       status.classList.add("error");
     }
   });
   const exportFile = (format: "json" | "csv" | "markdown") => {
     if (!report) return;
-    const content = format === "json" ? JSON.stringify(report, null, 2) : format === "csv" ? toCsv(reportRows(report)) : reportMarkdown(report);
-    const mime = format === "json" ? "application/json" : format === "csv" ? "text/csv;charset=utf-8" : "text/markdown;charset=utf-8";
-    downloadBlob(new Blob([content], { type: mime }), `prevlev-analytics.${format === "markdown" ? "md" : format}`);
+    try {
+      if (reportStamp !== stamp(capture())) { invalidate(); return; }
+      const content = format === "json" ? JSON.stringify(report, null, 2) : format === "csv" ? toCsv(reportRows(report)) : reportMarkdown(report);
+      if (reportStamp !== stamp(capture())) { invalidate(); return; }
+      const mime = format === "json" ? "application/json" : format === "csv" ? "text/csv;charset=utf-8" : "text/markdown;charset=utf-8";
+      downloadBlob(new Blob([content], { type: mime }), `prevlev-analytics.${format === "markdown" ? "md" : format}`);
+    } catch (error) {
+      invalidate(); status.textContent = error instanceof Error ? error.message : "Não foi possível exportar. Atualize o relatório novamente."; status.classList.add("error");
+    }
   };
   exports.forEach((button, index) => button.addEventListener("click", () => exportFile((["json", "csv", "markdown"] as const)[index])));
 
@@ -97,6 +126,7 @@ export function initAnalyticsTools(deps: { snapshot: () => PageSnapshot; filter:
     if (!current.topVideos.length) get("top").append(emptyRow("Nenhum vídeo na amostra incluída.", 6));
     get("limitations").replaceChildren(...current.limitations.map(text => element("li", text)), ...sourceWarnings.map(text => element("li", `Aviso da coleta: ${text}`)));
   }
+  const controller = { invalidate }; mountedAnalytics.set(section, controller); return controller;
 }
 
 function number(value: number | undefined): string { return value === undefined || !Number.isFinite(value) ? "desconhecido" : new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 }).format(value); }
