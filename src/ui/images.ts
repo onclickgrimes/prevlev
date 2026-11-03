@@ -132,7 +132,7 @@ export function initImageTools(options:ImageToolsOptions={}):ImageTools {
   for(const id of ['image-file','candidate-file','preview-avatar'])listen(id,'change',validateSelection);
   click('image-preview',()=>render());
   const autoRender=()=>{const had=!!previewBlob||!!previewAbort;clearPreview();if(had)void render(false).catch(fail);};
-  listen('preview-source','change',()=>resetContext(source()?'Clique em Usar amostra da fonte escolhida para iniciar uma captura explícita.':'Contexto ilustrativo. Nenhuma coleta foi iniciada.'));
+  listen('preview-source','change',()=>{const message=source()?'Clique em Usar amostra da fonte escolhida para iniciar uma captura explícita.':'Contexto ilustrativo. Nenhuma coleta foi iniciada.';resetContext(message);$('preview-status').textContent=message;});
   click('preview-load-context',captureContext);listen('preview-cancel-context','click',()=>resetContext('Captura cancelada. Uma resposta tardia será descartada.'));
   for(const id of ['preview-context','preview-theme','preview-position','preview-mode','preview-feed'])listen(id,'change',autoRender);
   for(const id of ['original-title','preview-title','preview-titles','preview-channel','preview-feed-label','preview-views','preview-date','preview-duration'])listen(id,'input',()=>{const had=!!previewBlob||!!previewAbort;clearPreview();clearGallery();clearCompression();if(had)void render(false).catch(fail);else $('preview-status').textContent='Entradas alteradas. Gere uma nova prévia.';});
