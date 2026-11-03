@@ -225,7 +225,7 @@ chrome.runtime.onMessage.addListener(
             throw new Error(
               "A aba mudou durante a medição. Imagem descartada.",
             );
-          return { status: "ok", dataUrl, capture };
+          return { status: "ok", dataUrl, capture, tabContext:{tabId:tab.id,url:tab.url} };
         } finally {
           try {
             const [active] = await chrome.tabs.query({

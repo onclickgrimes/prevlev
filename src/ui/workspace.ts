@@ -45,6 +45,7 @@ import { mountMcpGuide } from "./mcp-guide";
 import { mountWaveformTools } from "./waveform";
 import { mountMidrollRemoval } from "./midroll-removal";
 import { mountRemoteImages } from "./remote-images";
+import { mountStudioComposition } from "./studio-composition";
 import type { MidrollRemovalObservation } from "../core/midroll-removal";
 import { initOfficialSearch } from "./official-search";
 import { initAnalyticsTools } from "./analytics";
@@ -101,9 +102,24 @@ let savedBackendOrigin = "";
 let selectedAiStreaming = false;
 let aiSelectionSaving = false;
 let aiRequestRunning = false;
+let imageContextRevision=0,imageTabRevision=0,studioCaptureRevision=0,studioCaptureRequest=0;
+let studioCaptureObserved:{tabId:number;url:string;stamp:string;kind:"analytics"|"latest-performance";redact:boolean;categories:ReturnType<typeof getRedactionCategories>;token:number}|undefined;
+const studioCaptureContext=()=>JSON.stringify([value("tab-select"),snapshot.url,snapshot.videoId,studioCaptureRevision,studioCaptureObserved?.url,studioCaptureObserved?.token,$<HTMLInputElement>("redact").checked,getRedactionCategories()]);
+function invalidateStudioComposition(reason="A aba, coleta ou ocultação mudou. Capture novamente para compor.") {studioCaptureRevision++;studioCaptureRequest++;studioComposer.invalidate(reason);}
+async function validateStudioCaptureContext(key:string):Promise<boolean> {
+  const observed=studioCaptureObserved;
+  if(!observed||key!==studioCaptureContext()||Number(value("tab-select"))!==observed.tabId)return false;
+  try {
+    const tab=await chrome.tabs.get(observed.tabId);
+    if(key!==studioCaptureContext()||observed!==studioCaptureObserved||tab.url!==observed.url)return false;
+    const measurement=await chrome.tabs.sendMessage(observed.tabId,{type:"CAPTURE_CARD",kind:observed.kind,redact:observed.redact,...(observed.redact?{redactionCategories:observed.categories}:{})}) as {status?:string;captureStamp?:string};
+    const after=await chrome.tabs.get(observed.tabId);
+    return key===studioCaptureContext()&&observed===studioCaptureObserved&&after.url===observed.url&&measurement.status==="ok"&&measurement.captureStamp===observed.stamp;
+  } catch {return false;}
+}
 let remoteOutputEpoch = 0;
 function invalidateRemoteOutput() { remoteOutputEpoch++; remoteImages.invalidate(); $("remote-result").textContent=""; }
-const transcriptExtras=initTranscriptExtras({segments:()=>segments,text:transcriptContent,metadata:()=>snapshot,aiContext:()=>JSON.stringify([savedBackendOrigin,selectedAiOrigin,selectedAiModel,selectedAiStreaming])});
+const transcriptExtras=initTranscriptExtras({segments:()=>segments,text:transcriptContent,metadata:()=>snapshot,aiContext:()=>JSON.stringify([savedBackendOrigin,selectedAiOrigin,selectedAiModel,selectedAiStreaming]),aiProvenance:()=>({model:selectedAiModel,origin:selectedAiOrigin,backendOrigin:savedBackendOrigin})});
 const commentTools = initCommentTools({snapshot: () => snapshot, onAi: async () => {showPage("remote"); await remote("comment-analysis");}});
 const swipeTools = initSwipeTools();
 const renderComments = () => commentTools.render();
@@ -249,6 +265,7 @@ on("enrich", async () => {
     });
     if (result.status !== "ok") throw new Error(result.error);
     snapshot.videos = result.videos as VideoRecord[];
+    imageContextRevision++;
     imageTools.invalidateContext();
     invalidateRemoteOutput();
     nicheTools.invalidate(); cardComposer.invalidateSnapshot(); channelReport.invalidate();
@@ -378,7 +395,10 @@ function renderMetrics(videos: VideoRecord[]) {
   }
 }
 function render() {
+  imageContextRevision++;
   imageTools.invalidateContext();
+  invalidateStudioComposition();
+  midrollTools.refreshTimeline();
   swipeTools.invalidatePreviews();
   invalidateRemoteOutput();
   studioOverview.render();
@@ -505,13 +525,24 @@ on("frame", async () => {
 });
 async function screenshot(kind: string) {
   const tabId = targetTab();
+  const request=++studioCaptureRequest;
+  let contextKey=studioCaptureContext();
+  const compose=(kind==="analytics"||kind==="latest-performance")&&studioComposer.wantsComposition();
+  const redact=$<HTMLInputElement>("redact").checked;
+  const categories=redact&&kind!=="video"?getRedactionCategories():[];
+  const current=()=>request===studioCaptureRequest&&contextKey===studioCaptureContext()&&tabId===targetTab();
+  if(compose)studioComposer.invalidate("Preparando uma captura validada; nenhuma composição será gerada automaticamente.");
+  const sourceTab=compose?await chrome.tabs.get(tabId):undefined;
+  if(!current())return;
+  if(compose&&!/^https:\/\/studio\.youtube\.com\//.test(sourceTab?.url??""))throw new Error("Selecione a aba Studio autorizada para compor esta captura.");
   const capture = await chrome.runtime.sendMessage({
     type: "CAPTURE_SCREENSHOT",
     tabId,
     kind,
-    redact: $<HTMLInputElement>("redact").checked,
-    ...($<HTMLInputElement>("redact").checked && kind !== "video" ? {redactionCategories:getRedactionCategories()} : {}),
+    redact,
+    ...(redact&&kind!=="video"?{redactionCategories:categories}:{}),
   });
+  if(!current())return;
   if (capture.status !== "ok") throw new Error(capture.error);
   const details = capture.capture as
     | {
@@ -527,16 +558,31 @@ async function screenshot(kind: string) {
     throw new Error(
       "A captura não retornou uma medição validada; imagem descartada.",
     );
+  if(compose&&(kind==="analytics"||kind==="latest-performance")) {
+    const receipt=capture.tabContext as {tabId?:number;url?:string}|undefined;
+    const latest=await chrome.tabs.get(tabId);
+    if(!current())return;
+    if(!receipt||typeof receipt.url!=="string"||receipt.tabId!==tabId||receipt.url!==sourceTab?.url||latest.url!==receipt.url)throw new Error("A URL da aba mudou ou a captura não preservou a identidade da origem. Pixels descartados.");
+    studioCaptureObserved={tabId,url:receipt.url,stamp:details.captureStamp,kind,redact,categories,token:request};
+    contextKey=studioCaptureContext();
+  }
   const image = await loadImage(capture.dataUrl);
-  downloadBlob(
-    await cropScreenshot(
+  if(!current())return;
+  const cropped=await cropScreenshot(
       capture.dataUrl,
       details.rect,
       image.naturalWidth / details.viewportWidth,
       details.redactions,
-    ),
-    `prevlev-${kind}.png`,
-  );
+    );
+  if(!current())return;
+  if(compose&&(kind==="analytics"||kind==="latest-performance")) {
+    const valid=await validateStudioCaptureContext(contextKey);
+    if(!current())return;
+    if(!valid){invalidateStudioComposition("A página da captura mudou. Capture novamente antes de compor.");return;}
+    await studioComposer.setCapture(cropped,{kind,contextKey,capturedAt:new Date().toISOString(),redactionValidated:true,redacted:redact,categories});
+    return;
+  }
+  downloadBlob(cropped,`prevlev-${kind}.png`);
   notice(
     details.coarse ? `Captura salva com ocultação ampla (${(details.coarseSelectors??[]).join(", ")}). Confira a imagem antes de compartilhar.` : "Captura da área visível salva. Confira a ocultação antes de compartilhar.",
   );
@@ -811,14 +857,25 @@ on("studio-preview", async () => {
   const generation = studioPreviewGeneration;
   const tabId = targetTab();
   const action = value("studio-action");
-  const localPlan = action === "midrolls" ? midrollTools.getPlan() : undefined;
+  let localPlan:ReturnType<typeof midrollTools.getPlan>|undefined;
+  let positionFps:number|undefined;
+  try {
+    localPlan=action==="midrolls"?midrollTools.getPlan():undefined;
+    const editorFps=value("studio-fps")?num("studio-fps"):undefined;
+    if(localPlan?.positionPrecision==="frames" && editorFps!==undefined && editorFps!==localPlan.positionFps)
+      throw new Error("O FPS do plano difere do FPS declarado do editor. Revise os dois valores antes de preparar a prévia.");
+    positionFps=localPlan?.positionPrecision==="frames"?localPlan.positionFps:editorFps;
+  } catch(error) {
+    $("studio-plan").textContent=error instanceof Error?error.message:"Planejamento inválido.";
+    throw error;
+  }
   const positions = localPlan?.positions;
   let plan: { id: string; status: string; error?: string };
   try {
     plan = (await chrome.tabs.sendMessage(tabId, {
       type: "STUDIO_PREVIEW",
       action,
-      input: { limit: num("action-limit"), positions, ...(value("studio-fps")?{fps:num("studio-fps")}:{}) },
+      input: { limit: num("action-limit"), positions, ...(positionFps!==undefined?{fps:positionFps}:{}) },
     })) as typeof plan;
   } catch (error) {
     if (generation !== studioPreviewGeneration) return;
@@ -1275,6 +1332,14 @@ on("clear-data", async () => {
   notice("Dados locais apagados.");
 });
 const getRedactionCategories = initCaptureOptions();
+const compositionHost=element("div");compositionHost.id="studio-composition-host";$("studio").append(compositionHost);
+const studioComposer=mountStudioComposition(compositionHost,{contextKey:studioCaptureContext,validateContext:validateStudioCaptureContext,notice});
+for(const event of ["input","change"])$("studio").addEventListener(event,evt=>{
+  const target=evt.target;if(!(target instanceof Element))return;
+  if(target.id==="redact"||target.closest("#capture-redaction-categories"))invalidateStudioComposition();
+  if(target.id==="studio-compose-file"||target.id==="studio-compose-enabled")studioCaptureRequest++;
+});
+$("studio-compose-cancel").addEventListener("click",()=>studioCaptureRequest++);
 const midrollTools = mountMidrollTools(document, invalidateStudioPreview);
 const profitTools = initProfitTools({snapshot:()=>snapshot});
 const removalTools = mountMidrollRemoval(document, {observe:async()=>{
@@ -1305,7 +1370,25 @@ const channelReport = mountChannelReport($("channel-report"),()=>snapshot.videos
 const nicheTools = initNicheTools({snapshot:()=>snapshot});
 const cardComposer = initCardCompositionTools({snapshot:()=>snapshot});
 initVisualSimilarityTools();
-const imageTools = initImageTools({notice,contextVideos:()=>snapshot.videos});
+const imageContextIdentity=(source:"collection"|"selected-tab")=>source==="collection"?`collection:${imageContextRevision}`:value("tab-select")?`tab:${value("tab-select")}:${imageTabRevision}`:undefined;
+const imageTools = initImageTools({notice,contextVideos:()=>snapshot.videos,contextIdentity:imageContextIdentity,captureContext:async({source,expectedIdentity,signal})=>{
+  signal.throwIfAborted();
+  if(imageContextIdentity(source)!==expectedIdentity)throw new Error("A fonte da amostra mudou. Escolha novamente.");
+  if(source==="collection")return {source,identity:expectedIdentity,url:snapshot.url,title:snapshot.title,videos:structuredClone(snapshot.videos)};
+  const tabId=targetTab(),before=await chrome.tabs.get(tabId);signal.throwIfAborted();
+  if(!/^https:\/\/(?:www\.|m\.)?youtube\.com\//.test(before.url??""))throw new Error("Selecione uma aba pública do YouTube para esta amostra.");
+  const response=await chrome.tabs.sendMessage(tabId,{type:"GET_IMAGE_CONTEXT"}) as {status:string;error?:string;snapshot?:PageSnapshot};signal.throwIfAborted();
+  const after=await chrome.tabs.get(tabId);signal.throwIfAborted();
+  if(imageContextIdentity(source)!==expectedIdentity||tabId!==targetTab()||before.url!==after.url||response.snapshot?.url!==after.url)throw new Error("A aba ou URL mudou durante a captura. A amostra foi descartada.");
+  if(response.status!=="ok"||!response.snapshot)throw new Error(response.error??"A aba não devolveu uma amostra observada.");
+  return {source,identity:expectedIdentity,url:response.snapshot.url,title:response.snapshot.title,observedAt:new Date().toISOString(),videos:response.snapshot.videos};
+}});
+for(const event of ["input","change"])$("tab-select").addEventListener(event,()=>{imageTabRevision++;imageTools.invalidateContext();invalidateStudioComposition();});
+chrome.tabs.onUpdated?.addListener((tabId,change)=>{
+  if(tabId!==Number(value("tab-select"))||(!change.url&&change.status!=="loading"))return;
+  imageTabRevision++;imageTools.invalidateContext();studioOverview.invalidateContext();studioCaptureObserved=undefined;invalidateStudioComposition("A aba selecionada navegou. Declare novamente o contexto e faça outra captura.");
+});
+chrome.tabs.onRemoved?.addListener(tabId=>{if(tabId===Number(value("tab-select"))){imageTabRevision++;imageTools.invalidateContext();studioOverview.invalidateContext();studioCaptureObserved=undefined;invalidateStudioComposition("A aba foi fechada. Selecione outra origem.");}});
 const remoteImages = mountRemoteImages($("remote-images"));
 initCollectionTools({targetTab,snapshot:()=>snapshot,notice,adopt:async(next)=>{snapshot=next;nicheTools.invalidate(); cardComposer.invalidateSnapshot(); channelReport.invalidate();segments=next.transcript;await chrome.storage.local.set({snapshot});render();}});
 initSponsorshipTools();

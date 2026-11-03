@@ -350,6 +350,7 @@ describe("captura com validação da aba e recuperação", () => {
       status: "ok",
       dataUrl: "data:image/png;base64,captured",
       capture: baseMeasurement,
+      tabContext:{tabId:target.id,url:target.url},
     });
     expect(browser.captureVisibleTab).toHaveBeenCalledWith(1, {
       format: "png",

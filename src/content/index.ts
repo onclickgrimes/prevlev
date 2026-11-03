@@ -411,7 +411,7 @@ function mount(): void {
   }
 }
 
-async function snapshot() {
+async function snapshot(persist = true) {
   const value = readYouTubeSnapshot(document);
   value.videos = value.videos.map(enrichedVideo);
   const timeline=refreshTimeline(document);
@@ -421,7 +421,7 @@ async function snapshot() {
     value.studio = metrics;
     value.warnings.push(...metrics.warnings);
   }
-  await chrome.storage.local.set({ snapshot: value });
+  if(persist) await chrome.storage.local.set({ snapshot: value });
   return value;
 }
 async function blobData(blob: Blob): Promise<string> {
@@ -537,6 +537,8 @@ async function dispatch(message: Message): Promise<unknown> {
       return { status: "ok", state: await dispatchTimeline(message, document) };
     case "GET_SNAPSHOT":
       return { status: "ok", snapshot: await snapshot() };
+    case "GET_IMAGE_CONTEXT":
+      return { status: "ok", snapshot: await snapshot(false) };
     case "COPY_TITLE_ID": {
       const value = readYouTubeSnapshot(document);
       await navigator.clipboard.writeText(

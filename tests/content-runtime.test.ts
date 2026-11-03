@@ -55,6 +55,9 @@ it("inicia sem alterar canal, oculta Shorts e responde somente à própria exten
     listener?.({ type: "GET_SNAPSHOT" }, { id: "other-extension" }, rejected),
   ).toBe(false);
   expect(rejected).not.toHaveBeenCalled();
+  const imageContext=await new Promise<unknown>(resolve=>listener?.({type:"GET_IMAGE_CONTEXT"},{id:"prevlev-fixture"},resolve));
+  expect(imageContext).toMatchObject({status:"ok",snapshot:{videos:[{id:"abcdefghijk"},{id:"12345678901"}]}});
+  expect(set).not.toHaveBeenCalled();
   const response = await new Promise<unknown>((resolve) =>
     listener?.({ type: "GET_SNAPSHOT" }, { id: "prevlev-fixture" }, resolve),
   );
