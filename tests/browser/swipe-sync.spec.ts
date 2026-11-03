@@ -123,3 +123,17 @@ test('malformed remote library never becomes an empty replaceable snapshot',asyn
  expect((await localState()).writes).toBe(0);
  expect((await operation({action:'read'})).data.items[0]).toMatchObject(remoteItem);
 });
+
+async function localAsset(){return page.evaluate(()=>{const state=(window as unknown as FixtureWindow).__syncFixture,canvas=document.createElement('canvas');canvas.width=4;canvas.height=2;canvas.getContext('2d')!.fillRect(0,0,4,2);const image=canvas.toDataURL(),bytes=atob(image.split(',')[1]).length;state.items[0]={...state.items[0],folderId:'folder_fixture',image,asset:{version:1,id:'asset_fixture',kind:'file',mime:'image/png',bytes,width:4,height:2,sourceUrl:'https://www.youtube.com/watch?v=abcdefghijk',fileName:'own.png',createdAt:'2026-11-03T00:00:00.000Z'}};return structuredClone(state.items[0]);});}
+
+test('personal sync preserves local image bytes, asset provenance and folder identity when schema support is advertised',async()=>{
+ await seed([remoteItem]);const expected=await localAsset();await readPreview();page.once('dialog',dialog=>dialog.accept());await page.locator('#swipe-sync-upload').click();await expect(page.locator('#swipe-sync-status')).toContainText('referências enviadas');const actual=(await operation({action:'read'})).data.items[0];expect(actual.image).toBe(expected.image);expect(actual.asset).toEqual(expected.asset);expect(actual.folderId).toBe('folder_fixture');
+});
+
+test('older backends are blocked before asset/folder writes while legacy metadata-only synchronization still works',async()=>{
+ await seed([remoteItem]);await localAsset();const legacy=(await operation({action:'read'})).data;
+ await page.route(`${backend}/v1/library`,route=>{const body=route.request().postDataJSON()as{action:string};if(body.action!=='read')return route.fallback();return route.fulfill({contentType:'application/json',body:JSON.stringify({status:'ok',source:'prevlev:library',data:{items:legacy.items,revision:legacy.revision}})});});
+ await readPreview();await page.locator('#swipe-sync-upload').click();await expect(page.locator('#swipe-sync-status')).toContainText('não anuncia suporte a ativos');expect(requests.filter(body=>body.action==='commit')).toHaveLength(0);
+ await page.evaluate(()=>{const item=(window as unknown as FixtureWindow).__syncFixture.items[0];delete item.image;delete item.asset;});await readPreview();await page.locator('#swipe-sync-upload').click();await expect(page.locator('#swipe-sync-status')).toContainText('identidades de pasta');expect(requests.filter(body=>body.action==='commit')).toHaveLength(0);
+ await page.evaluate(()=>{delete(window as unknown as FixtureWindow).__syncFixture.items[0].folderId;});await readPreview();page.once('dialog',dialog=>dialog.accept());await page.locator('#swipe-sync-upload').click();await expect(page.locator('#swipe-sync-status')).toContainText('referências enviadas');expect(requests.filter(body=>body.action==='commit')).toHaveLength(1);
+});

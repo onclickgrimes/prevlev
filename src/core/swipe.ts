@@ -3,13 +3,14 @@ import type { VideoRecord } from '../shared/types';
 import { videoIdFromUrl } from './parse.ts';
 import { toCsv } from './export.ts';
 import { isoBoundary } from './observations.ts';
+import {inspectSwipeAssetDataUrl,normalizeSwipeAsset} from './swipe-assets';
 
 export const SWIPE_MAX_ITEMS=5000;
 export const SWIPE_MAX_BYTES=4*1024*1024;
 export type SwipeType='video'|'channel'|'other';
 export interface SwipeReference extends SwipeItem {type:SwipeType;tags:string[];notes:string;}
 export interface SwipeFilter {query?:string;folder?:string;tag?:string;type?:SwipeType|'';}
-export interface SwipeFields {title:string;url:string;folder?:string;type?:SwipeType;tags?:string[]|string;notes?:string;thumbnail?:string;source?:VideoRecord['source'];}
+export interface SwipeFields {title:string;url:string;folder?:string;folderId?:string;type?:SwipeType;tags?:string[]|string;notes?:string;thumbnail?:string;source?:VideoRecord['source'];}
 const plain=(value:unknown):value is Record<string,unknown>=>value!==null&&typeof value==='object'&&!Array.isArray(value);
 export const normalizeSwipeText=(value:string)=>value.normalize('NFD').replace(/\p{M}/gu,'').toLocaleLowerCase('pt-BR').replace(/\s+/g,' ').trim();
 const text=(value:unknown,name:string,max:number,fallback=''):string=>{
@@ -55,11 +56,12 @@ export function normalizeSwipeItem(value:unknown,index=0):SwipeReference{
  if(value.source!==undefined&&!['youtube-dom','public-page','user-provided'].includes(String(value.source)))throw new Error('Origem da referência desconhecida.');
  const title=text(value.title,'Título',1000);if(!title)throw new Error('Informe um título para a referência.');
  const url=safeReferenceUrl(value.url),folder=text(value.folder,'Pasta',120,'Referências')||'Referências';
+ const folderId=text(value.folderId,'ID da pasta',120);if(folderId&&!/^[A-Za-z0-9_-]+$/.test(folderId))throw new Error('ID da pasta inválido.');
  const id=text(value.id,'ID da referência',120)||legacyId(`${url}\n${index}`);if(/\p{Cc}/u.test(id))throw new Error('ID da referência inválido.');
  const type=value.type??inferSwipeType(url);if(!['video','channel','other'].includes(String(type)))throw new Error('Tipo de referência desconhecido.');
  const createdAt=date(value.createdAt,'Data de criação')??'',updatedAt=date(value.updatedAt,'Data de edição');
- const image=legacyImage(value.image),preview=thumbnail(value.thumbnail),notes=text(value.notes,'Notas',10000);
- return {id,title,url,folder,type:type as SwipeType,tags:parseSwipeTags(value.tags),notes,createdAt,...(updatedAt?{updatedAt}:{}),...(preview?{thumbnail:preview}:{}),...(image?{image}:{}),...(value.source?{source:value.source as VideoRecord['source']}:{} )};
+ const image=legacyImage(value.image),asset=normalizeSwipeAsset(value.asset,image),preview=thumbnail(value.thumbnail),notes=text(value.notes,'Notas',10000);
+ return {id,title,url,folder,...(folderId?{folderId}:{}),type:type as SwipeType,tags:parseSwipeTags(value.tags),notes,createdAt,...(updatedAt?{updatedAt}:{}),...(preview?{thumbnail:preview}:{}),...(image?{image}:{}),...(asset?{asset}:{}),...(value.source?{source:value.source as VideoRecord['source']}:{} )};
 }
 export function ensureSwipeBudget(items:readonly SwipeItem[]):number{
  if(items.length>SWIPE_MAX_ITEMS)throw new Error('A biblioteca aceita até 5000 referências. Exporte e remova itens antes de adicionar outros.');
@@ -71,14 +73,25 @@ export function normalizeSwipeLibrary(value:unknown):SwipeReference[]{
  if(value===undefined)return [];
  if(!Array.isArray(value))throw new Error('A biblioteca local tem formato incompatível; seus dados foram preservados.');
  ensureSwipeBudget(value as SwipeItem[]);
- const items=value.map(normalizeSwipeItem);ensureSwipeBudget(items);
+ const items=value.map(normalizeSwipeItem);const folderNames=new Map<string,string>(),folderIds=new Map<string,string>();for(const item of items){if(!item.folderId)continue;if(folderNames.has(item.folderId)&&folderNames.get(item.folderId)!==item.folder||folderIds.has(item.folder)&&folderIds.get(item.folder)!==item.folderId)throw new Error('Identidades de pasta conflitantes; preserve nomes e IDs consistentes.');folderNames.set(item.folderId,item.folder);folderIds.set(item.folder,item.folderId);}ensureSwipeBudget(items);
  return items;
 }
 export function createSwipeReference(fields:SwipeFields,now=new Date().toISOString()):SwipeReference{
  return normalizeSwipeItem({...fields,id:crypto.randomUUID(),createdAt:now});
 }
 export function editSwipeReference(item:SwipeItem,fields:SwipeFields,now=new Date().toISOString()):SwipeReference{
- return normalizeSwipeItem({...item,...fields,id:item.id,createdAt:item.createdAt,updatedAt:now});
+ return normalizeSwipeItem({...item,...fields,...(fields.folder!==undefined&&fields.folder!==item.folder?{folderId:fields.folderId}:{}),id:item.id,createdAt:item.createdAt,updatedAt:now});
+}
+/** Folder IDs are assigned only by explicit organization; reading legacy references never migrates them. */
+export function moveSwipeItem(items:readonly SwipeItem[],id:string,target:string,now=new Date().toISOString()):SwipeReference[]{
+ const current=normalizeSwipeLibrary([...items]),folder=text(target,'Pasta',120);if(!folder)throw new Error('Informe uma pasta de destino.');if(!current.some(item=>item.id===id))throw new Error('A referência foi removida.');
+ const folderId=current.find(item=>item.folder===folder&&item.folderId)?.folderId??crypto.randomUUID();
+ return normalizeSwipeLibrary(current.map(item=>item.id===id?{...item,folder,folderId,updatedAt:now}:item.folder===folder&&!item.folderId?{...item,folderId,updatedAt:now}:item));
+}
+export function renameSwipeFolder(items:readonly SwipeItem[],from:string,target:string,now=new Date().toISOString()):SwipeReference[]{
+ const current=normalizeSwipeLibrary([...items]),folder=text(target,'Pasta',120),members=current.filter(item=>item.folder===from);if(!folder||!members.length)throw new Error('Escolha uma pasta existente e informe seu novo nome.');
+ if(folder!==from&&current.some(item=>item.folder===folder))throw new Error('Já existe uma pasta com esse nome; mova os itens explicitamente para ela.');
+ const folderId=members.find(item=>item.folderId)?.folderId??crypto.randomUUID();return normalizeSwipeLibrary(current.map(item=>item.folder===from?{...item,folder,folderId,updatedAt:now}:item));
 }
 export function swipeIdentity(item:Pick<SwipeItem,'url'>):string{
  const url=safeReferenceUrl(item.url),id=videoIdFromUrl(url);if(id)return `video:${id}`;
@@ -107,15 +120,15 @@ export function filterSwipe(items:readonly SwipeItem[],filter:SwipeFilter={}):Sw
 }
 export function parseSwipeImport(value:unknown):SwipeReference[]{
  if(plain(value)&&value.source==='youtube-data-api')throw new Error('Dados da API oficial não podem alimentar a biblioteca local.');
- if(Array.isArray(value))return normalizeSwipeLibrary(value);
+ if(Array.isArray(value)){const items=normalizeSwipeLibrary(value);for(const item of items)if(item.image?.startsWith('data:'))inspectSwipeAssetDataUrl(item.image);return items;}
  if(!plain(value)||value.format!=='prevlev-swipe'||value.version!==2||!Array.isArray(value.items))throw new Error('Use um JSON Prevlev Swipe versão 2 ou uma lista antiga de referências.');
- return normalizeSwipeLibrary(value.items);
+ const items=normalizeSwipeLibrary(value.items);for(const item of items)if(item.image?.startsWith('data:'))inspectSwipeAssetDataUrl(item.image);return items;
 }
 export function exportSwipeJson(items:readonly SwipeItem[],now=new Date().toISOString()):string{
  return JSON.stringify({format:'prevlev-swipe',version:2,exportedAt:date(now,'Data da exportação'),items:normalizeSwipeLibrary([...items])},null,2);
 }
 export function exportSwipeCsv(items:readonly SwipeItem[]):string{
- return toCsv(normalizeSwipeLibrary([...items]).map(item=>({...item})),['id','type','title','url','folder','tags','notes','thumbnail','createdAt','updatedAt','source']);
+ return toCsv(normalizeSwipeLibrary([...items]).map(item=>({...item})),['id','type','title','url','folder','folderId','tags','notes','thumbnail','createdAt','updatedAt','source']);
 }
 
 /** Bounded RFC4180-style CSV reader; cell contents stay data, never HTML or formulas. */
@@ -134,7 +147,7 @@ export function parseSwipeCsv(input:string):SwipeReference[]{
  }
  if(quoted)throw new Error('O CSV terminou com aspas abertas.');if(cell||row.length||closed)finishRow();
  const headers=rows.shift();if(!headers||!headers.includes('title')||!headers.includes('url')||new Set(headers).size!==headers.length)throw new Error('O CSV exige colunas title e url, sem cabeçalhos duplicados.');
- const allowed=new Set(['id','type','title','url','folder','tags','notes','thumbnail','createdAt','updatedAt','source']);if(headers.some(header=>!allowed.has(header)))throw new Error('O CSV contém uma coluna desconhecida. Use o formato exportado pelo Prevlev.');
+ const allowed=new Set(['id','type','title','url','folder','folderId','tags','notes','thumbnail','createdAt','updatedAt','source']);if(headers.some(header=>!allowed.has(header)))throw new Error('O CSV contém uma coluna desconhecida. Use o formato exportado pelo Prevlev.');
  return normalizeSwipeLibrary(rows.map(values=>{
   if(values.length!==headers.length)throw new Error('Uma linha CSV tem quantidade diferente de colunas.');
   const item:Record<string,unknown>={};headers.forEach((header,index)=>{if(values[index]!==''||header==='title'||header==='url')item[header]=values[index];});

@@ -1,11 +1,14 @@
 import { defaultSettings, type Settings, type PageSnapshot } from "./types";
 import {normalizeSwipeLibrary,ensureSwipeBudget} from '../core/swipe';
+import type {SwipeAssetMetadata} from '../core/swipe-assets';
 export interface SwipeItem {
   id: string;
   folder: string;
+  folderId?:string;
   title: string;
   url: string;
   image?: string;
+  asset?:SwipeAssetMetadata;
   createdAt: string;
   updatedAt?:string;
   type?:'video'|'channel'|'other';

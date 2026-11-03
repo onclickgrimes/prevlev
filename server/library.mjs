@@ -4,7 +4,7 @@ import {constants} from 'node:fs';import {join,resolve} from 'node:path';import 
 class LibraryError extends Error {}
 const queues=new Map(),source='prevlev:library',MAX_BYTES=4*1024*1024+4096;
 const revision=items=>createHash('sha256').update(JSON.stringify(items)).digest('hex');
-const ok=(items,extra={})=>({status:'ok',source,data:{items,revision:revision(items),...extra},limitations:['Biblioteca pessoal deste backend; sincronização manual, sem contas ou isolamento multiusuário.','Dados locais de referências, sem consulta ao YouTube/Omni e sem sincronização automática.']});
+const ok=(items,extra={})=>({status:'ok',source,data:{items,revision:revision(items),assetSchemaVersion:1,folderIdentityVersion:1,...extra},limitations:['Biblioteca pessoal deste backend; sincronização manual, sem contas ou isolamento multiusuário.','Dados locais de referências, sem consulta ao YouTube/Omni e sem sincronização automática.']});
 const failure=message=>({status:'error',source,error:message});
 function config(options){if(!options?.dataDir)throw new LibraryError('Configure DATA_DIR para a biblioteca pessoal.');return resolve(options.dataDir);}
 async function serialized(directory,work){const previous=queues.get(directory)??Promise.resolve(),next=previous.catch(()=>{}).then(work);queues.set(directory,next);try{return await next;}finally{if(queues.get(directory)===next)queues.delete(directory);}}
