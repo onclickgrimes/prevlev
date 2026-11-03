@@ -20,9 +20,9 @@ Capturas usam a área visível e podem ativar temporariamente a aba selecionada.
 
 ## No backend escolhido
 
-O envio manual usa dados específicos para cada operação. Relatórios e similaridade recebem os vídeos coletados e a consulta; IA de comentários recebe os comentários filtrados; IA de transcrição recebe o texto exibido; geração de imagem recebe o briefing; análise de patrocínios recebe o texto informado; histórico recebe o ID e as views observadas, quando disponíveis. Uma ação não envia automaticamente todas as categorias da coleta. O destino é a origem configurada pelo operador; é necessário conceder ao navegador acesso a essa origem. A configuração padrão permanece vazia.
+O envio manual usa dados específicos para cada operação. Relatórios e similaridade recebem os vídeos coletados e a consulta; IA de comentários recebe os comentários filtrados; IA de transcrição recebe o texto exibido; geração de imagem recebe o briefing; análise de patrocínios recebe o texto informado; histórico recebe somente IDs, títulos, URLs/canal, origem, horários da coleta e contagens conhecidas dos vídeos selecionados. Não recebe comentários, transcrições ou Studio por essa ação. Uma ação não envia automaticamente todas as categorias da coleta. O destino é a origem configurada pelo operador; é necessário conceder ao navegador acesso a essa origem. A configuração padrão permanece vazia.
 
-O backend incluído não persiste os datasets de relatórios. O recurso `view-history` armazena observações recebidas em `DATA_DIR`; não recupera dados anteriores nem gera histórico fictício. O código não grava comentários, transcrições ou chaves em logs. Proxies, hospedagem e provedores configurados pelo operador podem ter suas próprias políticas e logs.
+O backend incluído não persiste os datasets de relatórios. A aba Histórico próprio e o adaptador compatível `view-history` armazenam observações solicitadas em `DATA_DIR`; não recuperam dados anteriores nem geram histórico fictício. O armazenamento novo usa `observations-v1.json`, permissões privadas e limites globais de até 5.000 registros/10 MiB. Ao registrar novos dados, os mais antigos podem ser removidos para respeitar esses limites. O horário original de coleta, quando disponível e válido, é preservado em `observedAt`; `recordedAt` indica a gravação no servidor. Sem horário original, o horário de registro não comprova uma nova consulta ao YouTube. Regravar a mesma coleta antiga não cria outro instante observado. Não há coleta periódica. Consultas/exportações da interface são limitadas a 500 registros; o resultado informa o total disponível. Arquivos legados reconhecidos continuam consultáveis pelo ID. Veja [HISTORY.md](HISTORY.md). O código não grava comentários, transcrições ou chaves em logs. Proxies, hospedagem e provedores configurados pelo operador podem ter suas próprias políticas e logs.
 
 No modo padrão `AI_PROVIDER=omni`, o envio de IA segue extensão → backend Prevlev → serviço Omni existente → provedor selecionado. A extensão acessa somente a origem do backend Prevlev, com seu token próprio. A origem Omni vem de `OMNI_BASE_URL` no ambiente do servidor e aparece na UI somente para leitura; não há endpoint para alterar remotamente a configuração do Omni. A chave existente de acesso ao serviço, se exigida, fica em `OMNI_API_KEY` no servidor e não é enviada ao navegador.
 
@@ -34,12 +34,20 @@ Sem seleção/configuração compatível, a função retorna indisponibilidade e
 
 Veja [BACKEND.md](BACKEND.md) para autenticação, CORS, limites, variáveis de ambiente e as limitações da instalação pessoal. Publicação multiusuário exige autenticação e isolamento próprios.
 
+## Fonte oficial e MCP opcionais
+
+Na Pesquisa oficial, uma seleção de fonte e confirmação antecedem cada busca ou próxima página. A consulta e os filtros públicos seguem extensão → backend Prevlev → API oficial Google/YouTube; o Google recebe esses parâmetros e a chave do projeto do operador. A chave existente fica somente no ambiente do servidor, nunca no navegador ou links. O Prevlev não consulta essa fonte ao abrir o painel ou iniciar o servidor. Consulte os [Termos do YouTube](https://www.youtube.com/t/terms) e a [Política de Privacidade do Google](https://policies.google.com/privacy).
+
+Os resultados oficiais ficam apenas em memória da visualização atual, com expiração de até 24 horas, sem persistência, exportação, Swipe File, IA, histórico ou métricas derivadas. Fechar/recarregar a página ou limpar a visualização descarta os resultados. Cancelar não recupera cota de uma chamada já aceita pelo Google. Os detalhes estão em [YOUTUBE.md](YOUTUBE.md). Não são enviados tokens de conta do YouTube nem credenciais Omni nessa pesquisa.
+
+O MCP é um processo local por stdio, desativado por padrão, iniciado manualmente. Um cliente autorizado a iniciá-lo pode fornecer dados para análise local e ler/exportar observações do `DATA_DIR` escolhido. Não usa a sessão do navegador, não busca na rede, não gera conteúdo, não grava nem exclui dados. Não registramos um cliente MCP automaticamente. Confira o diretório e as permissões do aplicativo antes da configuração descrita em [MCP.md](MCP.md).
+
 ## Apagar e exportar
 
 - Exporte o Swipe File em JSON antes de remover dados que queira preservar.
 - Em **Conexão**, use **Apagar coleta e biblioteca locais** para remover os dados coletados e as referências deste perfil, após confirmar.
 - Use **Desconectar** para apagar origem/token e remover a permissão da origem configurada.
-- Apague `DATA_DIR` no servidor para remover as observações de histórico.
+- Em **Histórico próprio**, exporte os registros e use a exclusão confirmada do vídeo selecionado ou de todas as observações reconhecidas. Isso não apaga contas ou dados do YouTube. Arquivos não reconhecidos são preservados. Remover manualmente `DATA_DIR` também remove o histórico desse diretório.
 - Downloads já salvos são arquivos comuns e precisam ser removidos da pasta de downloads separadamente.
 - Desinstalar a extensão remove o armazenamento do perfil; não remove downloads, arquivos do servidor ou dados já enviados a um provedor.
 

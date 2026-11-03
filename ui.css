@@ -707,3 +707,11 @@ section[hidden] {
   font-weight: 400;
   line-height: 1.5;
 }
+
+/* Long tool lists remain reachable at smaller desktop heights. */
+aside { overflow-y: auto; }
+#official-search td, #history td { overflow-wrap: anywhere; }
+#analytics .metric strong { overflow-wrap: anywhere; }
+
+#official-search .check { display: block; line-height: 1.8; }
+#official-search .check input { margin-right: 8px; accent-color: var(--green); }

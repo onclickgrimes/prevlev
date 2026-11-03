@@ -49,6 +49,9 @@ import {
   type Rect,
 } from "../core/media";
 import { planMidrolls, detectSilences, type Silence } from "../core/midroll";
+import { initOfficialSearch } from "./official-search";
+import { initAnalyticsTools } from "./analytics";
+import { initHistoryTools } from "./history";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) =>
   document.getElementById(id) as T;
@@ -194,7 +197,14 @@ async function scan() {
     throw new Error(
       "Não foi possível coletar. Recarregue a aba YouTube após instalar a extensão.",
     );
-  snapshot = result.snapshot;
+  snapshot = {
+    ...result.snapshot,
+    videos: result.snapshot.videos.map((video) => ({
+      ...video,
+      source: video.source ?? "youtube-dom",
+      observedAt: video.observedAt ?? new Date().toISOString(),
+    })),
+  };
   segments = snapshot.transcript;
   await chrome.storage.local.set({ snapshot });
   render();
@@ -568,7 +578,11 @@ on("channel-load", async () => {
       channelName?: string;
       warnings: string[];
     };
-    channelVideos = data.videos;
+    channelVideos = data.videos.map((video) => ({
+      ...video,
+      source: video.source ?? "public-page",
+      observedAt: video.observedAt ?? new Date().toISOString(),
+    }));
     renderChannel();
     $("channel-source").textContent =
       `${data.channelName ?? data.channelUrl} · ${channelVideos.length} vídeos encontrados na primeira resposta pública. ${data.warnings.join(" ")}`;
@@ -1422,6 +1436,9 @@ on("clear-data", async () => {
   await renderSwipe();
   notice("Dados locais apagados.");
 });
+initOfficialSearch();
+initAnalyticsTools({ snapshot: () => snapshot, filter: readVideoFilter });
+initHistoryTools({ snapshot: () => snapshot, filter: readVideoFilter });
 void (async () => {
   await tabs();
   const saved = await getSnapshot();

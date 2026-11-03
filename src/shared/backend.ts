@@ -79,6 +79,85 @@ export function isAiFeature(feature: string): boolean {
     "transcript-script",
   ].includes(feature);
 }
+
+/** Explicit local-backend operations. Never retries or discovers a remote source. */
+export async function callBackendOperation(
+  settings: Settings,
+  path: "/v1/youtube/search" | "/v1/history",
+  payload: unknown,
+  signal?: AbortSignal,
+): Promise<RemoteResponse> {
+  if (!["/v1/youtube/search", "/v1/history"].includes(path))
+    throw new Error("Operação de backend desconhecida.");
+  if (!settings.backendUrl)
+    return {
+      status: "not_configured",
+      source: "prevlev:client",
+      error: "Configure e salve seu backend Prevlev na aba Conexão.",
+    };
+  const origin = backendOrigin(settings.backendUrl);
+  const requestSignal = signal
+    ? AbortSignal.any([signal, AbortSignal.timeout(45000)])
+    : AbortSignal.timeout(45000);
+  try {
+    requestSignal.throwIfAborted();
+    const response = await fetch(`${origin}${path}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(settings.backendToken
+          ? { Authorization: `Bearer ${settings.backendToken}` }
+          : {}),
+      },
+      body: JSON.stringify(payload),
+      credentials: "omit",
+      redirect: "error",
+      signal: requestSignal,
+    });
+    // History exports are bounded server-side to 10 MiB; also bound untrusted responses.
+    const maxBytes = 12 * 1024 * 1024;
+    if (Number(response.headers.get("content-length")) > maxBytes) {
+      await response.body?.cancel();
+      throw new Error("Resposta do backend excedeu o limite de leitura.");
+    }
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
+    let raw = "", bytes = 0;
+    if (reader) {
+      try {
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          bytes += value.byteLength;
+          if (bytes > maxBytes) {
+            await reader.cancel();
+            throw new Error("Resposta do backend excedeu o limite de leitura.");
+          }
+          raw += decoder.decode(value, { stream: true });
+        }
+        raw += decoder.decode();
+      } finally { reader.releaseLock(); }
+    }
+    requestSignal.throwIfAborted();
+    let body: RemoteResponse;
+    try { body = JSON.parse(raw) as RemoteResponse; }
+    catch { throw new Error("O backend não devolveu JSON completo. O resultado é incerto; consulte o histórico antes de reenviar uma alteração. Nenhuma repetição foi enviada."); }
+    if (
+      !body || typeof body !== "object" || Array.isArray(body) ||
+      !["ok", "not_configured", "unsupported", "error"].includes(body.status) ||
+      typeof body.source !== "string"
+    ) throw new Error("Resposta incompatível com o contrato Prevlev.");
+    if (!response.ok && !body.error)
+      throw new Error(`Backend respondeu HTTP ${response.status}. Nenhuma repetição foi enviada.`);
+    return body;
+  } catch (error) {
+    if (signal?.aborted)
+      throw new DOMException("Solicitação cancelada. Uma operação já aceita pelo servidor pode ter sido concluída.", "AbortError");
+    if (error instanceof Error && error.message.startsWith("Resposta")) throw error;
+    if (error instanceof Error && (error.message.startsWith("O backend") || error.message.startsWith("Backend respondeu"))) throw error;
+    throw new Error("Não foi possível concluir a operação no backend Prevlev. O resultado é incerto; confira o serviço antes de reenviar. Nenhuma repetição foi enviada.");
+  }
+}
 export async function fetchAiCatalog(
   settings: Settings,
 ): Promise<RemoteResponse & { data?: AiCatalogData }> {

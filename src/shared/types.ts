@@ -11,6 +11,8 @@ export interface VideoRecord {
   subscribers?: number;
   isShort?: boolean;
   thumbnail?: string;
+  source?: "youtube-dom" | "public-page" | "user-provided" | "youtube-data-api";
+  observedAt?: string;
 }
 export interface CommentRecord {
   id: string;

@@ -5,6 +5,8 @@ import { resolve } from "node:path";
 import { analyzeDataset } from "./analysis.mjs";
 import { analyzeAi, isAiFeature, validateProvider } from "./ai.mjs";
 import { discoverOmni, validateOmniBase } from "./omni.mjs";
+import { searchYouTube } from "./youtube.mjs";
+import { handleHistory } from "./history.mjs";
 
 const loopback = (bind) => ["127.0.0.1", "localhost", "::1"].includes(bind);
 export function configFromEnv(env = process.env) {
@@ -17,6 +19,10 @@ export function configFromEnv(env = process.env) {
       .map((s) => s.trim())
       .filter(Boolean),
     dataDir: resolve(env.DATA_DIR ?? "data/history"),
+    youtubeEnabled: env.YOUTUBE_ENABLED === "true",
+    youtubeApiKey: env.YOUTUBE_API_KEY ?? "",
+    historyMaxRecords: Number(env.HISTORY_MAX_RECORDS ?? 5000),
+    mcpEnabled: env.MCP_ENABLED === "true",
     aiProvider: env.AI_PROVIDER ?? "omni",
     omniBaseUrl: env.OMNI_BASE_URL ?? "http://127.0.0.1:7814",
     omniApiKey: env.OMNI_API_KEY ?? "",
@@ -30,6 +36,10 @@ export function configFromEnv(env = process.env) {
 function validConfig(config) {
   if (!loopback(config.bind) && !config.token)
     throw new Error("PREVLEV_TOKEN é obrigatório ao escutar fora do loopback.");
+  if (typeof config.youtubeEnabled !== "boolean" || typeof config.mcpEnabled !== "boolean")
+    throw new Error("YOUTUBE_ENABLED e MCP_ENABLED exigem configuração booleana explícita.");
+  if (!Number.isInteger(config.historyMaxRecords) || config.historyMaxRecords < 1 || config.historyMaxRecords > 5000)
+    throw new Error("HISTORY_MAX_RECORDS deve ser um inteiro entre 1 e 5000.");
   if (!["omni", "openai-compatible"].includes(config.aiProvider))
     throw new Error("AI_PROVIDER deve ser omni ou openai-compatible.");
   if (config.aiProvider === "omni") {
@@ -78,6 +88,7 @@ export function createPrevlevServer(options = {}, dependencies = {}) {
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("Vary", "Origin");
     const respond = (status, data) => {
+      if (res.destroyed || res.writableEnded) return;
       res.writeHead(status);
       res.end(JSON.stringify(data));
     };
@@ -103,7 +114,13 @@ export function createPrevlevServer(options = {}, dependencies = {}) {
         status: "ok",
         source,
         data: {
-          version: "0.3.0",
+          version: "0.4.0",
+          youtubeEnabled: config.youtubeEnabled,
+          youtubeConfigured: config.youtubeEnabled && Boolean(config.youtubeApiKey),
+          youtubeSource: "youtube-data-api",
+          youtubeReachable: null,
+          historyMaxRecords: config.historyMaxRecords,
+          mcpEnabled: config.mcpEnabled,
           aiProvider: config.aiProvider,
           aiOrigin:
             config.aiProvider === "omni"
@@ -127,7 +144,9 @@ export function createPrevlevServer(options = {}, dependencies = {}) {
       });
     const catalogRequest = req.url === "/v1/ai/catalog" && req.method === "GET";
     const analysisRequest = req.url === "/v1/analyze" && req.method === "POST";
-    if (!catalogRequest && !analysisRequest)
+    const youtubeRequest = req.url === "/v1/youtube/search" && req.method === "POST";
+    const historyRequest = req.url === "/v1/history" && req.method === "POST";
+    if (!catalogRequest && !analysisRequest && !youtubeRequest && !historyRequest)
       return respond(404, {
         status: "error",
         source,
@@ -154,7 +173,7 @@ export function createPrevlevServer(options = {}, dependencies = {}) {
       for (const [address, value] of rates)
         if (now - value.start > 60000) rates.delete(address);
     if (
-      analysisRequest &&
+      !catalogRequest &&
       !(req.headers["content-type"] ?? "").startsWith("application/json")
     )
       return respond(415, {
@@ -162,6 +181,16 @@ export function createPrevlevServer(options = {}, dependencies = {}) {
         source,
         error: "Use Content-Type: application/json.",
       });
+    const requestAbortController = new AbortController();
+    const abortRequest = () => requestAbortController.abort();
+    const abortClosedResponse = () => {
+      if (!res.writableEnded) requestAbortController.abort();
+    };
+    if (youtubeRequest) {
+      req.once("aborted", abortRequest);
+      res.once("close", abortClosedResponse);
+      if (req.aborted || res.destroyed) requestAbortController.abort();
+    }
     try {
       if (catalogRequest) {
         if (
@@ -211,17 +240,23 @@ export function createPrevlevServer(options = {}, dependencies = {}) {
       if (
         !input ||
         typeof input !== "object" ||
-        Array.isArray(input) ||
-        typeof input.feature !== "string" ||
-        !input.payload ||
-        typeof input.payload !== "object" ||
-        Array.isArray(input.payload)
+        Array.isArray(input)
       )
         return respond(400, {
           status: "error",
           source,
-          error: "Informe feature e payload como objeto.",
+          error: "Informe um corpo JSON como objeto.",
         });
+      if (youtubeRequest) {
+        const result = await searchYouTube(input, config, dependencies.fetcher, requestAbortController.signal);
+        return respond(result.status === "unsupported" ? 422 : 200, result);
+      }
+      if (historyRequest) {
+        const result = await handleHistory(input, {dataDir:config.dataDir, historyMaxRecords:config.historyMaxRecords});
+        return respond(result.status === "unsupported" ? 422 : 200, result);
+      }
+      if (typeof input.feature !== "string" || !input.payload || typeof input.payload !== "object" || Array.isArray(input.payload))
+        return respond(400, {status:"error", source, error:"Informe feature e payload como objeto."});
       const result = isAiFeature(input.feature)
         ? await analyzeAi(
             input.feature,
@@ -236,7 +271,7 @@ export function createPrevlevServer(options = {}, dependencies = {}) {
     } catch (error) {
       let safe =
         error instanceof Error ? error.message : "Falha ao processar análise.";
-      for (const secret of [config.omniApiKey, config.aiApiKey, config.token])
+      for (const secret of [config.omniApiKey, config.aiApiKey, config.youtubeApiKey, config.token])
         if (secret) safe = safe.split(secret).join("[redigido]");
       const status = error?.name === "TimeoutError" ? 504 : 400;
       respond(status, {
@@ -244,6 +279,11 @@ export function createPrevlevServer(options = {}, dependencies = {}) {
         source,
         error: safe.replace(/Bearer\s+\S+/gi, "[redigido]"),
       });
+    } finally {
+      if (youtubeRequest) {
+        req.off("aborted", abortRequest);
+        res.off("close", abortClosedResponse);
+      }
     }
   });
   server.requestTimeout = 15000;

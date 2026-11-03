@@ -1,4 +1,4 @@
-# Prevlev · v0.3.0
+# Prevlev · v0.4.0
 
 Extensão Chrome Manifest V3 independente para pesquisar vídeos, preparar imagens e operar ferramentas assistidas no YouTube/Studio. O núcleo funciona no navegador; análises de amostra e IA usam um backend próprio opcional.
 
@@ -32,7 +32,11 @@ A coleta considera o conteúdo carregado na página: não percorre automaticamen
 - Compressão proporcional de imagens, prévia de thumbnail/título, download/cópia de thumbnails públicas e captura de frame ou de áreas visíveis.
 - Calculadora de lucro, leitura de métricas visíveis e ações assistidas no Studio com prévia, confirmação e cancelamento.
 - Swipe File local com referências, pastas por nome e importação/exportação JSON.
-- Backend opcional com relatórios sobre os dados enviados, similaridade lexical, registro de observações de views e integração com o OmniProviders existente, com seleção explícita de provedor/modelo.
+- Relatório local com cobertura dos dados, médias/medianas, formatos, canais, meses de publicação, intervalo observado e exportações JSON/CSV/Markdown. Filtros preservam a referência completa de outlier.
+- Histórico próprio no backend: registro manual da coleta, consulta, diferenças entre observações reais, exportação e exclusão confirmada, com limites de retenção.
+- Pesquisa oficial opcional por vídeos/canais públicos, valores brutos atribuídos ao YouTube e até três páginas manuais. Dados separados da coleta local e das métricas calculadas.
+- Backend opcional com similaridade lexical e integração ao OmniProviders existente, com seleção explícita de provedor/modelo.
+- MCP local por stdio, desativado por padrão, com cinco ferramentas de análise e leitura do histórico, sem rede ou geração.
 
 VPH é a média de views desde a publicação, e não as visualizações da última hora. Outlier usa pelo menos três outros vídeos comparáveis da amostra. Quando há identidade de canal conhecida, não mistura canais ou referências sem identidade; quando o alvo não tem identidade, a referência é a amostra informada. Marcadores de anúncios não confirmam que um criador recebe receita. Não são produzidos valores de RPM, geografia ou receita de canais a partir de dados ausentes.
 
@@ -42,7 +46,7 @@ O painel de canal não pagina a coleção e ordena apenas os vídeos reconhecido
 
 ## Backend e IA opcionais
 
-As ferramentas locais funcionam com a conexão vazia. Para análises remotas, siga [BACKEND.md](docs/BACKEND.md), configure seu servidor e salve a origem/token na aba **Conexão**. Cada envio parte de uma ação explícita. O servidor incluído analisa o dataset recebido; não substitui uma base global de pesquisa do YouTube.
+As ferramentas locais funcionam com a conexão vazia. Para análises remotas, siga [BACKEND.md](docs/BACKEND.md), configure seu servidor e salve a origem/token na aba **Conexão**. Cada envio parte de uma ação explícita. O servidor analisa o dataset recebido; a fonte oficial opcional oferece pesquisa pública separada e não fornece uma base global própria de analytics.
 
 O modo padrão de IA usa o **OmniProviders já existente**: extensão → backend Prevlev em `127.0.0.1:8787` → Omni em `127.0.0.1:7814`. No Node.js 24, execute `npm ci`, `npm run build`, em uma instalação nova copie `.env.example` para `.env` (preserve o arquivo existente se já houver), preencha os placeholders localmente e inicie `npm run server`. A origem Omni é alterada somente por `OMNI_BASE_URL` no servidor; reinicie o backend após mudar `.env`. Os dois loopbacks pressupõem navegador, Prevlev e Omni na mesma máquina.
 
@@ -51,6 +55,16 @@ Na extensão, clique em **Consultar modelos** e escolha o provedor/modelo anunci
 A chave existente de acesso ao serviço Omni, quando exigida, fica em `OMNI_API_KEY` apenas no ambiente do backend. Credenciais de provedores/OAuth permanecem no Omni; não vão para a extensão ou para o chat. A instalação e as fontes verificadas do contrato estão em [OMNIPROVIDERS.md](docs/OMNIPROVIDERS.md). O modo anterior permanece disponível por escolha explícita de `AI_PROVIDER=openai-compatible`, sem fallback automático entre modos.
 
 Os testes usam fixtures, sem acessar o serviço/contas Omni do usuário nem consumir gerações ou créditos. Para hospedagem pública ainda é necessário escolher infraestrutura, HTTPS, autenticação de produção e isolamento de dados. O backend fornecido destina-se a uma instalação pessoal.
+
+## Pesquisa oficial, relatório e histórico
+
+A aba **Pesquisa oficial** começa sem fonte selecionada e sem consentimento. Para usá-la, o operador deve configurar `YOUTUBE_ENABLED=true` e uma chave **já existente** em `YOUTUBE_API_KEY` no `.env` do servidor; não coloque essa chave na extensão. Cada pesquisa/próxima página é manual e pode consumir cota do projeto. O fluxo limita cada página a 25 resultados e cada consulta a três páginas; cancelar impede as etapas seguintes, mas não desfaz solicitações aceitas pelo Google. Veja o contrato e os limites em [YOUTUBE.md](docs/YOUTUBE.md).
+
+Os resultados oficiais ficam somente em memória, expiram em até 24 horas e exibem contadores brutos. Não são importados na pesquisa local, enviados para IA ou usados em VPH, outlier, histórico, somas ou médias. O relatório local permanece sobre observações da página e material fornecido pelo usuário, com origem e cobertura explícitas. A pesquisa oficial não foi chamada com uma chave real nesta execução.
+
+Em **Relatório local**, gere uma análise da coleta inteira ou dos filtros da aba Pesquisa e exporte os dados disponíveis. Meses agrupam datas de publicação; as views são contadores observados, não o tráfego recebido naquele mês. Em **Histórico próprio**, registre manualmente até 100 vídeos por ação no backend configurado. A retenção padrão é de até 5.000 observações no total, ajustável por `HISTORY_MAX_RECORDS`; o armazenamento também tem limite de 10 MiB. Registros antigos podem sair quando o limite for atingido. Consulte/exporte/exclua antes de perder dados que queira preservar. Não há agendamento ou histórico retroativo. Veja [HISTORY.md](docs/HISTORY.md).
+
+O MCP usa um processo separado: `MCP_ENABLED=true npm --silent run mcp`, no diretório do projeto com Node.js 24. Esse comando habilita somente o processo iniciado; não instala nem registra integração em outro aplicativo. Para um cliente MCP, use o executável Node e caminhos absolutos conforme [MCP.md](docs/MCP.md). As ferramentas não geram IA, acessam o YouTube, alteram canais ou gravam histórico.
 
 ## Ações no Studio
 
@@ -91,7 +105,7 @@ Capturas ativam a aba e medem o alvo antes e depois de capturar. Mudanças detec
 
 ## Pendências além do runtime
 
-Usar IA exige conectar o backend ao Omni existente, consultar seu catálogo e escolher um modelo compatível. Quando o serviço exige chave de acesso, ela deve ser fornecida somente no ambiente do servidor. Pesquisa global exige uma fonte autorizada e integração adicional. Insights privados do Studio, dados financeiros indisponíveis, sincronização em nuvem, autenticação multiusuário e MCP não estão implementados. Configurar a URL do backend não cria essas integrações: o backend incluído continua trabalhando sobre os dados enviados.
+Usar IA exige conectar o backend ao Omni existente e selecionar um modelo compatível. A pesquisa oficial exige a chave existente do operador e opt-in; seu runtime real permanece não verificado. O MCP exige iniciar e configurar manualmente um cliente local. Descoberta global por similaridade/nicho, insights privados do Studio, dados financeiros indisponíveis, sincronização em nuvem e autenticação multiusuário continuam pendentes. Configurar uma URL não cria essas fontes ou integrações.
 
 ## Método e limites da reconstrução
 

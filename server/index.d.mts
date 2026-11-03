@@ -5,6 +5,10 @@ export interface BackendConfig {
   token?: string;
   allowedOrigins?: string[];
   dataDir?: string;
+  youtubeEnabled?: boolean;
+  youtubeApiKey?: string;
+  historyMaxRecords?: number;
+  mcpEnabled?: boolean;
   aiProvider?: "omni" | "openai-compatible";
   omniBaseUrl?: string;
   omniApiKey?: string;

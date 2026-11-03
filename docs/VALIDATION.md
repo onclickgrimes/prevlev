@@ -1,51 +1,59 @@
-# Validação da versão 0.3.0
+# Validação da versão 0.4.0
 
-Execução final neste executor em 3 de novembro de 2026, Node.js 24.19.0 e Chromium 154.0.8037.57.
+Execução neste executor em 3 de novembro de 2026, Node.js 24.19.0 e Chromium 154.0.8037.57.
 
-| Verificação         | Resultado                                                                       |
-| ------------------- | ------------------------------------------------------------------------------- |
-| `npm run typecheck` | Aprovado                                                                        |
-| `npm run lint`      | Aprovado                                                                        |
-| `npm test`          | 220 testes aprovados em 15 arquivos                                             |
-| `npm run build`     | Aprovado; extensão MV3 gerada em `dist/`                                        |
-| `npm run test:ui`   | 14 testes aprovados; 2 testes explicitamente ignorados por política do ambiente |
+| Verificação | Resultado |
+| --- | --- |
+| `npm run typecheck` | Aprovado |
+| `npm run lint` | Aprovado |
+| `npm test` | 295 testes aprovados em 20 arquivos |
+| `npm run build` | Aprovado; MV3 gerada em `dist/` |
+| `npm run test:ui` | 27 aprovados; 2 ignorados pela política de extensões |
 
-Os testes unitários e de integração cobrem dados ausentes, parsing PT/EN, cálculos, exportação, proteção de CSV, canvas, URLs públicas de canal, limites de rede, autenticação/CORS do backend, ausência de chamadas pagas, mensagens da extensão, captura com mudança de aba/URL, navegação SPA e limpeza/retomada do observer.
+## Entrega e evidências desta etapa
 
-Os nove cenários anteriores Chromium executam a interface construída e canvas real com dados de teste: dois de UI/imagens, quatro de Studio e três de pesquisa/timeline. Os cenários integrados conectam `workspace.js` e `content.js` próprios através de um transporte Chrome simulado em páginas interceptadas. Verificam filtros completos aplicados aos cards, baseline de outlier preservado, enriquecimento, consulta de canal sem duplicatas, monetização desconhecida, timeline, confirmação/cancelamento, criação de rascunhos mid-roll sem Salvar e rejeição de comentários reciclados mantendo o botão. Não utilizam uma conta ou canal real. Fixtures e mocks ficam exclusivamente em `tests/`, fora do pacote da extensão.
+A versão 0.4 amplia o produto com pesquisa oficial opcional, relatório local, histórico próprio e MCP de leitura. As interfaces estão integradas ao bundle `workspace.js`, com ações funcionais; não são apenas helpers ou uma lista de recursos futuros. As fontes e limitações são separadas na [matriz dos 40 recursos](FEATURES.md).
 
-## Integração OmniProviders verificada nesta etapa
+- **Fonte oficial:** [youtube.test.ts](../tests/youtube.test.ts) verifica opt-in/chave/consentimento, host e rotas fixas, valores brutos e contadores decimais, campos ausentes, paginação, lotes, cancelamento, prazo total, limites de resposta e erros sanitizados. [official-search.spec.ts](../tests/browser/official-search.spec.ts) executa a UI construída com todas as requisições interceptadas: seleção/consentimento, três páginas manuais, até 75 resultados, precisão de contadores, texto/links seguros, separação de armazenamento/cálculos, dados ocultos, cancelamento, respostas inválidas e expiração de 24 horas.
+- **Relatório local:** [analytics.test.ts](../tests/analytics.test.ts) e [analytics.spec.ts](../tests/browser/analytics.spec.ts) cobrem cobertura, formatos desconhecidos, identidades de canal, meses UTC, médias/medianas, filtros com baseline de outlier preservada, duplicatas, conflitos, estabilidade numérica e downloads reais JSON/CSV/Markdown. Registros marcados como API oficial são excluídos antes das derivações. Views agrupadas por mês são contadores dos vídeos publicados naquele mês; não são tráfego mensal.
+- **Histórico:** [history.test.ts](../tests/history.test.ts) verifica arquivos temporários, escrita atômica/privada, concorrência no processo, limites/retenção, contagens ausentes/zero, observação versus gravação, regravação de coleta antiga, legado por ID, exportação, exclusão confirmada, arquivos inválidos e fontes recusadas. A rota HTTP é coberta em [backend.test.ts](../tests/backend.test.ts). A interface tem testes em [history.spec.ts](../tests/browser/history.spec.ts) contra o backend próprio em loopback e diretórios temporários, por relay HTTP do transporte de fixtures. Verifica arquivos efetivamente gravados, downloads, taxas e alteração de conexão durante confirmação, sem YouTube/Omni real.
+- **MCP:** [mcp.test.ts](../tests/mcp.test.ts) usa o SDK oficial em memória e processo stdio, incluindo negociação `2026-07-28`, schemas estritos, limites, leitura de histórico sem alterar arquivos, recusa de dados oficiais e importação/inicialização desativada sem I/O. Isso verifica o protocolo local; nenhum aplicativo MCP do usuário foi registrado ou configurado.
+- **Transporte e controles:** [backend-operation.test.ts](../tests/backend-operation.test.ts) verifica as duas rotas novas, origem/token, ausência de cookies/retry, cancelamento, limite de leitura, erro offline e respostas incompletas. Os testes HTTP verificam autenticação, origem, JSON/1 MiB, limite compartilhado e interrupção dos lotes oficiais quando o cliente desconecta.
 
-O contrato foi inspecionado somente por leitura no repositório OmniProviders, commit `cd4e6a2efd5cdd54ec9bcea274a86ed854932120`: catálogo, capacidades, autenticação, Responses JSON/SSE e artefatos. Não se executou/importou o app Omni nem se acessou o serviço em `127.0.0.1:7814` da máquina do usuário. Uma porta local deste executor não foi tratada como a instalação do usuário.
+A revisão independente encontrou e corrigiu derivação de dados oficiais pela rota HTTP, duplicatas inflando relatórios, horário de gravação substituindo o instante original da coleta e confirmação de exclusão antes de fixar o backend de destino. Há regressões para esses casos. O histórico também informa somente novos registros efetivamente retidos, mesmo quando uma amostra antiga sai imediatamente pelo limite de retenção.
 
-32 testes de transporte Omni simulado cobrem seleção exata/origem, revalidação do catálogo, JSON/SSE terminal, respostas incompletas, falhas, EOF, imagem não suportada, artefatos autenticados, prazos, erros e ausência de repetição. 11 testes do cliente verificam formatos/credenciais/erros seguros; cinco cenários Chromium adicionais verificam seleção/capacidades e tarefas com a UI real, com todas as requisições interceptadas. O backend Prevlev é testado em loopback com o transporte Omni substituído por fixture. Nenhuma geração real ou crédito foi consumido.
+Nenhuma chave real foi criada, fornecida ou usada na fonte oficial. Nenhuma pesquisa, cota, geração, conta real ou serviço do usuário foi acessado. Os resultados simulados estão nos testes; recursos sem configuração retornam indisponibilidade explícita no produto.
 
-A origem padrão é `http://127.0.0.1:7814`, editável em `OMNI_BASE_URL` no servidor; o navegador só recebe o catálogo normalizado e usa a ponte Prevlev. Chaves de provedores permanecem no Omni, e a chave do sidecar, se exigida, permanece no backend. Foram também corrigidas validações do modo legado explícito para descartar texto truncado/modelo divergente e não expor erros brutos do upstream.
+## Cobertura preservada
 
-## Lacunas locais resolvidas nas etapas anteriores
+Os testes anteriores cobrem parsing PT/EN, cálculos e incertezas, filtros e ordenação, comentários, transcrição, exportação segura, canvas/mídia, enriquecimento público, autenticação/CORS, segurança de mensagens, screenshots transacionais, navegação SPA e limpeza/retomada de observers.
 
-- Filtros por inscritos, duração, datas, VPH e outlier integrados no painel e DOM; limites inválidos não alteram os cards. Outlier usa referências do mesmo canal quando a identidade é conhecida e mantém a coleção de referência após filtrar.
-- Painel de recentes/populares da primeira resposta HTML pública, enriquecimento de inscritos propagado aos cards e amostragem anônima de até cinco vídeos para marcadores de monetização. Não equivale a catálogo completo nem confirmação financeira.
-- Timeline do player com seleção/cópia/exportação de trechos, busca, posicionamento, pausa/reprodução e captura local. O passo de 1/30 s é estimado, sem detecção do FPS.
-- Mid-roll pode criar rascunhos por controle reconhecido após prévia/confirmar, esperar campo, preencher e cancelar. Não envia Continuar/Salvar.
-- Corações conferem identidade, contêiner, autor e texto antes de cada clique. Capturas são medidas após ativar a aba e novamente depois do screenshot, com descarte por mudança de alvo, viewport, rolagem, revisão DOM ou máscara. Eventos intermediários de scroll/resize também invalidam a medição mesmo que as coordenadas retornem ao ponto inicial.
+Os cenários Chromium de pesquisa/Studio conectam os bundles próprios `workspace.js` e `content.js` por transporte Chrome simulado em páginas interceptadas. Cobrem aplicação/restauração dos filtros no DOM, timeline/player, prévia/confirmação/cancelamento, criação de rascunhos mid-roll sem Salvar e rejeição de comentários reciclados mantendo o botão. Não usam canal real. Fixtures/mocks ficam em `tests/`, fora do pacote da extensão.
 
-## Verificação bloqueada
+## OmniProviders: contrato e fixtures
 
-Ação: carregar a extensão MV3 em um perfil de teste do Chromium do executor, para executar `tests/browser/extension.spec.ts`. Alvo: build próprio em `/workspace/prevlev/dist/`.
+O contrato foi inspecionado somente por leitura no repositório OmniProviders, commit `cd4e6a2efd5cdd54ec9bcea274a86ed854932120`: catálogo, capacidades, autenticação, Responses JSON/SSE e artefatos. Não se executou/importou o app Omni nem se acessou `127.0.0.1:7814` da máquina do usuário. Uma porta deste executor não foi tratada como a instalação do usuário.
 
-Motivo: `/etc/chromium/policies/managed/extensions.json` contém `ExtensionInstallBlocklist: ["*"]`. O Chromium não iniciou o service worker da extensão. A investigação identificou a política; nenhuma política foi desativada ou alterada. Estado: **bloqueado por política do ambiente**, com os dois testes marcados como ignorados e sem contá-los como aprovados. Isso não foi uma rejeição do revisor automático de aprovação.
+As fixtures cobrem seleção exata/origem, revalidação do catálogo, JSON/SSE terminal, respostas incompletas, falhas, EOF, imagem não suportada, artefatos autenticados, prazos e ausência de repetição. Cinco cenários de UI verificam seleção/capacidades e tarefas com requisições interceptadas. O backend usa prazo total limitado, incluindo descoberta e operação. Nenhuma geração real ou crédito foi consumido.
 
-Continua necessária a validação da extensão instalada em um Chrome que permita carregar extensões de desenvolvimento. Captura `activeTab`, clipboard e permissões opcionais dependem também do comportamento real desse navegador. Screenshots exigem invocar o ícone Prevlev na aba alvo para obter a concessão temporária; falhas têm orientação explícita. [Documentação Chrome: activeTab](https://developer.chrome.com/docs/extensions/develop/concepts/activeTab), [captureVisibleTab](https://developer.chrome.com/docs/extensions/reference/api/tabs#method-captureVisibleTab).
+A origem padrão é `http://127.0.0.1:7814`, editável por `OMNI_BASE_URL` no servidor. Chaves de provedores permanecem no Omni; a chave de acesso ao serviço, se exigida, permanece no backend. O navegador usa somente a ponte Prevlev. Consulte [OMNIPROVIDERS.md](OMNIPROVIDERS.md).
 
-## Verificação pública e configuração ainda pendentes
+## Verificação bloqueada e runtime pendente
 
-Uma consulta anônima a `https://www.youtube.com/@YouTube/videos` retornou `fetch failed` neste executor. Estado: **consulta falhou; compatibilidade com a resposta pública atual não verificada**. Os parsers foram testados com fixtures de renderers antigos e modernos. Não se usou conta real. Nenhuma política do Chromium foi alterada.
+Ação bloqueada: carregar a extensão MV3 em perfil Chromium deste executor para executar `tests/browser/extension.spec.ts`. Alvo: build próprio `/workspace/prevlev/dist/`. Motivo: `/etc/chromium/policies/managed/extensions.json` contém `ExtensionInstallBlocklist: ["*"]`; o service worker não iniciou. Nenhuma política foi alterada ou contornada. Os dois cenários estão **ignorados**, sem contar como aprovados. Não foi rejeição do revisor automático de aprovação.
 
-A validação em runtime real precisa conferir layouts atuais, concessões Chrome, comportamento do player e aceitação dos controles do Studio. Ela não elimina as lacunas de produto: catálogo global/paginação exigem fonte e integração adicional; IA tem integração Omni implementada, mas exige iniciar/configurar a ponte na máquina do serviço e escolher um modelo disponível no catálogo; a geração real continua não verificada; APIs privadas do Studio, receita/RPM/geografia indisponíveis, nuvem/multiusuário e MCP não estão implementados.
+Uma tentativa de fetch nativo da página HTTPS de teste para o backend temporário em loopback foi negada pelo Chromium por acesso ao espaço de endereços local. O teste de histórico usa `route.fetch()` como relay controlado ao mesmo servidor HTTP real, preservando autenticação, rotas e arquivos. Nenhuma permissão ou política foi modificada. Esse teste não comprova o transporte nativo de uma extensão instalada.
 
-## Outros limites
+É necessária validação em Chrome que permita a extensão: permissões opcionais, clipboard, captura `activeTab`, layouts atuais e aceitação das ações pelo YouTube/Studio. Screenshots exigem invocar o ícone na aba alvo para a concessão temporária. Referências: [activeTab](https://developer.chrome.com/docs/extensions/develop/concepts/activeTab), [captureVisibleTab](https://developer.chrome.com/docs/extensions/reference/api/tabs#method-captureVisibleTab). Capturas são revalidadas e descartadas por mudanças de contexto; a ocultação cobre campos reconhecidos e não garante anonimização total.
 
-REA foi executado pelo coordenador e orientou a especificação; o recibo integral de análise não foi materializado neste executor porque o download retornou `download failed`. O escopo e as identidades comunicadas estão em [REA.md](REA.md).
+Uma tentativa anônima anterior de consultar `https://www.youtube.com/@YouTube/videos` retornou `fetch failed`; compatibilidade com a resposta pública atual continua não verificada. A nova API oficial não foi chamada com chave real. O serviço Omni e um cliente MCP do usuário não foram acessados.
 
-Nenhum provedor de IA pago, servidor Nexlev, extensão original, conta real ou canal real foi utilizado nas verificações. IA continua sem configuração por padrão; descoberta/relatórios usam somente os dados fornecidos, e as limitações de cada um dos 40 recursos constam em [FEATURES.md](FEATURES.md).
+## Configuração e lacunas de produto
+
+- Pesquisa oficial: ativar a fonte e fornecer uma chave existente autorizada somente no servidor. A UI exibe dados brutos; isso não habilita métricas derivadas ou descoberta global por similaridade/nicho.
+- Histórico: iniciar o backend pessoal, escolher `DATA_DIR` e registrar observações explicitamente. Não existe histórico retroativo ou coleta agendada.
+- MCP: iniciar processo stdio e conectar manualmente um cliente compatível, se desejado. Não há integração automática ou acesso à sessão do navegador.
+- IA: iniciar/configurar a ponte na máquina do Omni existente e escolher um modelo anunciado com capacidades compatíveis. Conectividade e geração reais permanecem sem validação.
+- Continuam pendentes insights privados do Studio, receita/RPM/geografia indisponíveis, descoberta global por similaridade, sincronização e autenticação/isolamento multiusuário. Nenhum dado financeiro ausente é fabricado.
+
+REA foi executado pelo coordenador e orientou a especificação; o recibo integral não foi materializado neste executor porque o download falhou. A análise focada relatada cobriu 61 módulos selecionados, sem equivaler a cobertura integral/runtime/backend. Detalhes em [REA.md](REA.md).

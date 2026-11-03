@@ -15,6 +15,9 @@
         <div class="sidebar-label">ESPAÇO DE TRABALHO</div>
         <nav aria-label="Ferramentas">
           <button data-page="research" class="active">◈ &nbsp; Pesquisa</button
+          ><button data-page="official-search">↗ &nbsp; Pesquisa oficial</button
+          ><button data-page="analytics">▤ &nbsp; Relatório local</button
+          ><button data-page="history">◷ &nbsp; Histórico próprio</button
           ><button data-page="channel">▥ &nbsp; Canal</button
           ><button data-page="images">▧ &nbsp; Imagens</button
           ><button data-page="transcript">≋ &nbsp; Transcrição</button
@@ -29,7 +32,7 @@
           <p>
             Seus dados ficam aqui até você solicitar uma análise no seu backend.
           </p>
-          <span class="pill">VERSÃO 0.3 · INDEPENDENTE</span>
+          <span class="pill">VERSÃO 0.4 · INDEPENDENTE</span>
         </div>
       </aside>
       <main>
@@ -46,6 +49,9 @@
         <div id="notice" role="status" aria-live="polite">
           Abra o YouTube e colete os vídeos carregados para começar.
         </div>
+        <section id="official-search" class="page" hidden></section>
+        <section id="analytics" class="page" hidden></section>
+        <section id="history" class="page" hidden></section>
         <section id="research" class="page">
           <div class="hero">
             <div>

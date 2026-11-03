@@ -1,6 +1,4 @@
-import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
-import { join } from "node:path";
+import {legacyHistory} from './history.mjs';
 
 const number = (value) =>
   typeof value === "number" && Number.isFinite(value) && value >= 0
@@ -139,7 +137,12 @@ export async function analyzeDataset(
   payload,
   { dataDir, now = Date.now() } = {},
 ) {
-  if (feature === "view-history") return history(payload, dataDir, now);
+  // Reject the entire provenance-marked batch before any feature dispatch or
+  // projection can discard its source, including textual and unknown features.
+  if (payload?.source === "youtube-data-api" ||
+    (Array.isArray(payload?.videos) && payload.videos.some(video => video?.source === "youtube-data-api")))
+    throw new Error("Dados com origem youtube-data-api pertencem somente à pesquisa oficial e não podem alimentar análises derivadas locais. A amostra inteira foi recusada.");
+  if (feature === "view-history") return legacyHistory(payload, dataDir, now);
   if (feature === "sponsorships") {
     const source = text(payload.text, 100000);
     if (!source)
@@ -265,64 +268,5 @@ export async function analyzeDataset(
         source: "prevlev:backend",
         error: "Recurso não suportado por este backend.",
       };
-  }
-}
-
-const queues = new Map();
-async function history(payload, dataDir, now) {
-  const videoId = text(payload.videoId, 100);
-  if (!/^[\w-]{1,100}$/.test(videoId))
-    throw new Error("Informe payload.videoId válido.");
-  if (!dataDir)
-    return {
-      status: "not_configured",
-      source: "prevlev:history",
-      error: "Configure DATA_DIR para armazenar observações de views.",
-    };
-  if (payload.views !== undefined && number(payload.views) === undefined)
-    throw new Error("views deve ser um número não negativo.");
-  const key = createHash("sha256").update(videoId).digest("hex");
-  const filename = join(dataDir, `${key}.json`);
-  const previous = queues.get(filename) ?? Promise.resolve();
-  const task = previous
-    .catch(() => {})
-    .then(async () => {
-      await mkdir(dataDir, { recursive: true });
-      let observations = [];
-      try {
-        const parsed = JSON.parse(await readFile(filename, "utf8"));
-        if (!Array.isArray(parsed)) throw new Error("invalid");
-        observations = parsed;
-      } catch (error) {
-        if (error.code !== "ENOENT")
-          throw new Error("Não foi possível ler o histórico armazenado.");
-      }
-      if (payload.views !== undefined) {
-        observations.push({
-          observedAt: new Date(now).toISOString(),
-          views: payload.views,
-          source: "user-provided-observation",
-        });
-        observations = observations.slice(-10000);
-        const temporary = `${filename}.tmp`;
-        await writeFile(temporary, JSON.stringify(observations), {
-          mode: 0o600,
-        });
-        await rename(temporary, filename);
-      }
-      return ok(
-        { videoId, observations },
-        [
-          "O histórico começa nas observações registradas aqui; não recupera dados anteriores.",
-          "Views são fornecidas pelo navegador, sem verificação financeira. RPM e receita não são estimados.",
-        ],
-        "prevlev:history",
-      );
-    });
-  queues.set(filename, task);
-  try {
-    return await task;
-  } finally {
-    if (queues.get(filename) === task) queues.delete(filename);
   }
 }

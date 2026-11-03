@@ -1,5 +1,5 @@
 {
-  "version": "0.3.0",
+  "version": "0.4.0",
   "scope": "Implementação independente; não há declaração de paridade completa com Nexlev 3.12.6.",
   "statusDefinitions": {
     "implemented": "Disponível no escopo local descrito, com evidência em fixtures; não significa validação em extensão instalada ou paridade completa.",
@@ -34,8 +34,12 @@
       "status": "implemented",
       "execution": "local",
       "boundary": "Oculta cards e prateleiras reconhecidos no DOM, incluindo atualizações de página.",
-      "source": ["src/content/index.ts"],
-      "tests": ["tests/content-runtime.test.ts"],
+      "source": [
+        "src/content/index.ts"
+      ],
+      "tests": [
+        "tests/content-runtime.test.ts"
+      ],
       "verificationStatus": "fixture_coverage_only",
       "installedExtensionVerification": "blocked_by_environment_policy",
       "runtimeVerificationStatus": "pending_installed_and_live_validation",
@@ -68,9 +72,19 @@
       "name": "Analytics de Shorts",
       "status": "partial",
       "execution": "local",
-      "boundary": "Identifica e filtra Shorts, calcula métricas da amostra; não produz relatório completo de todos os Shorts do canal.",
-      "source": ["src/core/metrics.ts", "src/ui/workspace.ts"],
-      "tests": ["tests/core.test.ts", "tests/content-youtube.test.ts"],
+      "boundary": "Relatório local atualizado por ação explícita, com filtros da pesquisa (inclusive Shorts), cobertura de views/datas/duração/canal, médias/medianas de views e VPH histórico, formatos desconhecidos separados e meses de publicação UTC. Preserva baseline completa de outlier e deduplica IDs com regra explícita; não representa analytics privado ou tráfego oficial de todos os Shorts.",
+      "source": [
+        "src/core/metrics.ts",
+        "src/ui/workspace.ts",
+        "src/core/analytics.ts",
+        "src/ui/analytics.ts"
+      ],
+      "tests": [
+        "tests/core.test.ts",
+        "tests/content-youtube.test.ts",
+        "tests/analytics.test.ts",
+        "tests/browser/analytics.spec.ts"
+      ],
       "verificationStatus": "fixture_coverage_only",
       "installedExtensionVerification": "blocked_by_environment_policy",
       "runtimeVerificationStatus": "pending_installed_and_live_validation",
@@ -87,7 +101,10 @@
         "src/content/studio.ts",
         "src/ui/workspace.ts"
       ],
-      "tests": ["tests/core.test.ts", "tests/studio.test.ts"],
+      "tests": [
+        "tests/core.test.ts",
+        "tests/studio.test.ts"
+      ],
       "verificationStatus": "fixture_coverage_only",
       "installedExtensionVerification": "blocked_by_environment_policy",
       "runtimeVerificationStatus": "pending_installed_and_live_validation",
@@ -99,8 +116,12 @@
       "status": "partial",
       "execution": "local",
       "boundary": "Lê cards visíveis reconhecidos. A integração com API privada Studio não foi implementada.",
-      "source": ["src/content/studio.ts"],
-      "tests": ["tests/studio.test.ts"],
+      "source": [
+        "src/content/studio.ts"
+      ],
+      "tests": [
+        "tests/studio.test.ts"
+      ],
       "verificationStatus": "fixture_coverage_only",
       "installedExtensionVerification": "blocked_by_environment_policy",
       "runtimeVerificationStatus": "pending_installed_and_live_validation",
@@ -114,8 +135,12 @@
       "status": "partial",
       "execution": "local",
       "boundary": "Preenche dois campos nativos de data em seletor já aberto; o usuário revisa e aplica no Studio. Layouts desconhecidos são recusados.",
-      "source": ["src/content/studio.ts"],
-      "tests": ["tests/studio.test.ts"],
+      "source": [
+        "src/content/studio.ts"
+      ],
+      "tests": [
+        "tests/studio.test.ts"
+      ],
       "verificationStatus": "fixture_coverage_only",
       "installedExtensionVerification": "blocked_by_environment_policy",
       "runtimeVerificationStatus": "pending_installed_and_live_validation",
@@ -132,7 +157,10 @@
         "src/content/youtube.ts",
         "src/ui/workspace.ts"
       ],
-      "tests": ["tests/core.test.ts", "tests/content-youtube.test.ts"],
+      "tests": [
+        "tests/core.test.ts",
+        "tests/content-youtube.test.ts"
+      ],
       "verificationStatus": "fixture_coverage_only",
       "installedExtensionVerification": "blocked_by_environment_policy",
       "runtimeVerificationStatus": "pending_installed_and_live_validation",
@@ -144,8 +172,14 @@
       "status": "implemented",
       "execution": "local",
       "boundary": "Lê título e ID disponíveis e copia para a área de transferência.",
-      "source": ["src/content/index.ts", "src/ui/workspace.ts"],
-      "tests": ["tests/content-youtube.test.ts", "tests/core.test.ts"],
+      "source": [
+        "src/content/index.ts",
+        "src/ui/workspace.ts"
+      ],
+      "tests": [
+        "tests/content-youtube.test.ts",
+        "tests/core.test.ts"
+      ],
       "verificationStatus": "fixture_coverage_only",
       "installedExtensionVerification": "blocked_by_environment_policy",
       "runtimeVerificationStatus": "pending_installed_and_live_validation",
@@ -178,8 +212,13 @@
       "status": "implemented",
       "execution": "local",
       "boundary": "Redimensiona proporcionalmente e codifica JPEG/WebP/PNG no navegador; saída não é garantidamente menor que arquivo já otimizado.",
-      "source": ["src/core/media.ts", "src/ui/workspace.ts"],
-      "tests": ["tests/media.test.ts"],
+      "source": [
+        "src/core/media.ts",
+        "src/ui/workspace.ts"
+      ],
+      "tests": [
+        "tests/media.test.ts"
+      ],
       "verificationStatus": "fixture_coverage_only",
       "installedExtensionVerification": "blocked_by_environment_policy",
       "runtimeVerificationStatus": "pending_installed_and_live_validation",
@@ -191,8 +230,13 @@
       "status": "implemented",
       "execution": "local",
       "boundary": "Composição local de imagem, título e canal; não realiza teste A/B com audiência.",
-      "source": ["src/core/media.ts", "src/ui/workspace.ts"],
-      "tests": ["tests/media.test.ts"],
+      "source": [
+        "src/core/media.ts",
+        "src/ui/workspace.ts"
+      ],
+      "tests": [
+        "tests/media.test.ts"
+      ],
       "verificationStatus": "fixture_coverage_only",
       "installedExtensionVerification": "blocked_by_environment_policy",
       "runtimeVerificationStatus": "pending_installed_and_live_validation",
@@ -204,8 +248,13 @@
       "status": "implemented",
       "execution": "YouTube + local",
       "boundary": "Baixa thumbnails do CDN público do YouTube e copia a imagem pela interface; clipboard depende do suporte/permissão do navegador.",
-      "source": ["src/core/media.ts", "src/ui/workspace.ts"],
-      "tests": ["tests/media.test.ts"],
+      "source": [
+        "src/core/media.ts",
+        "src/ui/workspace.ts"
+      ],
+      "tests": [
+        "tests/media.test.ts"
+      ],
       "verificationStatus": "fixture_coverage_only",
       "installedExtensionVerification": "blocked_by_environment_policy",
       "runtimeVerificationStatus": "pending_installed_and_live_validation",
@@ -260,7 +309,10 @@
       "status": "partial",
       "execution": "local",
       "boundary": "Mesma transação de captura para card reconhecido do último vídeo, inteiramente visível. Descarta mudanças durante a captura; layouts desconhecidos podem impedir a operação.",
-      "source": ["src/content/index.ts", "src/core/media.ts"],
+      "source": [
+        "src/content/index.ts",
+        "src/core/media.ts"
+      ],
       "tests": [
         "tests/media.test.ts",
         "tests/background.test.ts",
@@ -300,8 +352,13 @@
       "status": "partial",
       "execution": "local",
       "boundary": "Avança uma etapa somente após escolha existente e confirmação. Não ativa monetização nem responde adequação de anúncios.",
-      "source": ["src/content/studio.ts"],
-      "tests": ["tests/studio.test.ts", "tests/studio-flow.test.ts"],
+      "source": [
+        "src/content/studio.ts"
+      ],
+      "tests": [
+        "tests/studio.test.ts",
+        "tests/studio-flow.test.ts"
+      ],
       "verificationStatus": "fixture_coverage_only",
       "installedExtensionVerification": "blocked_by_environment_policy",
       "runtimeVerificationStatus": "pending_installed_and_live_validation",
@@ -313,7 +370,10 @@
       "status": "implemented",
       "execution": "local",
       "boundary": "Prévia explícita com alvo, confirmação, limite de 50, expiração e cancelamento para comentários visíveis reconhecidos. Revalida identidade, autor e texto antes de cada clique, inclusive se o DOM reciclar o mesmo botão. Cliques enviados precisam de conferência; aceitação do servidor não é confirmada.",
-      "source": ["src/content/studio.ts", "src/ui/workspace.ts"],
+      "source": [
+        "src/content/studio.ts",
+        "src/ui/workspace.ts"
+      ],
       "tests": [
         "tests/studio.test.ts",
         "tests/studio-flow.test.ts",
@@ -352,8 +412,13 @@
       "status": "implemented",
       "execution": "local",
       "boundary": "Compara views com mediana de pelo menos três outros vídeos comparáveis da amostra, excluindo o alvo; não representa todo o canal.",
-      "source": ["src/core/metrics.ts", "src/content/index.ts"],
-      "tests": ["tests/core.test.ts"],
+      "source": [
+        "src/core/metrics.ts",
+        "src/content/index.ts"
+      ],
+      "tests": [
+        "tests/core.test.ts"
+      ],
       "verificationStatus": "fixture_coverage_only",
       "installedExtensionVerification": "blocked_by_environment_policy",
       "runtimeVerificationStatus": "pending_installed_and_live_validation",
@@ -365,8 +430,13 @@
       "status": "implemented",
       "execution": "local",
       "boundary": "Média acumulada desde publicação. Datas relativas são aproximadas e ausência de data/views impede o cálculo; não mede as últimas 60 minutos.",
-      "source": ["src/core/metrics.ts", "src/core/parse.ts"],
-      "tests": ["tests/core.test.ts"],
+      "source": [
+        "src/core/metrics.ts",
+        "src/core/parse.ts"
+      ],
+      "tests": [
+        "tests/core.test.ts"
+      ],
       "verificationStatus": "fixture_coverage_only",
       "installedExtensionVerification": "blocked_by_environment_policy",
       "runtimeVerificationStatus": "pending_installed_and_live_validation",
@@ -378,7 +448,10 @@
       "status": "implemented",
       "execution": "local",
       "boundary": "Filtra cards carregados por título/canal, views, inscritos, duração, VPH, outlier, datas e formato, com limites inclusivos, ordenação, aplicar e restaurar. Métricas ausentes ficam fora de limites ativos e outlier preserva a referência completa da amostra. Atua no feed de inscrições, sem percorrer todo o catálogo.",
-      "source": ["src/content/index.ts", "src/content/youtube.ts"],
+      "source": [
+        "src/content/index.ts",
+        "src/content/youtube.ts"
+      ],
       "tests": [
         "tests/content-youtube.test.ts",
         "tests/content-runtime.test.ts",
@@ -396,7 +469,10 @@
       "status": "implemented",
       "execution": "local",
       "boundary": "Filtra cards carregados por título/canal, views, inscritos, duração, VPH, outlier, datas e formato, com limites inclusivos, ordenação, aplicar e restaurar. Métricas ausentes ficam fora de limites ativos e outlier preserva a referência completa da amostra. Atua na Home, sem envio automático dos dados a terceiros.",
-      "source": ["src/content/index.ts", "src/content/youtube.ts"],
+      "source": [
+        "src/content/index.ts",
+        "src/content/youtube.ts"
+      ],
       "tests": [
         "tests/content-youtube.test.ts",
         "tests/content-runtime.test.ts",
@@ -413,18 +489,26 @@
       "name": "Filtro da busca",
       "status": "partial",
       "execution": "local",
-      "boundary": "Filtra cards carregados por título/canal, views, inscritos, duração, VPH, outlier, datas e formato, com limites inclusivos, ordenação, aplicar e restaurar. Métricas ausentes ficam fora de limites ativos e outlier preserva a referência completa da amostra. Não cria pesquisa ampliada em servidor nem busca catálogo completo.",
-      "source": ["src/content/youtube.ts", "src/content/index.ts"],
+      "boundary": "Filtros completos sobre cards carregados continuam locais. Pesquisa oficial opcional usa chave existente somente no servidor e consentimento por ação, com uma página de até25 resultados por chamada e até3 páginas manuais na visualização. Exibe dados oficiais brutos em memória, sem mesclar com o dataset local, indicadores derivados, IA ou histórico; depende de configuração e não cobre catálogo completo.",
+      "source": [
+        "src/content/youtube.ts",
+        "src/content/index.ts",
+        "server/youtube.mjs",
+        "src/ui/official-search.ts"
+      ],
       "tests": [
         "tests/content-youtube.test.ts",
         "tests/content-filters-runtime.test.ts",
-        "tests/browser/research-ui.spec.ts"
+        "tests/browser/research-ui.spec.ts",
+        "tests/youtube.test.ts",
+        "tests/browser/official-search.spec.ts"
       ],
       "verificationStatus": "fixture_coverage_only",
       "installedExtensionVerification": "blocked_by_environment_policy",
       "runtimeVerificationStatus": "pending_installed_and_live_validation",
       "configurationRequirements": [
-        "Paridade de pesquisa/cobertura global requer uma fonte de dados autorizada e integração ainda não implementada."
+        "Pesquisa oficial: configurar YOUTUBE_ENABLED=true e uma chave existente autorizada somente no servidor; consentir em cada ação. Resultados oficiais ficam separados e não alimentam os cálculos locais.",
+        "Relatórios/termos usam somente a amostra observada. Aquisição abrangente, dados privados ou descoberta global equivalente exigem integração adicional."
       ]
     },
     {
@@ -433,7 +517,10 @@
       "status": "partial",
       "execution": "local",
       "boundary": "Filtra cards carregados por título/canal, views, inscritos, duração, VPH, outlier, datas e formato, com limites inclusivos, ordenação, aplicar e restaurar. Métricas ausentes ficam fora de limites ativos e outlier preserva a referência completa da amostra. Consulta opcional do canal usa só o HTML público inicial; não pagina a coleção inteira.",
-      "source": ["src/content/youtube.ts", "src/content/index.ts"],
+      "source": [
+        "src/content/youtube.ts",
+        "src/content/index.ts"
+      ],
       "tests": [
         "tests/content-youtube.test.ts",
         "tests/content-filters-runtime.test.ts",
@@ -443,7 +530,7 @@
       "installedExtensionVerification": "blocked_by_environment_policy",
       "runtimeVerificationStatus": "pending_installed_and_live_validation",
       "configurationRequirements": [
-        "Paridade de pesquisa/cobertura global requer uma fonte de dados autorizada e integração ainda não implementada."
+        "Cobertura integral do catálogo ou descoberta global por similaridade/nicho exige trabalho e fontes autorizadas adicionais; a pesquisa oficial bruta separada não entrega essa paridade."
       ]
     },
     {
@@ -466,7 +553,7 @@
       "installedExtensionVerification": "blocked_by_environment_policy",
       "runtimeVerificationStatus": "pending_installed_and_live_validation",
       "configurationRequirements": [
-        "Paridade de pesquisa/cobertura global requer uma fonte de dados autorizada e integração ainda não implementada."
+        "Cobertura integral do catálogo ou descoberta global por similaridade/nicho exige trabalho e fontes autorizadas adicionais; a pesquisa oficial bruta separada não entrega essa paridade."
       ]
     },
     {
@@ -474,15 +561,26 @@
       "name": "Análise de termos de pesquisa",
       "status": "partial",
       "execution": "backend próprio",
-      "boundary": "Backend calcula termos frequentes e estatísticas da amostra enviada. Exige configurar servidor e não mede o mercado inteiro.",
-      "source": ["server/analysis.mjs", "src/ui/workspace.ts"],
-      "tests": ["tests/backend.test.ts"],
+      "boundary": "Backend calcula termos frequentes da amostra enviada; o relatório local oferece cobertura e estatísticas dessa coleção. A busca oficial opcional é outro fluxo: resultados brutos isolados, sem alimentar métricas derivadas ou estimar mercado/saturação. Fontes e lacunas são explícitas.",
+      "source": [
+        "server/analysis.mjs",
+        "src/ui/workspace.ts",
+        "src/core/analytics.ts",
+        "src/ui/analytics.ts",
+        "server/youtube.mjs"
+      ],
+      "tests": [
+        "tests/backend.test.ts",
+        "tests/analytics.test.ts",
+        "tests/youtube.test.ts",
+        "tests/browser/analytics.spec.ts"
+      ],
       "verificationStatus": "fixture_coverage_only",
       "installedExtensionVerification": "blocked_by_environment_policy",
       "runtimeVerificationStatus": "pending_installed_and_live_validation",
       "configurationRequirements": [
-        "Configurar o backend próprio para a análise já implementada sobre dados enviados.",
-        "Paridade de pesquisa/cobertura global requer uma fonte de dados autorizada e integração ainda não implementada."
+        "Pesquisa oficial: configurar YOUTUBE_ENABLED=true e uma chave existente autorizada somente no servidor; consentir em cada ação. Resultados oficiais ficam separados e não alimentam os cálculos locais.",
+        "Relatórios/termos usam somente a amostra observada. Aquisição abrangente, dados privados ou descoberta global equivalente exigem integração adicional."
       ]
     },
     {
@@ -523,8 +621,13 @@
       "status": "implemented",
       "execution": "local",
       "boundary": "Biblioteca independente com pastas por nome, referências, importação/exportação JSON e exclusão. Armazenamento neste perfil Chrome, sem sincronização de nuvem.",
-      "source": ["src/shared/storage.ts", "src/ui/workspace.ts"],
-      "tests": ["tests/browser/ui.spec.ts"],
+      "source": [
+        "src/shared/storage.ts",
+        "src/ui/workspace.ts"
+      ],
+      "tests": [
+        "tests/browser/ui.spec.ts"
+      ],
       "verificationStatus": "fixture_coverage_only",
       "installedExtensionVerification": "blocked_by_environment_policy",
       "runtimeVerificationStatus": "pending_installed_and_live_validation",
@@ -536,14 +639,18 @@
       "status": "partial",
       "execution": "backend próprio",
       "boundary": "Similaridade lexical Jaccard entre títulos da amostra enviada; sem descoberta global ou comparação visual.",
-      "source": ["server/analysis.mjs"],
-      "tests": ["tests/backend.test.ts"],
+      "source": [
+        "server/analysis.mjs"
+      ],
+      "tests": [
+        "tests/backend.test.ts"
+      ],
       "verificationStatus": "fixture_coverage_only",
       "installedExtensionVerification": "blocked_by_environment_policy",
       "runtimeVerificationStatus": "pending_installed_and_live_validation",
       "configurationRequirements": [
         "Configurar o backend próprio para a análise já implementada sobre dados enviados.",
-        "Paridade de pesquisa/cobertura global requer uma fonte de dados autorizada e integração ainda não implementada."
+        "Cobertura integral do catálogo ou descoberta global por similaridade/nicho exige trabalho e fontes autorizadas adicionais; a pesquisa oficial bruta separada não entrega essa paridade."
       ]
     },
     {
@@ -552,14 +659,18 @@
       "status": "partial",
       "execution": "backend próprio",
       "boundary": "Agrupa e compara palavras de títulos dos canais presentes na amostra; não descobre canais externos.",
-      "source": ["server/analysis.mjs"],
-      "tests": ["tests/backend.test.ts"],
+      "source": [
+        "server/analysis.mjs"
+      ],
+      "tests": [
+        "tests/backend.test.ts"
+      ],
       "verificationStatus": "fixture_coverage_only",
       "installedExtensionVerification": "blocked_by_environment_policy",
       "runtimeVerificationStatus": "pending_installed_and_live_validation",
       "configurationRequirements": [
         "Configurar o backend próprio para a análise já implementada sobre dados enviados.",
-        "Paridade de pesquisa/cobertura global requer uma fonte de dados autorizada e integração ainda não implementada."
+        "Cobertura integral do catálogo ou descoberta global por similaridade/nicho exige trabalho e fontes autorizadas adicionais; a pesquisa oficial bruta separada não entrega essa paridade."
       ]
     },
     {
@@ -568,65 +679,93 @@
       "status": "partial",
       "execution": "backend próprio",
       "boundary": "Termos e estatísticas reais dos vídeos enviados; sem saturação real do nicho ou base global.",
-      "source": ["server/analysis.mjs"],
-      "tests": ["tests/backend.test.ts"],
+      "source": [
+        "server/analysis.mjs"
+      ],
+      "tests": [
+        "tests/backend.test.ts"
+      ],
       "verificationStatus": "fixture_coverage_only",
       "installedExtensionVerification": "blocked_by_environment_policy",
       "runtimeVerificationStatus": "pending_installed_and_live_validation",
       "configurationRequirements": [
         "Configurar o backend próprio para a análise já implementada sobre dados enviados.",
-        "Paridade de pesquisa/cobertura global requer uma fonte de dados autorizada e integração ainda não implementada."
+        "Cobertura integral do catálogo ou descoberta global por similaridade/nicho exige trabalho e fontes autorizadas adicionais; a pesquisa oficial bruta separada não entrega essa paridade."
       ]
     },
     {
       "id": 34,
       "name": "Analytics de canais",
       "status": "partial",
-      "execution": "backend próprio",
-      "boundary": "Agrega views, formatos e cobertura observada; receita, geografia e dados privados ficam desconhecidos.",
-      "source": ["server/analysis.mjs"],
-      "tests": ["tests/backend.test.ts"],
+      "execution": "local + backend próprio opcional",
+      "boundary": "Relatório local por coleção ou filtros da pesquisa: coverage/missing, agrupamentos cautelosos de canais, médias/medianas de views e VPH histórico, formatos e meses UTC. Deduplica IDs sem combinar contadores conflitantes e mantém baseline completa de outlier. Exclui API oficial antes dos cálculos. Receita, geografia, monetização e dados privados permanecem desconhecidos.",
+      "source": [
+        "server/analysis.mjs",
+        "src/core/analytics.ts",
+        "src/ui/analytics.ts"
+      ],
+      "tests": [
+        "tests/backend.test.ts",
+        "tests/analytics.test.ts",
+        "tests/browser/analytics.spec.ts"
+      ],
       "verificationStatus": "fixture_coverage_only",
       "installedExtensionVerification": "blocked_by_environment_policy",
       "runtimeVerificationStatus": "pending_installed_and_live_validation",
       "configurationRequirements": [
-        "Configurar o backend próprio para a análise já implementada sobre dados enviados.",
-        "Paridade de pesquisa/cobertura global requer uma fonte de dados autorizada e integração ainda não implementada.",
-        "Dados financeiros, RPM, geografia ou contratos indisponíveis não são inferidos; fonte autorizada e integração adicional seriam necessárias."
+        "O relatório local funciona sem backend. Análises remotas da amostra exigem configurar o backend próprio.",
+        "Relatórios privados completos, finanças/geografia e aquisição abrangente não estão implementados; a fonte oficial opcional exibe apenas os campos brutos permitidos."
       ]
     },
     {
       "id": 35,
       "name": "Relatório detalhado de canal",
       "status": "partial",
-      "execution": "backend próprio",
-      "boundary": "Relatório de amostra e principais vídeos conhecidos; sem enriquecimento, dados financeiros ou cobertura completa.",
-      "source": ["server/analysis.mjs"],
-      "tests": ["tests/backend.test.ts"],
+      "execution": "local + backend próprio opcional",
+      "boundary": "Relatório explícito da amostra com até20 vídeos por views, cobertura, procedência, canais, meses de publicação, lacunas observadas e exportação JSON/CSV/Markdown. Views mensais são contadores atuais dos vídeos publicados no mês, não tráfego daquele mês. Não estima finanças, frequência futura ou catálogo completo e exclui dados da API oficial.",
+      "source": [
+        "server/analysis.mjs",
+        "src/core/analytics.ts",
+        "src/ui/analytics.ts"
+      ],
+      "tests": [
+        "tests/backend.test.ts",
+        "tests/analytics.test.ts",
+        "tests/browser/analytics.spec.ts"
+      ],
       "verificationStatus": "fixture_coverage_only",
       "installedExtensionVerification": "blocked_by_environment_policy",
       "runtimeVerificationStatus": "pending_installed_and_live_validation",
       "configurationRequirements": [
-        "Configurar o backend próprio para a análise já implementada sobre dados enviados.",
-        "Paridade de pesquisa/cobertura global requer uma fonte de dados autorizada e integração ainda não implementada.",
-        "Dados financeiros, RPM, geografia ou contratos indisponíveis não são inferidos; fonte autorizada e integração adicional seriam necessárias."
+        "O relatório local funciona sem backend. Análises remotas da amostra exigem configurar o backend próprio.",
+        "Relatórios privados completos, finanças/geografia e aquisição abrangente não estão implementados; a fonte oficial opcional exibe apenas os campos brutos permitidos."
       ]
     },
     {
       "id": 36,
       "name": "Histórico de views/RPM",
       "status": "partial",
-      "execution": "backend próprio",
-      "boundary": "Grava e consulta observações fornecidas após configuração de DATA_DIR. Não recupera passado nem estima RPM/receita.",
-      "source": ["server/analysis.mjs", "src/ui/workspace.ts"],
-      "tests": ["tests/backend.test.ts"],
+      "execution": "backend próprio + cálculo local",
+      "boundary": "Histórico próprio manual em DATA_DIR: registrar/listar/abrir/exportar/excluir com confirmação. Novos registros preservam observedAt válido da coleta e registram recordedAt do servidor, fonte e contagens conhecidas; fallback sem observedAt não comprova frescor, com índice global limitado a5000 registros/10MiB e leitura do legado reconhecido porID. Deltas e taxas ligam apenas extremos realmente observados, preservam revisões negativas e não interpolam. Sem coleta periódica, passado retroativo, API oficial, RPM ou receita.",
+      "source": [
+        "server/analysis.mjs",
+        "src/ui/workspace.ts",
+        "server/history.mjs",
+        "src/core/analytics.ts",
+        "src/ui/history.ts"
+      ],
+      "tests": [
+        "tests/backend.test.ts",
+        "tests/history.test.ts",
+        "tests/analytics.test.ts",
+        "tests/browser/history.spec.ts"
+      ],
       "verificationStatus": "fixture_coverage_only",
       "installedExtensionVerification": "blocked_by_environment_policy",
       "runtimeVerificationStatus": "pending_installed_and_live_validation",
       "configurationRequirements": [
-        "Configurar o backend próprio para a análise já implementada sobre dados enviados.",
-        "Dados financeiros, RPM, geografia ou contratos indisponíveis não são inferidos; fonte autorizada e integração adicional seriam necessárias.",
-        "Configurar DATA_DIR para persistir somente observações posteriores ao primeiro registro."
+        "Configurar backend próprio e DATA_DIR; HISTORY_MAX_RECORDS entre1 e5000 limita o índice global. Registrar observações manualmente.",
+        "RPM/receita e histórico anterior ao primeiro registro não estão disponíveis. Dados identificados como youtube-data-api não são persistidos."
       ]
     },
     {
@@ -635,8 +774,12 @@
       "status": "partial",
       "execution": "backend próprio",
       "boundary": "Detecta marcadores textuais de divulgação comercial no texto enviado. Não comprova contrato nem estima receita.",
-      "source": ["server/analysis.mjs"],
-      "tests": ["tests/backend.test.ts"],
+      "source": [
+        "server/analysis.mjs"
+      ],
+      "tests": [
+        "tests/backend.test.ts"
+      ],
       "verificationStatus": "fixture_coverage_only",
       "installedExtensionVerification": "blocked_by_environment_policy",
       "runtimeVerificationStatus": "pending_installed_and_live_validation",
@@ -649,16 +792,24 @@
       "id": 38,
       "name": "Analytics combinado de canais",
       "status": "partial",
-      "execution": "backend próprio",
-      "boundary": "Agrupa estatísticas dos canais da amostra; não agrega relatórios privados de contas conectadas.",
-      "source": ["server/analysis.mjs"],
-      "tests": ["tests/backend.test.ts"],
+      "execution": "local + backend próprio opcional",
+      "boundary": "Compara canais identificados presentes na coleção local, com totais conhecidos, médias/medianas, formatos e cobertura por canal. Distingue IDs conflitantes e handles ambíguos; não une canais de IDs diferentes apenas pelo nome. Não agrega relatórios privados de contas conectadas e não deriva métricas sobre dados da API oficial.",
+      "source": [
+        "server/analysis.mjs",
+        "src/core/analytics.ts",
+        "src/ui/analytics.ts"
+      ],
+      "tests": [
+        "tests/backend.test.ts",
+        "tests/analytics.test.ts",
+        "tests/browser/analytics.spec.ts"
+      ],
       "verificationStatus": "fixture_coverage_only",
       "installedExtensionVerification": "blocked_by_environment_policy",
       "runtimeVerificationStatus": "pending_installed_and_live_validation",
       "configurationRequirements": [
-        "Configurar o backend próprio para a análise já implementada sobre dados enviados.",
-        "Paridade de pesquisa/cobertura global requer uma fonte de dados autorizada e integração ainda não implementada."
+        "O relatório local funciona sem backend. Análises remotas da amostra exigem configurar o backend próprio.",
+        "Relatórios privados completos, finanças/geografia e aquisição abrangente não estão implementados; a fonte oficial opcional exibe apenas os campos brutos permitidos."
       ]
     },
     {
@@ -715,9 +866,19 @@
   ],
   "extras": [
     {
-      "name": "Nexlev MCP no ChatGPT/Claude",
-      "status": "not_implemented",
-      "boundary": "Nenhum MCP Nexlev ou substituto de MCP publicado."
+      "name": "MCP local próprio para clientes compatíveis",
+      "status": "implemented",
+      "boundary": "Cinco ferramentas próprias somente para leitura por processo stdio separado: capacidades, análise de dados locais e listar/abrir/exportar histórico. Desativado por padrão, ativação/conexão manual; não configura clientes, usa Nexlev, chama IA/rede ou altera canal/histórico.",
+      "referenceFeature": "MCP no ChatGPT/Claude",
+      "source": [
+        "server/mcp.mjs",
+        "server/history.mjs"
+      ],
+      "tests": [
+        "tests/mcp.test.ts"
+      ],
+      "verificationStatus": "local_protocol_fixtures_only",
+      "runtimeVerificationStatus": "user_client_configuration_not_performed"
     },
     {
       "name": "Guia visual ChatGPT/Claude",
@@ -750,15 +911,18 @@
     "featureStatusMeaning": "Estado de implementação no escopo da boundary; não confirma paridade, cobertura completa do YouTube ou êxito em extensão instalada.",
     "fixtureScope": "Testes unitários, DOM e contratos usam fixtures. Testes HTTP usam servidor próprio em loopback; provedores de IA são simulados somente nos testes.",
     "browserUi": {
-      "status": "passed",
-      "tests": 14,
+      "status": "fixture_tests_passed",
       "sources": [
         "tests/browser/ui.spec.ts",
         "tests/browser/studio-ui.spec.ts",
         "tests/browser/research-ui.spec.ts",
-        "tests/browser/omni-ui.spec.ts"
+        "tests/browser/omni-ui.spec.ts",
+        "tests/browser/analytics.spec.ts",
+        "tests/browser/official-search.spec.ts",
+        "tests/browser/history.spec.ts"
       ],
-      "scope": "Dois cenários UI/canvas, quatro Studio, três pesquisa/timeline e cinco Omni. Bundles próprios reais, transporte Chrome e requisições substituídos por fixtures. Não é extensão instalada, conta real ou acesso ao Omni do usuário."
+      "scope": "Bundles próprios reais com Chrome/transporte/dados de fixtures; histórico usa relay HTTP ao servidor próprio real em loopback e arquivos temporários. Não equivale a extensão instalada, conta real, chave oficial ou Omni do usuário.",
+      "testsPassed": 27
     },
     "installedExtension": {
       "status": "blocked_by_environment_policy",
@@ -778,6 +942,38 @@
       "status": "fetch_failed",
       "target": "https://www.youtube.com/@YouTube/videos",
       "scope": "Tentativa anônima sem conta informada pelo responsável pela integração; não houve resposta utilizável. Compatibilidade do parser com a fonte pública atual permanece não verificada."
+    },
+    "stage4Modules": {
+      "status": "fixture_tests_and_full_checks_passed",
+      "sources": [
+        "tests/analytics.test.ts",
+        "tests/youtube.test.ts",
+        "tests/history.test.ts",
+        "tests/mcp.test.ts"
+      ],
+      "scope": "Cálculos locais, transporte oficial injetado, arquivos temporários e protocolo MCP em memória/stdio. Sem serviços do usuário, conta, credencial real ou consumo de cota."
+    },
+    "officialYouTubeApi": {
+      "status": "not_configured_or_contacted_in_execution",
+      "scope": "Fonte opt-in implementada com fixtures; nenhuma chave real foi criada/lida/usada, nem pesquisa/cota real consultada."
+    },
+    "mcpClient": {
+      "status": "explicit_local_fixture_protocol_only",
+      "scope": "Factory, schemas, transporte em memória e processo stdio testados; nenhum cliente do usuário foi registrado ou configurado."
+    },
+    "fullChecks": {
+      "date": "2026-11-03",
+      "typecheck": "passed",
+      "lint": "passed",
+      "build": "passed",
+      "unitAndIntegrationTestsPassed": 295,
+      "testFiles": 20,
+      "browserTestsPassed": 27,
+      "installedExtensionTestsSkipped": 2
+    },
+    "nativeFixtureLoopback": {
+      "status": "blocked_by_chromium_local_network_access",
+      "scope": "Fetch da página HTTPS de teste ao loopback foi negado. Fixture usa relay HTTP ao mesmo servidor real. Nenhuma política ou permissão foi alterada; transporte nativo da extensão continua não verificado."
     }
   },
   "remainingWork": {
@@ -787,20 +983,26 @@
       "Timeline do player nativo com busca/cópia/exportação de trechos e proteção de identidade.",
       "Rascunhos mid-roll por controles reconhecidos, prévia e cancelamento; validação de comentário reciclado.",
       "Transação de screenshot com medição antes/depois e descarte quando o contexto muda.",
-      "Ponte OmniProviders com catálogo explícito, seleção por capacidade/ID/origem, Responses JSON/SSE e artefatos autenticados; chaves permanecem no servidor."
+      "Ponte OmniProviders com catálogo explícito, seleção por capacidade/ID/origem, Responses JSON/SSE e artefatos autenticados; chaves permanecem no servidor.",
+      "Relatório local com cobertura e procedência, deduplicação, filtros preservando a baseline, canais/meses e exports JSON/CSV/Markdown.",
+      "Fonte oficial opcional com consentimento, chave só no servidor, valores brutos isolados e prazo/cancelamento sem retries.",
+      "Histórico próprio manual com índice limitado, escrita atômica, legado porID e diferenças entre observações reais.",
+      "MCP próprio stdio somente para leitura, desativado por padrão, com cinco ferramentas e limites de entrada/saída."
     ],
     "runtimePending": [
       "Extensão instalada bloqueada pela política gerenciada do Chromium; dois cenários ignorados, sem contorno.",
       "Consulta anônima pública de @YouTube/videos falhou neste ambiente; parser/fonte atual não confirmado.",
       "Layouts e aceitação do servidor YouTube/Studio não verificados em conta real; testes usam fixtures.",
-      "OmniProviders do usuário não acessado: contrato verificado em repositório e integração em fixtures; conectividade/geração real exigem configuração local pelo operador."
+      "OmniProviders do usuário não acessado: contrato verificado em repositório e integração em fixtures; conectividade/geração real exigem configuração local pelo operador.",
+      "YouTube Data API não acessada com chave real; MCP não registrado em aplicativo do usuário."
     ],
     "productConfiguration": [
       "IA: executar ponte Prevlev na máquina do Omni existente, configurar origem/chave do serviço apenas no servidor se exigida e escolher um modelo disponível; nenhum modelo real foi selecionado ou gerado nesta execução.",
-      "Pesquisa global: fonte autorizada, aquisição e integração ainda não implementadas.",
       "Studio privado: não há integração com APIs privadas de insights.",
       "Financeiro: receita/RPM/geografia/contratos não disponíveis não são inventados.",
-      "Nuvem/MCP: sincronização, autenticação multiusuário e MCP não implementados."
+      "Fonte oficial opcional: ativar explicitamente e fornecer chave existente autorizada no servidor. Isso não habilita métricas derivadas, dados privados ou cobertura integral.",
+      "Histórico: iniciar backend pessoal com DATA_DIR e registrar observações por ação explícita; MCP: iniciar/conectar manualmente processo stdio se desejado.",
+      "Nuvem: sincronização e autenticação/isolamento multiusuário não implementados."
     ]
   },
   "omniProvidersIntegration": {
@@ -811,5 +1013,48 @@
     "providerCredentialsLocation": "existing_omni_service",
     "sidecarAccessKeyLocation": "prevlev_backend_environment_only",
     "browserAccess": "prevlev_backend_only"
+  },
+  "officialYouTubeIntegration": {
+    "source": "youtube-data-api",
+    "defaultEnabled": false,
+    "serverKeyOnly": true,
+    "perActionConsentRequired": true,
+    "rawOnly": true,
+    "derivedMetricsAllowedInPrevlev": false,
+    "persistedByPrevlev": false,
+    "uiRetention": "memory_only_max_24h_or_clear_close",
+    "uiPagination": "manual_max_3_pages_25_results_each",
+    "userApiAccessed": false,
+    "documentation": "docs/YOUTUBE.md"
+  },
+  "ownHistoryIntegration": {
+    "store": "observations-v1.json",
+    "maxRecords": 5000,
+    "maxBytes": 10485760,
+    "automaticCollection": false,
+    "officialApiRecordsAccepted": false,
+    "legacyCompatibility": "recognized_sha256_files_by_video_id_only",
+    "documentation": "docs/BACKEND.md",
+    "timestamps": {
+      "observedAt": "valid_full_utc_non_future_collection_time_preserved",
+      "recordedAt": "server_save_time",
+      "missingObservedAt": "record_time_fallback_not_proof_of_freshness"
+    }
+  },
+  "mcpIntegration": {
+    "transport": "stdio",
+    "defaultEnabled": false,
+    "readOnly": true,
+    "network": false,
+    "ai": false,
+    "tools": [
+      "prevlev_capabilities",
+      "analyze_dataset",
+      "history_list",
+      "history_get",
+      "history_export"
+    ],
+    "userClientConfigured": false,
+    "documentation": "docs/MCP.md"
   }
 }

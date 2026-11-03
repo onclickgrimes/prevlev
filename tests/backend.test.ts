@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Server } from "node:http";
+import { request, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { configFromEnv, createPrevlevServer } from "../server/index.mjs";
 import { analyzeDataset } from "../server/analysis.mjs";
@@ -25,6 +25,93 @@ afterEach(async () => {
       .splice(0)
       .map((path) => rm(path, { recursive: true, force: true })),
   );
+});
+
+describe("rotas opcionais de pesquisa oficial e histórico local",()=>{
+  const channelId=`UC${'a'.repeat(22)}`;
+  const snippet={title:"Vídeo fixture",channelId,channelTitle:"Canal fixture",publishedAt:"2026-10-01T00:00:00Z",thumbnails:{default:{url:"https://i.ytimg.com/vi/aaaaaaaaaaa/default.jpg"}}};
+  const json=(body:unknown)=>new Response(JSON.stringify(body),{headers:{"Content-Type":"application/json"}});
+  const post=(base:string,path:string,input:unknown,headers:Record<string,string>={})=>fetch(`${base}${path}`,{method:"POST",headers:{"Content-Type":"application/json",...headers},body:JSON.stringify(input)});
+  async function historyDirectory(){const dataDir=await mkdtemp(join(tmpdir(),"prevlev-route-history-"));directories.push(dataDir);return dataDir;}
+  it("inicia desativado sem acessar fonte ou expor chaves e valida retenção",async()=>{
+    expect(configFromEnv({})).toMatchObject({youtubeEnabled:false,youtubeApiKey:"",historyMaxRecords:5000,mcpEnabled:false});
+    expect(configFromEnv({YOUTUBE_ENABLED:"true",YOUTUBE_API_KEY:"fixture-official-key",MCP_ENABLED:"true",HISTORY_MAX_RECORDS:"100"})).toMatchObject({youtubeEnabled:true,youtubeApiKey:"fixture-official-key",mcpEnabled:true,historyMaxRecords:100});
+    expect(configFromEnv({YOUTUBE_ENABLED:"yes",MCP_ENABLED:"1"})).toMatchObject({youtubeEnabled:false,mcpEnabled:false});
+    for(const historyMaxRecords of [0,5001,NaN,1.5])expect(()=>createPrevlevServer({historyMaxRecords})).toThrow("HISTORY_MAX_RECORDS");
+    const fetcher=vi.fn<typeof fetch>();const base=await start({youtubeEnabled:true,youtubeApiKey:"fixture-official-key",mcpEnabled:true},{fetcher});
+    const health=await (await fetch(`${base}/health`)).json();
+    expect(health).toMatchObject({data:{youtubeEnabled:true,youtubeConfigured:true,youtubeSource:"youtube-data-api",youtubeReachable:null,historyMaxRecords:5000,mcpEnabled:true}});
+    expect(JSON.stringify(health)).not.toMatch(/fixture-official-key|youtubeApiKey|remainingQuota|quotaRemaining|mcpRunning/);
+    expect((await post(base,"/v1/mcp",{})).status).toBe(404);expect(fetcher).not.toHaveBeenCalled();
+  });
+  it("exige ativação, chave e consentimento explícito antes de qualquer busca",async()=>{
+    const cases=[{options:{},apiConsent:true},{options:{youtubeEnabled:true},apiConsent:true},{options:{youtubeEnabled:false,youtubeApiKey:"fixture-official-key"},apiConsent:true},{options:{youtubeEnabled:true,youtubeApiKey:"fixture-official-key"},apiConsent:false}];
+    for(const {options,apiConsent} of cases){const fetcher=vi.fn<typeof fetch>();const base=await start(options,{fetcher});
+      expect(await (await post(base,"/v1/youtube/search",{q:"fixture",type:"video",apiConsent})).json()).toMatchObject({status:"not_configured",source:"youtube-data-api"});expect(fetcher).not.toHaveBeenCalled();}
+  });
+  it("aplica origem, autenticação, JSON e limite de corpo às duas rotas",async()=>{
+    const origin="chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const fetcher=vi.fn<typeof fetch>();const base=await start({token:"fixture-client-token",allowedOrigins:[origin],dataDir:await historyDirectory()},{fetcher});
+    const headers={Origin:origin,Authorization:"Bearer fixture-client-token"};
+    for(const path of ["/v1/youtube/search","/v1/history"]){
+      expect((await post(base,path,{}, {Origin:"https://evil.example",Authorization:headers.Authorization})).status).toBe(403);
+      expect((await post(base,path,{}, {Origin:origin})).status).toBe(401);
+      expect((await post(base,path,[],headers)).status).toBe(400);
+      expect((await fetch(`${base}${path}`,{method:"POST",headers:{...headers,"Content-Type":"text/plain"},body:"{}"})).status).toBe(415);
+      expect((await fetch(`${base}${path}`,{method:"POST",headers:{...headers,"Content-Type":"application/json"},body:"invalid json"})).status).toBe(400);
+      expect((await post(base,path,{padding:"x".repeat(1024*1024)},headers)).status).toBe(413);
+    }
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+  it("mantém os dados oficiais separados e não cancela após o corpo normal terminar",async()=>{
+    const fetcher=vi.fn<typeof fetch>().mockImplementation(async(input,options)=>{
+      expect(options?.signal?.aborted).toBe(false);
+      const url=new URL(String(input));
+      if(url.pathname.endsWith('/search'))return json({items:[{id:{kind:"youtube#video",videoId:"aaaaaaaaaaa"},snippet}],nextPageToken:"next-fixture"});
+      if(url.pathname.endsWith('/videos'))return json({items:[{id:"aaaaaaaaaaa",snippet,contentDetails:{duration:"PT5M"},statistics:{viewCount:"123",likeCount:"5"}}]});
+      if(url.pathname.endsWith('/channels'))return json({items:[{id:channelId,snippet:{title:"Canal fixture"},statistics:{subscriberCount:"1200",hiddenSubscriberCount:false,viewCount:"123",videoCount:"4"}}]});
+      throw new Error("Unexpected fixture route");
+    });
+    const base=await start({youtubeEnabled:true,youtubeApiKey:"fixture-official-key"},{fetcher});
+    const response=await post(base,"/v1/youtube/search",{q:"fixture",type:"video",apiConsent:true,maxResults:10});
+    const result=await response.json();expect(result).toMatchObject({status:"ok",source:"youtube-data-api",data:{source:"youtube-data-api",requestCount:3,nextPageToken:"next-fixture",videos:[{id:"aaaaaaaaaaa",viewCount:"123"}]}});
+    expect(JSON.stringify(result)).not.toMatch(/fixture-official-key|"vph"|"outlier"|"estimatedRevenue"/);
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    for(const [url,options] of fetcher.mock.calls){expect(String(url)).not.toContain("fixture-official-key");expect(options?.signal?.aborted).toBe(false);}
+  });
+  it("aborta a busca quando o cliente fecha a resposta e impede metadados seguintes",async()=>{
+    let receivedSignal:AbortSignal|undefined;
+    let entered:()=>void=()=>{};
+    const firstRequest=new Promise<void>(resolve=>{entered=resolve;});
+    const fetcher=vi.fn<typeof fetch>().mockImplementation(async(_url,options)=>{
+      receivedSignal=options?.signal??undefined;entered();
+      return new Promise<Response>((_resolve,reject)=>{receivedSignal?.addEventListener('abort',()=>reject(new Error('Fixture aborted')),{once:true});});
+    });
+    const base=await start({youtubeEnabled:true,youtubeApiKey:"fixture-official-key"},{fetcher});
+    const client=request(`${base}/v1/youtube/search`,{method:"POST",headers:{"Content-Type":"application/json"}});
+    client.on('error',()=>{});client.end(JSON.stringify({q:"fixture",type:"video",apiConsent:true}));
+    await firstRequest;expect(receivedSignal?.aborted).toBe(false);client.destroy();
+    await vi.waitFor(()=>expect(receivedSignal?.aborted).toBe(true));expect(fetcher).toHaveBeenCalledOnce();
+  });
+  it("registra, consulta, exporta e exclui somente histórico local mediante confirmação",async()=>{
+    const base=await start({dataDir:await historyDirectory()});
+    const local={id:"abcdefghijk",title:"Fixture local",url:"https://www.youtube.com/watch?v=abcdefghijk",views:100,source:"youtube-dom"};
+    expect(await (await post(base,"/v1/history",{action:"record",videos:[local]})).json()).toMatchObject({status:"ok",source:"prevlev:history",data:{recorded:1}});
+    for(const action of ["list","get","export"]){const response=await post(base,"/v1/history",{action,videoId:local.id});const result=await response.json();expect(result).toMatchObject({status:"ok",source:"prevlev:history",data:{records:[{videoId:local.id}]}});}
+    expect(await (await post(base,"/v1/history",{action:"record",videos:[{...local,source:"youtube-data-api"}]})).json()).toMatchObject({status:"error"});
+    expect(await (await post(base,"/v1/history",{action:"delete",videoId:local.id})).json()).toMatchObject({status:"error"});
+    expect(await (await post(base,"/v1/history",{action:"delete",videoId:local.id,confirm:true})).json()).toMatchObject({status:"ok",data:{deleted:1}});
+    expect(await (await post(base,"/v1/history",{action:"list"})).json()).toMatchObject({status:"ok",data:{records:[]}});
+  });
+  it("compartilha o limite das novas rotas com catálogo e análise",async()=>{
+    const fetcher=vi.fn<typeof fetch>();const base=await start({aiProvider:"openai-compatible",dataDir:await historyDirectory()},{fetcher});
+    for(let index=0;index<10;index++){
+      expect((await post(base,"/v1/youtube/search",{q:"fixture",apiConsent:false})).status).toBe(200);
+      expect((await post(base,"/v1/history",{action:"list"})).status).toBe(200);
+      expect((await fetch(`${base}/v1/ai/catalog`)).status).toBe(422);
+    }
+    expect((await post(base,"/v1/analyze",{feature:"niche",payload:{videos}})).status).toBe(429);expect(fetcher).not.toHaveBeenCalled();
+  });
 });
 async function start(
   options: Parameters<typeof createPrevlevServer>[0] = {},
@@ -62,6 +149,17 @@ const videos = [
 ];
 
 describe("análises próprias com dados observados", () => {
+  it("recusa a amostra inteira com proveniência da API antes de qualquer análise ou projeção",async()=>{
+    const api={id:"fixture-api-row",title:"API fixture",views:123,source:"youtube-data-api"};
+    const features=["channel-report","channel-analytics","combined-analytics","search-analysis","niche","similar-videos","similar-channels","sponsorships","view-history","unknown-feature"];
+    for(const feature of features){
+      for(const payload of [{source:"youtube-data-api",videos,text:"Patrocinado por fixture"},{videos:[...videos,api],text:"Patrocinado por fixture"},{videos:[api,...videos],text:"Patrocinado por fixture"},{videos:[...videos,{...api,id:videos[0].id}],text:"Patrocinado por fixture"}]){
+        await expect(analyzeDataset(feature,payload)).rejects.toThrow("youtube-data-api");
+      }
+    }
+    const local=await analyzeDataset("channel-report",{source:"youtube-dom",videos:videos.map(video=>({...video,source:"youtube-dom"}))});
+    expect(local).toMatchObject({status:"ok",data:{videoCount:3,totalObservedViews:400}});
+  });
   it("calcula cobertura sem inventar views ausentes e remove vídeos repetidos", async () => {
     const result = await analyzeDataset(
       "channel-report",
@@ -160,6 +258,19 @@ describe("análises próprias com dados observados", () => {
 });
 
 describe("servidor HTTP real em loopback", () => {
+  it("recusa datasets mistos pela rota HTTP sem devolver métricas parciais",async()=>{
+    const fetcher=vi.fn<typeof fetch>();const base=await start({}, {fetcher});
+    for(const [feature,payload] of [
+      ["channel-report",{videos:[...videos,{id:"fixture-api-row",title:"API fixture",views:123,source:"youtube-data-api"}]}],
+      ["sponsorships",{source:"youtube-data-api",text:"Patrocinado por fixture"}],
+      ["unknown-feature",{source:"youtube-data-api",videos}],
+    ] as const){
+      const response=await fetch(`${base}/v1/analyze`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({feature,payload})});
+      expect(response.status).toBe(400);const result=await response.json();expect(result).toMatchObject({status:"error",error:expect.stringContaining("amostra inteira")});
+      expect(result).not.toHaveProperty("data");expect(JSON.stringify(result)).not.toMatch(/totalObservedViews|medianViews|mentions|score/);
+    }
+    expect(fetcher).not.toHaveBeenCalled();
+  });
   it("responde health e exige origem exata e token para análise", async () => {
     const origin = "chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     const base = await start({ token: "test-token", allowedOrigins: [origin] });
