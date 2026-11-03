@@ -30,12 +30,18 @@ export interface Settings {
   showMetrics: boolean;
   backendUrl: string;
   backendToken: string;
+  aiModel: string;
+  aiStreaming: boolean;
+  aiOrigin: string;
 }
 export const defaultSettings: Settings = {
   hideShorts: false,
   showMetrics: true,
   backendUrl: "",
   backendToken: "",
+  aiModel: "",
+  aiStreaming: false,
+  aiOrigin: "http://127.0.0.1:7814",
 };
 export interface PageSnapshot {
   url: string;
@@ -68,4 +74,20 @@ export interface RemoteResponse {
   data?: unknown;
   error?: string;
   limitations?: string[];
+}
+export interface AiCatalogModel {
+  id: string;
+  provider: string;
+  label: string;
+  inputModalities: string[];
+  outputModalities: string[];
+  operations: string[];
+  streaming: boolean;
+  textSupported: boolean;
+  imageSupported: boolean;
+}
+export interface AiCatalogData {
+  origin: string;
+  models: AiCatalogModel[];
+  warnings: string[];
 }

@@ -6,7 +6,7 @@ O Prevlev não inclui telemetria, cadastro comercial ou conexão aos servidores 
 
 As configurações, a última coleta e o Swipe File ficam em `chrome.storage.local`, no perfil atual do Chrome. A coleta pode conter títulos, IDs, URLs, canais, views, datas aproximadas, inscritos quando visíveis, comentários, transcrição aberta e métricas reconhecidas do Studio. O arquivo não sincroniza a biblioteca entre dispositivos.
 
-A origem e o token do backend também ficam no armazenamento local da extensão. Use um token exclusivo para essa instalação. Credenciais de provedores de IA devem permanecer no ambiente do servidor. Não coloque senhas de contas ou chaves de IA no campo de token da extensão.
+A origem e o token do backend também ficam no armazenamento local da extensão. Use um token exclusivo para essa instalação. A seleção de modelo de IA, preferência de streaming e origem do catálogo ficam nesse perfil, sem chave de acesso Omni. `OMNI_API_KEY` permanece somente no ambiente do backend Prevlev; credenciais de provedores e OAuth continuam no serviço Omni existente. Não coloque senhas de contas ou chaves Omni/provedor no campo de token da extensão.
 
 Imagens escolhidas para compressão/prévia e frames são processados em canvas no navegador. O download de uma thumbnail acessa o CDN público do YouTube, sem enviar credenciais de conta. A leitura dos cards usa a página do YouTube já aberta e sua sessão normal, quando houver; não exige uma sessão Nexlev.
 
@@ -24,7 +24,13 @@ O envio manual usa dados específicos para cada operação. Relatórios e simila
 
 O backend incluído não persiste os datasets de relatórios. O recurso `view-history` armazena observações recebidas em `DATA_DIR`; não recupera dados anteriores nem gera histórico fictício. O código não grava comentários, transcrições ou chaves em logs. Proxies, hospedagem e provedores configurados pelo operador podem ter suas próprias políticas e logs.
 
-Quando IA estiver configurada, o backend envia ao provedor o texto/briefing necessário à ação e usa a credencial presente no ambiente do servidor. Sem configuração, responde `not_configured` e não chama um provedor. Testes usam fixtures, sem consumo pago ou contas reais.
+No modo padrão `AI_PROVIDER=omni`, o envio de IA segue extensão → backend Prevlev → serviço Omni existente → provedor selecionado. A extensão acessa somente a origem do backend Prevlev, com seu token próprio. A origem Omni vem de `OMNI_BASE_URL` no ambiente do servidor e aparece na UI somente para leitura; não há endpoint para alterar remotamente a configuração do Omni. A chave existente de acesso ao serviço, se exigida, fica em `OMNI_API_KEY` no servidor e não é enviada ao navegador.
+
+**Consultar modelos** é uma ação explícita: o backend consulta o catálogo Omni, devolvendo somente os descritores normalizados necessários à escolha e avisos. Isso pode envolver a descoberta normal de modelos pelo serviço, mas não gera conteúdo nem confirma saldo/permissão de inferência. A seleção é vinculada à origem consultada. Para gerar, o servidor revalida o modelo e envia apenas o texto/comentários/briefing necessários à tarefa. Não assume capacidades pelo nome do provedor nem troca para outro modelo após erro.
+
+Texto usa Responses sem armazenamento de conversa (`store: false`), conforme o contrato Omni; isso não desliga automaticamente seu recorder, logs de proxy ou políticas do provedor. SSE incompleto ou com erro não é apresentado como resultado final. Imagens exigem operação e saída anunciadas e são obtidas pelo backend como artefatos autenticados da mesma origem Omni. A chave não é anexada a links de mídia. Uma geração já aceita pelo provedor pode consumir cota mesmo se o cliente deixar de esperar.
+
+Sem seleção/configuração compatível, a função retorna indisponibilidade explícita; nenhum resultado fictício é apresentado como real. O modo anterior `AI_PROVIDER=openai-compatible` só é usado por configuração expressa e mantém suas chaves no servidor. Não há fallback entre esse modo e Omni. Os testes usam fixtures, sem acessar serviço, contas ou configurações do usuário e sem consumir gerações ou créditos. O código-fonte do contrato foi lido; o serviço existente não foi acessado nesta execução. Veja [OMNIPROVIDERS.md](OMNIPROVIDERS.md).
 
 Veja [BACKEND.md](BACKEND.md) para autenticação, CORS, limites, variáveis de ambiente e as limitações da instalação pessoal. Publicação multiusuário exige autenticação e isolamento próprios.
 

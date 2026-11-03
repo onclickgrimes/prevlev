@@ -29,7 +29,7 @@
           <p>
             Seus dados ficam aqui até você solicitar uma análise no seu backend.
           </p>
-          <span class="pill">VERSÃO 0.2 · INDEPENDENTE</span>
+          <span class="pill">VERSÃO 0.3 · INDEPENDENTE</span>
         </div>
       </aside>
       <main>
@@ -640,6 +640,12 @@
             </p>
             <div id="remote-images"></div>
             <pre id="remote-result"></pre>
+            <p class="footnote">
+              Modelo de IA:
+              <span id="ai-selected-label"
+                >Nenhum selecionado. Configure na aba Conexão.</span
+              >
+            </p>
           </div>
         </section>
         <section id="connection" class="page" hidden>
@@ -670,6 +676,47 @@
               exclusivo do Prevlev; chaves do provedor de IA ficam apenas no
               servidor.
             </p>
+            <h3>OmniProviders · inteligência artificial</h3>
+            <p class="muted">
+              O backend Prevlev faz a ponte com o OmniProviders. As chaves do
+              serviço e dos provedores ficam no servidor. Consultar modelos não
+              inicia uma geração.
+            </p>
+            <label
+              >Origem do OmniProviders informada pelo servidor<input
+                id="ai-origin"
+                type="url"
+                value="http://127.0.0.1:7814"
+                readonly
+            /></label>
+            <p class="footnote">
+              Para mudar o endereço, edite OMNI_BASE_URL no arquivo .env do
+              backend Prevlev e reinicie esse processo. O endereço local é o da
+              máquina que executa o backend.
+            </p>
+            <button id="ai-discover">Consultar modelos no OmniProviders</button>
+            <label
+              >Provedor<select id="ai-provider-select">
+                <option value="">Selecione após consultar</option>
+              </select></label
+            >
+            <label
+              >Modelo<select id="ai-model-select">
+                <option value="">Nenhum modelo selecionado</option>
+              </select></label
+            >
+            <label class="toggle"
+              ><input id="ai-stream" type="checkbox" disabled /> Usar transporte
+              streaming de texto quando anunciado</label
+            >
+            <p class="footnote">
+              O resultado é exibido ao concluir. Não há troca automática de
+              provedor/modelo nem repetição de geração em caso de falha.
+            </p>
+            <p id="ai-capabilities" class="muted">
+              Capacidades ainda não consultadas.
+            </p>
+            <p id="ai-catalog-status" role="status" aria-live="polite"></p>
             <h3>Dados deste navegador</h3>
             <button id="clear-data">Apagar coleta e biblioteca locais</button>
           </div>

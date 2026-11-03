@@ -1,4 +1,4 @@
-# Prevlev · v0.2.0
+# Prevlev · v0.3.0
 
 Extensão Chrome Manifest V3 independente para pesquisar vídeos, preparar imagens e operar ferramentas assistidas no YouTube/Studio. O núcleo funciona no navegador; análises de amostra e IA usam um backend próprio opcional.
 
@@ -32,7 +32,7 @@ A coleta considera o conteúdo carregado na página: não percorre automaticamen
 - Compressão proporcional de imagens, prévia de thumbnail/título, download/cópia de thumbnails públicas e captura de frame ou de áreas visíveis.
 - Calculadora de lucro, leitura de métricas visíveis e ações assistidas no Studio com prévia, confirmação e cancelamento.
 - Swipe File local com referências, pastas por nome e importação/exportação JSON.
-- Backend opcional com relatórios sobre os dados enviados, similaridade lexical, registro de observações de views e adaptador configurável de IA.
+- Backend opcional com relatórios sobre os dados enviados, similaridade lexical, registro de observações de views e integração com o OmniProviders existente, com seleção explícita de provedor/modelo.
 
 VPH é a média de views desde a publicação, e não as visualizações da última hora. Outlier usa pelo menos três outros vídeos comparáveis da amostra. Quando há identidade de canal conhecida, não mistura canais ou referências sem identidade; quando o alvo não tem identidade, a referência é a amostra informada. Marcadores de anúncios não confirmam que um criador recebe receita. Não são produzidos valores de RPM, geografia ou receita de canais a partir de dados ausentes.
 
@@ -42,11 +42,15 @@ O painel de canal não pagina a coleção e ordena apenas os vídeos reconhecido
 
 ## Backend e IA opcionais
 
-As ferramentas locais funcionam com a conexão vazia. Para usar análises remotas, siga [docs/BACKEND.md](docs/BACKEND.md), configure seu servidor e salve a origem/token na aba **Conexão**. Cada envio ao backend parte de uma ação explícita na interface.
+As ferramentas locais funcionam com a conexão vazia. Para análises remotas, siga [BACKEND.md](docs/BACKEND.md), configure seu servidor e salve a origem/token na aba **Conexão**. Cada envio parte de uma ação explícita. O servidor incluído analisa o dataset recebido; não substitui uma base global de pesquisa do YouTube.
 
-O servidor incluído analisa apenas o dataset recebido; ele não substitui uma base global de pesquisa do YouTube. IA e geração de imagem retornam `not_configured` até que o operador escolha um provedor/modelo e forneça as próprias credenciais no servidor. A extensão nunca precisa receber a chave do provedor de IA. Os testes não consomem serviços pagos.
+O modo padrão de IA usa o **OmniProviders já existente**: extensão → backend Prevlev em `127.0.0.1:8787` → Omni em `127.0.0.1:7814`. No Node.js 24, execute `npm ci`, `npm run build`, em uma instalação nova copie `.env.example` para `.env` (preserve o arquivo existente se já houver), preencha os placeholders localmente e inicie `npm run server`. A origem Omni é alterada somente por `OMNI_BASE_URL` no servidor; reinicie o backend após mudar `.env`. Os dois loopbacks pressupõem navegador, Prevlev e Omni na mesma máquina.
 
-Para hospedagem pública ainda é necessário escolher infraestrutura, HTTPS, autenticação de produção e isolamento de dados entre usuários. O backend fornecido é destinado a uma instalação pessoal.
+Na extensão, clique em **Consultar modelos** e escolha o provedor/modelo anunciado para a tarefa. O seletor não escolhe o primeiro modelo nem substitui uma seleção incompatível. Texto usa as capacidades Responses JSON/SSE; thumbnail só fica disponível se o catálogo anunciar geração e saída de imagem. Um catálogo acessível não comprova saldo ou geração real. O código revalida o catálogo antes de gerar e mantém indisponibilidades explícitas.
+
+A chave existente de acesso ao serviço Omni, quando exigida, fica em `OMNI_API_KEY` apenas no ambiente do backend. Credenciais de provedores/OAuth permanecem no Omni; não vão para a extensão ou para o chat. A instalação e as fontes verificadas do contrato estão em [OMNIPROVIDERS.md](docs/OMNIPROVIDERS.md). O modo anterior permanece disponível por escolha explícita de `AI_PROVIDER=openai-compatible`, sem fallback automático entre modos.
+
+Os testes usam fixtures, sem acessar o serviço/contas Omni do usuário nem consumir gerações ou créditos. Para hospedagem pública ainda é necessário escolher infraestrutura, HTTPS, autenticação de produção e isolamento de dados. O backend fornecido destina-se a uma instalação pessoal.
 
 ## Ações no Studio
 
@@ -68,7 +72,7 @@ npm run test:ui
 
 Os testes cobrem cálculos e incertezas, parsing PT/EN, dados ausentes, coleta em fixtures, transcrição, exportação, limites de mídia, confirmação/cancelamento do Studio e chamadas HTTP do backend em loopback. O adaptador de IA usa fixtures e respostas simuladas identificadas somente nos testes. A aprovação dessas verificações não comprova compatibilidade com todos os layouts ou uma integração real com provedor externo.
 
-`test:ui` requer o build em `dist/` e um Chromium disponível. Nove testes de navegador em fixtures passaram: dois de UI/canvas, quatro de Studio e três de pesquisa/timeline. Os cenários integrados usam os bundles próprios `workspace.js`/`content.js` com transporte Chrome simulado e URLs interceptadas, sem conta real. Os dois testes de extensão instalada foram explicitamente ignorados porque a política gerenciada deste ambiente contém `ExtensionInstallBlocklist=[*]`. Não houve contorno da política; esses testes não contam como aprovados.
+`test:ui` requer o build em `dist/` e um Chromium disponível. Os testes de navegador em fixtures cobrem UI/canvas, Studio e pesquisa/timeline; o resultado consolidado desta versão está em [VALIDATION.md](docs/VALIDATION.md). Os cenários integrados usam os bundles próprios `workspace.js`/`content.js` com transporte Chrome simulado e URLs interceptadas, sem conta real. Os testes de extensão instalada foram explicitamente ignorados porque a política gerenciada deste ambiente contém `ExtensionInstallBlocklist=[*]`. Não houve contorno da política; esses testes não contam como aprovados.
 
 Uma tentativa anônima de consultar `https://www.youtube.com/@YouTube/videos` retornou `fetch failed` neste ambiente. O parser público tem testes em fixtures; compatibilidade com a fonte atual, seletores reais do Studio e aceitação de ações pelo servidor continuam sem validação. A [matriz de cobertura](docs/FEATURES.md) separa implementação local, runtime pendente e configuração/trabalho de produto.
 
@@ -87,7 +91,7 @@ Capturas ativam a aba e medem o alvo antes e depois de capturar. Mudanças detec
 
 ## Pendências além do runtime
 
-Configurar IA exige escolher backend/provedor/modelos e fornecer credenciais no servidor. Pesquisa global exige uma fonte autorizada e integração adicional. Insights privados do Studio, dados financeiros indisponíveis, sincronização em nuvem, autenticação multiusuário e MCP não estão implementados. Configurar a URL do backend não cria essas integrações: o backend incluído continua trabalhando sobre os dados enviados.
+Usar IA exige conectar o backend ao Omni existente, consultar seu catálogo e escolher um modelo compatível. Quando o serviço exige chave de acesso, ela deve ser fornecida somente no ambiente do servidor. Pesquisa global exige uma fonte autorizada e integração adicional. Insights privados do Studio, dados financeiros indisponíveis, sincronização em nuvem, autenticação multiusuário e MCP não estão implementados. Configurar a URL do backend não cria essas integrações: o backend incluído continua trabalhando sobre os dados enviados.
 
 ## Método e limites da reconstrução
 

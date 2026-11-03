@@ -155,13 +155,11 @@ export async function analyzeDataset(
       );
     return ok(
       {
-        mentions: lines
-          .slice(0, 200)
-          .map((excerpt) => ({
-            excerpt: excerpt.slice(0, 1000),
-            classification: "possível divulgação comercial",
-            confidence: "regra textual; requer revisão",
-          })),
+        mentions: lines.slice(0, 200).map((excerpt) => ({
+          excerpt: excerpt.slice(0, 1000),
+          classification: "possível divulgação comercial",
+          confidence: "regra textual; requer revisão",
+        })),
         estimatedRevenue: null,
       },
       [

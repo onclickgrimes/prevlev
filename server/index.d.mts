@@ -5,6 +5,10 @@ export interface BackendConfig {
   token?: string;
   allowedOrigins?: string[];
   dataDir?: string;
+  aiProvider?: "omni" | "openai-compatible";
+  omniBaseUrl?: string;
+  omniApiKey?: string;
+  omniTimeoutMs?: number;
   aiBaseUrl?: string;
   aiApiKey?: string;
   aiModel?: string;

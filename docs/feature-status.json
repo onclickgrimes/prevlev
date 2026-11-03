@@ -1,5 +1,5 @@
 {
-  "version": "0.2.0",
+  "version": "0.3.0",
   "scope": "Implementação independente; não há declaração de paridade completa com Nexlev 3.12.6.",
   "statusDefinitions": {
     "implemented": "Disponível no escopo local descrito, com evidência em fixtures; não significa validação em extensão instalada ou paridade completa.",
@@ -490,26 +490,31 @@
       "name": "Transcrição e ações de IA",
       "status": "partial",
       "execution": "local + backend próprio",
-      "boundary": "Coleta transcrição visível, importa XML/json3/segmentos e exporta texto/VTT/Markdown. Resumo, tópicos e roteiro exigem backend e provedor de IA configurados; texto editado não recebe timestamps inventados.",
+      "boundary": "Transcrição local preservada; resumo, tópicos e roteiro integram OmniProviders via backend Prevlev, com catálogo explícito, modelo exato, origem vinculada e Responses JSON/SSE validado. Texto editado não recebe timestamps inventados. Serviço do usuário não acessado; requer configuração e seleção reais.",
       "source": [
         "src/core/transcript.ts",
         "src/content/youtube.ts",
         "server/ai.mjs",
         "src/ui/workspace.ts",
-        "src/content/timeline.ts"
+        "src/content/timeline.ts",
+        "server/omni.mjs",
+        "src/shared/backend.ts"
       ],
       "tests": [
         "tests/core.test.ts",
         "tests/content-youtube.test.ts",
         "tests/backend.test.ts",
         "tests/timeline.test.ts",
-        "tests/browser/research-ui.spec.ts"
+        "tests/browser/research-ui.spec.ts",
+        "tests/omni.test.ts",
+        "tests/backend-client.test.ts",
+        "tests/browser/omni-ui.spec.ts"
       ],
       "verificationStatus": "fixture_coverage_only",
       "installedExtensionVerification": "blocked_by_environment_policy",
       "runtimeVerificationStatus": "pending_installed_and_live_validation",
       "configurationRequirements": [
-        "Para as ações de IA: escolher e configurar backend, provedor, modelo e credencial próprios; sem configuração retorna not_configured."
+        "Executar o backend Prevlev na máquina do Omni existente; configurar OMNI_BASE_URL (padrão http://127.0.0.1:7814) e chave existente do serviço apenas no servidor se exigida; consultar catálogo e selecionar provider:model compatível. Não houve acesso à instalação do usuário."
       ]
     },
     {
@@ -661,14 +666,25 @@
       "name": "Análise de comentários com IA",
       "status": "configuration_required",
       "execution": "backend próprio + IA",
-      "boundary": "Contrato e adaptador implementados; precisa configurar origem, modelo e credencial no servidor. Sem configuração retorna not_configured; sem consumo pago nos testes.",
-      "source": ["server/ai.mjs", "server/index.mjs", "src/ui/workspace.ts"],
-      "tests": ["tests/backend.test.ts"],
+      "boundary": "Integração OmniProviders por catálogo/capacidades e modelo exato para análise dos comentários filtrados. Credenciais Omni ficam no servidor, catálogo é revalidado a cada geração, falhas não selecionam outro modelo. Exige serviço/conta/modelo configurados pelo operador; somente fixtures verificadas.",
+      "source": [
+        "server/ai.mjs",
+        "server/index.mjs",
+        "src/ui/workspace.ts",
+        "server/omni.mjs",
+        "src/shared/backend.ts"
+      ],
+      "tests": [
+        "tests/backend.test.ts",
+        "tests/omni.test.ts",
+        "tests/backend-client.test.ts",
+        "tests/browser/omni-ui.spec.ts"
+      ],
       "verificationStatus": "fixture_coverage_only",
       "installedExtensionVerification": "blocked_by_environment_policy",
       "runtimeVerificationStatus": "pending_installed_and_live_validation",
       "configurationRequirements": [
-        "Para as ações de IA: escolher e configurar backend, provedor, modelo e credencial próprios; sem configuração retorna not_configured."
+        "Executar o backend Prevlev na máquina do Omni existente; configurar OMNI_BASE_URL (padrão http://127.0.0.1:7814) e chave existente do serviço apenas no servidor se exigida; consultar catálogo e selecionar provider:model compatível. Não houve acesso à instalação do usuário."
       ]
     },
     {
@@ -676,14 +692,24 @@
       "name": "Geração de thumbnails com IA",
       "status": "configuration_required",
       "execution": "backend próprio + IA",
-      "boundary": "Contrato e adaptador de geração implementados; precisa modelo de imagem e provedor próprios. Sem configuração retorna not_configured, sem resultado simulado.",
-      "source": ["server/ai.mjs", "src/ui/workspace.ts"],
-      "tests": ["tests/backend.test.ts"],
+      "boundary": "Geração só é habilitada para modelo com images.generate, saída image e entrada text anunciadas. Usa artefatos autenticados da mesma origem via backend, sem chave no navegador. Modelo textual ou indisponível é recusado, sem geração de teste real nem inferência de suporte pelo nome.",
+      "source": [
+        "server/ai.mjs",
+        "src/ui/workspace.ts",
+        "server/omni.mjs",
+        "src/shared/backend.ts"
+      ],
+      "tests": [
+        "tests/backend.test.ts",
+        "tests/omni.test.ts",
+        "tests/backend-client.test.ts",
+        "tests/browser/omni-ui.spec.ts"
+      ],
       "verificationStatus": "fixture_coverage_only",
       "installedExtensionVerification": "blocked_by_environment_policy",
       "runtimeVerificationStatus": "pending_installed_and_live_validation",
       "configurationRequirements": [
-        "Para as ações de IA: escolher e configurar backend, provedor, modelo e credencial próprios; sem configuração retorna not_configured."
+        "Executar o backend Prevlev na máquina do Omni existente; configurar OMNI_BASE_URL (padrão http://127.0.0.1:7814) e chave existente do serviço apenas no servidor se exigida; consultar catálogo e selecionar provider:model compatível. Não houve acesso à instalação do usuário."
       ]
     }
   ],
@@ -725,13 +751,14 @@
     "fixtureScope": "Testes unitários, DOM e contratos usam fixtures. Testes HTTP usam servidor próprio em loopback; provedores de IA são simulados somente nos testes.",
     "browserUi": {
       "status": "passed",
-      "tests": 9,
+      "tests": 14,
       "sources": [
         "tests/browser/ui.spec.ts",
         "tests/browser/studio-ui.spec.ts",
-        "tests/browser/research-ui.spec.ts"
+        "tests/browser/research-ui.spec.ts",
+        "tests/browser/omni-ui.spec.ts"
       ],
-      "scope": "Dois cenários de UI/canvas, quatro de Studio e três de pesquisa/timeline. Bundles próprios workspace.js/content.js reais via transporte Chrome simulado; os cenários integrados interceptam todas as URLs. Não é execução de extensão instalada ou conta real."
+      "scope": "Dois cenários UI/canvas, quatro Studio, três pesquisa/timeline e cinco Omni. Bundles próprios reais, transporte Chrome e requisições substituídos por fixtures. Não é extensão instalada, conta real ou acesso ao Omni do usuário."
     },
     "installedExtension": {
       "status": "blocked_by_environment_policy",
@@ -745,7 +772,7 @@
     },
     "liveAiProvider": {
       "status": "not_performed",
-      "reason": "Nenhuma chamada a provedor pago; configuração real continua necessária."
+      "reason": "Contrato Omni lido no código; testes simulados. Serviço em 127.0.0.1:7814 do usuário, contas, cotas e gerações reais não acessados."
     },
     "anonymousPublicYouTubeSmoke": {
       "status": "fetch_failed",
@@ -759,19 +786,30 @@
       "Painel de amostra pública de canal, marcadores de monetização até cinco vídeos e transporte manual.",
       "Timeline do player nativo com busca/cópia/exportação de trechos e proteção de identidade.",
       "Rascunhos mid-roll por controles reconhecidos, prévia e cancelamento; validação de comentário reciclado.",
-      "Transação de screenshot com medição antes/depois e descarte quando o contexto muda."
+      "Transação de screenshot com medição antes/depois e descarte quando o contexto muda.",
+      "Ponte OmniProviders com catálogo explícito, seleção por capacidade/ID/origem, Responses JSON/SSE e artefatos autenticados; chaves permanecem no servidor."
     ],
     "runtimePending": [
       "Extensão instalada bloqueada pela política gerenciada do Chromium; dois cenários ignorados, sem contorno.",
       "Consulta anônima pública de @YouTube/videos falhou neste ambiente; parser/fonte atual não confirmado.",
-      "Layouts e aceitação do servidor YouTube/Studio não verificados em conta real; testes usam fixtures."
+      "Layouts e aceitação do servidor YouTube/Studio não verificados em conta real; testes usam fixtures.",
+      "OmniProviders do usuário não acessado: contrato verificado em repositório e integração em fixtures; conectividade/geração real exigem configuração local pelo operador."
     ],
     "productConfiguration": [
-      "IA: provedor/modelo/credenciais e backend próprios.",
+      "IA: executar ponte Prevlev na máquina do Omni existente, configurar origem/chave do serviço apenas no servidor se exigida e escolher um modelo disponível; nenhum modelo real foi selecionado ou gerado nesta execução.",
       "Pesquisa global: fonte autorizada, aquisição e integração ainda não implementadas.",
       "Studio privado: não há integração com APIs privadas de insights.",
       "Financeiro: receita/RPM/geografia/contratos não disponíveis não são inventados.",
       "Nuvem/MCP: sincronização, autenticação multiusuário e MCP não implementados."
     ]
+  },
+  "omniProvidersIntegration": {
+    "sourceCommit": "cd4e6a2efd5cdd54ec9bcea274a86ed854932120",
+    "verification": "source_contract_and_injected_fixtures_only",
+    "userServiceAccessed": false,
+    "liveGenerationVerified": false,
+    "providerCredentialsLocation": "existing_omni_service",
+    "sidecarAccessKeyLocation": "prevlev_backend_environment_only",
+    "browserAccess": "prevlev_backend_only"
   }
 }

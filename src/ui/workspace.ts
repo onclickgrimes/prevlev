@@ -12,8 +12,14 @@ import type {
   TranscriptSegment,
   RemoteFeature,
   RemoteResponse,
+  AiCatalogData,
 } from "../shared/types";
-import { backendOrigin } from "../shared/backend";
+import {
+  backendOrigin,
+  callBackend,
+  fetchAiCatalog,
+  isAiFeature,
+} from "../shared/backend";
 import {
   summarizeVideos,
   lifetimeVph,
@@ -75,6 +81,12 @@ interface TimelineView {
   limitations: string[];
 }
 let timeline: TimelineView | undefined;
+let aiCatalog: AiCatalogData | undefined;
+let selectedAiModel = "";
+let selectedAiOrigin = "http://127.0.0.1:7814";
+let selectedAiStreaming = false;
+let aiSelectionSaving = false;
+let aiRequestRunning = false;
 const filterIds = [
   "video-filter",
   "channel-filter",
@@ -1034,7 +1046,7 @@ function displayRemote(response: RemoteResponse, output: string) {
         ? result.base64
         : undefined;
     const url = base64
-      ? `data:image/png;base64,${base64}`
+      ? `data:${["image/png", "image/jpeg", "image/webp"].includes(String(result.mime)) ? result.mime : "image/png"};base64,${base64}`
       : typeof result.url === "string" && result.url.startsWith("https://")
         ? safeLink(result.url)
         : undefined;
@@ -1047,7 +1059,8 @@ function displayRemote(response: RemoteResponse, output: string) {
     link.href = url;
     link.target = "_blank";
     link.rel = "noopener noreferrer";
-    if (base64) link.download = "prevlev-gerada.png";
+    if (base64)
+      link.download = `prevlev-gerada.${result.mime === "image/jpeg" ? "jpg" : result.mime === "image/webp" ? "webp" : "png"}`;
     $("remote-images").append(image, element("p"), link);
   }
   $(output).textContent = JSON.stringify(
@@ -1069,41 +1082,66 @@ async function remote(
   output = "remote-result",
   extra: Record<string, unknown> = {},
 ) {
-  notice("Enviando ao backend configurado…");
-  const query = value("remote-query");
-  const current = snapshot.videos.find((v) => v.id === snapshot.videoId);
-  let payload: Record<string, unknown>;
-  if (feature === "comment-analysis") payload = { comments: currentComments() };
-  else if (feature === "thumbnail-generation") payload = { prompt: query };
-  else if (feature.startsWith("transcript-"))
-    payload = { text: transcriptContent() };
-  else if (feature === "sponsorships") payload = { text: query };
-  else if (feature === "view-history")
-    payload = {
-      videoId: snapshot.videoId ?? query.trim(),
-      views: current?.views,
-    };
-  else
-    payload = {
-      videos: snapshot.videos,
-      query,
-      targetId:
-        feature === "similar-channels"
-          ? (current?.channelId ?? current?.channel)
-          : snapshot.videoId,
-    };
-  const response = (await chrome.runtime.sendMessage({
-    type: "REMOTE_ANALYZE",
-    feature,
-    payload: { ...payload, ...extra },
-  })) as RemoteResponse;
-  displayRemote(response, output);
-  notice(
-    response.status === "ok"
-      ? `Análise concluída · ${response.source}`
-      : (response.error ?? "Recurso não configurado."),
-    response.status === "error",
-  );
+  const ai = isAiFeature(feature);
+  if (ai && (aiRequestRunning || aiSelectionSaving))
+    throw new Error(
+      "Aguarde a análise ou o salvamento da seleção atual concluir.",
+    );
+  if (ai) {
+    aiRequestRunning = true;
+    updateAiButtons();
+  }
+  try {
+    notice("Enviando ao backend configurado…");
+    const query = value("remote-query");
+    const current = snapshot.videos.find((v) => v.id === snapshot.videoId);
+    let payload: Record<string, unknown>;
+    if (feature === "comment-analysis")
+      payload = { comments: currentComments() };
+    else if (feature === "thumbnail-generation") payload = { prompt: query };
+    else if (feature.startsWith("transcript-"))
+      payload = { text: transcriptContent() };
+    else if (feature === "sponsorships") payload = { text: query };
+    else if (feature === "view-history")
+      payload = {
+        videoId: snapshot.videoId ?? query.trim(),
+        views: current?.views,
+      };
+    else
+      payload = {
+        videos: snapshot.videos,
+        query,
+        targetId:
+          feature === "similar-channels"
+            ? (current?.channelId ?? current?.channel)
+            : snapshot.videoId,
+      };
+    const settings = await getSettings();
+    const response = await callBackend(settings, feature, {
+      ...payload,
+      ...extra,
+      ...(isAiFeature(feature)
+        ? {
+            model: settings.aiModel,
+            stream:
+              feature === "thumbnail-generation" ? false : settings.aiStreaming,
+            expectedOrigin: settings.aiOrigin,
+          }
+        : {}),
+    });
+    displayRemote(response, output);
+    notice(
+      response.status === "ok"
+        ? `Análise concluída · ${response.source}`
+        : (response.error ?? "Recurso não configurado."),
+      response.status === "error",
+    );
+  } finally {
+    if (ai) {
+      aiRequestRunning = false;
+      updateAiButtons();
+    }
+  }
 }
 on("remote-run", () => remote(value("remote-feature") as RemoteFeature));
 on("comments-ai", async () => {
@@ -1116,6 +1154,207 @@ for (const b of document.querySelectorAll<HTMLButtonElement>("[data-ai]"))
       text: transcriptContent(),
     }).catch(fail);
   });
+function updateAiButtons() {
+  const model = aiCatalog?.models.find((m) => m.id === selectedAiModel);
+  const busy = aiRequestRunning || aiSelectionSaving;
+  const textBlocked =
+    busy ||
+    (!!aiCatalog &&
+      (!model?.textSupported ||
+        (selectedAiStreaming &&
+          !(model.streaming && model.operations.includes("responses")))));
+  for (const button of document.querySelectorAll<HTMLButtonElement>(
+    "[data-ai]",
+  ))
+    button.disabled = textBlocked;
+  $<HTMLButtonElement>("comments-ai").disabled = textBlocked;
+  const feature = value("remote-feature");
+  $<HTMLButtonElement>("remote-run").disabled =
+    isAiFeature(feature) &&
+    (busy ||
+      (!!aiCatalog &&
+        (feature === "thumbnail-generation"
+          ? !model?.imageSupported
+          : textBlocked)));
+  $("ai-selected-label").textContent = selectedAiModel
+    ? `${selectedAiModel} · ${selectedAiStreaming ? "streaming solicitado" : "JSON"} · backend revalida antes de enviar`
+    : "Nenhum modelo selecionado. Consulte o OmniProviders na aba Conexão.";
+}
+async function persistAiSelection() {
+  aiSelectionSaving = true;
+  updateAiButtons();
+  $<HTMLSelectElement>("ai-provider-select").disabled = true;
+  $<HTMLSelectElement>("ai-model-select").disabled = true;
+  $<HTMLInputElement>("ai-stream").disabled = true;
+  try {
+    const old = await getSettings();
+    await saveSettings({
+      ...old,
+      aiModel: selectedAiModel,
+      aiOrigin: selectedAiOrigin,
+      aiStreaming: selectedAiStreaming,
+    });
+  } catch (error) {
+    const old = await getSettings();
+    selectedAiModel = old.aiModel;
+    selectedAiOrigin = old.aiOrigin;
+    selectedAiStreaming = old.aiStreaming;
+    throw error;
+  } finally {
+    aiSelectionSaving = false;
+    $<HTMLSelectElement>("ai-provider-select").disabled = false;
+    renderAiSelection();
+  }
+}
+function renderAiSelection(providerFilter?: string) {
+  const provider = $<HTMLSelectElement>("ai-provider-select");
+  const chosenProvider =
+    providerFilter ?? (provider.value || selectedAiModel.split(":")[0] || "");
+  provider.replaceChildren();
+  const placeholder = element("option", "Selecione um provedor");
+  placeholder.value = "";
+  provider.append(placeholder);
+  const providers = aiCatalog
+    ? [...new Set(aiCatalog.models.map((m) => m.provider))].sort()
+    : selectedAiModel
+      ? [selectedAiModel.split(":")[0]]
+      : [];
+  for (const id of providers) {
+    const option = element("option", id);
+    option.value = id;
+    provider.append(option);
+  }
+  provider.value = chosenProvider;
+  const models = $<HTMLSelectElement>("ai-model-select");
+  models.replaceChildren();
+  const empty = element("option", "Nenhum modelo selecionado");
+  empty.value = "";
+  models.append(empty);
+  for (const model of (aiCatalog?.models ?? []).filter(
+    (m) => m.provider === chosenProvider,
+  )) {
+    const option = element(
+      "option",
+      `${model.label} · ${model.id}${model.textSupported ? " · texto" : ""}${model.imageSupported ? " · imagem" : ""}${!model.textSupported && !model.imageSupported ? " · capacidade não utilizada pelo Prevlev" : ""}`,
+    );
+    option.value = model.id;
+    option.disabled = !model.textSupported && !model.imageSupported;
+    models.append(option);
+  }
+  if (
+    selectedAiModel &&
+    !Array.from(models.options).some((o) => o.value === selectedAiModel)
+  ) {
+    const saved = element(
+      "option",
+      `${selectedAiModel} · ${aiCatalog ? "indisponível no catálogo atual" : "salvo; catálogo ainda não consultado"}`,
+    );
+    saved.value = selectedAiModel;
+    saved.disabled = true;
+    models.append(saved);
+  }
+  models.value = selectedAiModel;
+  models.disabled = !aiCatalog || !chosenProvider;
+  const selected = aiCatalog?.models.find((m) => m.id === selectedAiModel);
+  const supportsStream =
+    selected?.textSupported &&
+    selected.streaming &&
+    selected.operations.includes("responses");
+  const streaming = $<HTMLInputElement>("ai-stream");
+  streaming.checked = selectedAiStreaming;
+  streaming.disabled =
+    !selected?.textSupported || (!supportsStream && !selectedAiStreaming);
+  $<HTMLInputElement>("ai-origin").value =
+    aiCatalog?.origin ?? selectedAiOrigin;
+  $("ai-capabilities").textContent = selected
+    ? `Saída: ${selected.outputModalities.join(", ") || "não anunciada"}. Operações: ${selected.operations.join(", ") || "nenhuma"}.${selectedAiStreaming && !supportsStream ? " O streaming salvo não está disponível; desmarque a opção ou escolha outro modelo." : ""}`
+    : aiCatalog
+      ? selectedAiModel
+        ? "O modelo salvo não está disponível. Escolha um modelo do catálogo; nenhuma alternativa foi selecionada."
+        : "Escolha provedor e modelo. Apenas capacidades anunciadas são habilitadas."
+      : "Capacidades ainda não consultadas. A origem exibida é configuração, não uma confirmação de conexão.";
+  updateAiButtons();
+}
+on("ai-discover", async () => {
+  $<HTMLButtonElement>("ai-discover").disabled = true;
+  $("ai-catalog-status").textContent =
+    "Consultando o catálogo pela ponte Prevlev…";
+  try {
+    const response = await fetchAiCatalog(await getSettings());
+    if (response.status !== "ok" || !response.data) {
+      $("ai-catalog-status").textContent =
+        response.error ?? "Catálogo não disponível.";
+      throw new Error(response.error ?? "Catálogo não disponível.");
+    }
+    aiCatalog = response.data;
+    if (selectedAiModel && selectedAiOrigin !== aiCatalog.origin) {
+      selectedAiModel = "";
+      selectedAiStreaming = false;
+      const old = await getSettings();
+      await saveSettings({ ...old, aiModel: "", aiStreaming: false });
+      $("ai-catalog-status").textContent =
+        "A origem do OmniProviders mudou. Selecione novamente o provedor e modelo antes de enviar dados.";
+    } else
+      $("ai-catalog-status").textContent =
+        `${aiCatalog.models.length} modelos anunciados. ${aiCatalog.warnings.join(" ")} Catálogo não comprova saldo nem aceitação de geração.`;
+    renderAiSelection();
+    notice("Catálogo consultado. Nenhuma geração foi iniciada.");
+  } catch (error) {
+    $("ai-catalog-status").textContent =
+      error instanceof Error ? error.message : String(error);
+    throw error;
+  } finally {
+    $<HTMLButtonElement>("ai-discover").disabled = false;
+  }
+});
+$("ai-provider-select").addEventListener("change", () => {
+  void (async () => {
+    if (aiSelectionSaving) return;
+    const provider = value("ai-provider-select");
+    selectedAiModel = "";
+    selectedAiStreaming = false;
+    await persistAiSelection();
+    renderAiSelection(provider);
+  })().catch(fail);
+});
+$("ai-model-select").addEventListener("change", () => {
+  void (async () => {
+    if (aiSelectionSaving) return;
+    const model = aiCatalog?.models.find(
+      (m) => m.id === value("ai-model-select"),
+    );
+    if (!model || (!model.textSupported && !model.imageSupported))
+      throw new Error(
+        "Escolha um modelo com capacidade anunciada para texto ou imagem.",
+      );
+    selectedAiModel = model.id;
+    selectedAiOrigin = aiCatalog!.origin;
+    selectedAiStreaming = false;
+    await persistAiSelection();
+    renderAiSelection(model.provider);
+    $("ai-catalog-status").textContent =
+      `Seleção salva: ${model.id}. O catálogo será revalidado no próximo envio.`;
+  })().catch(fail);
+});
+$("ai-stream").addEventListener("change", () => {
+  void (async () => {
+    if (aiSelectionSaving) return;
+    const selected = aiCatalog?.models.find((m) => m.id === selectedAiModel);
+    const checked = $<HTMLInputElement>("ai-stream").checked;
+    if (
+      checked &&
+      (!selected?.streaming ||
+        !selected.textSupported ||
+        !selected.operations.includes("responses"))
+    ) {
+      $<HTMLInputElement>("ai-stream").checked = selectedAiStreaming;
+      throw new Error("Este modelo não anuncia streaming Responses de texto.");
+    }
+    selectedAiStreaming = checked;
+    await persistAiSelection();
+  })().catch(fail);
+});
+$("remote-feature").addEventListener("change", updateAiButtons);
 on("save-settings", async () => {
   const url = value("backend-url").trim(),
     origin = url ? backendOrigin(url) : "";
@@ -1131,7 +1370,14 @@ on("save-settings", async () => {
     ...old,
     backendUrl: origin,
     backendToken: value("backend-token").trim(),
+    ...(old.backendUrl !== origin ? { aiModel: "", aiStreaming: false } : {}),
   });
+  if (old.backendUrl !== origin) {
+    aiCatalog = undefined;
+    selectedAiModel = "";
+    selectedAiStreaming = false;
+    renderAiSelection();
+  }
   notice("Configuração salva. O envio continua sendo manual.");
 });
 on("clear-connection", async () => {
@@ -1140,7 +1386,17 @@ on("clear-connection", async () => {
     await chrome.permissions.remove({
       origins: [`${backendOrigin(old.backendUrl)}/*`],
     });
-  await saveSettings({ ...old, backendUrl: "", backendToken: "" });
+  await saveSettings({
+    ...old,
+    backendUrl: "",
+    backendToken: "",
+    aiModel: "",
+    aiStreaming: false,
+  });
+  aiCatalog = undefined;
+  selectedAiModel = "";
+  selectedAiStreaming = false;
+  renderAiSelection();
   $<HTMLInputElement>("backend-url").value = "";
   $<HTMLInputElement>("backend-token").value = "";
   notice("Backend desconectado.");
@@ -1176,6 +1432,10 @@ void (async () => {
   const settings = await getSettings();
   $<HTMLInputElement>("backend-url").value = settings.backendUrl;
   $<HTMLInputElement>("backend-token").value = settings.backendToken;
+  selectedAiModel = settings.aiModel;
+  selectedAiOrigin = settings.aiOrigin;
+  selectedAiStreaming = settings.aiStreaming;
+  renderAiSelection();
   render();
   await renderSwipe();
 })().catch(fail);

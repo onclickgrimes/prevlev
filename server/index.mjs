@@ -4,6 +4,7 @@ import { pathToFileURL } from "node:url";
 import { resolve } from "node:path";
 import { analyzeDataset } from "./analysis.mjs";
 import { analyzeAi, isAiFeature, validateProvider } from "./ai.mjs";
+import { discoverOmni, validateOmniBase } from "./omni.mjs";
 
 const loopback = (bind) => ["127.0.0.1", "localhost", "::1"].includes(bind);
 export function configFromEnv(env = process.env) {
@@ -16,6 +17,10 @@ export function configFromEnv(env = process.env) {
       .map((s) => s.trim())
       .filter(Boolean),
     dataDir: resolve(env.DATA_DIR ?? "data/history"),
+    aiProvider: env.AI_PROVIDER ?? "omni",
+    omniBaseUrl: env.OMNI_BASE_URL ?? "http://127.0.0.1:7814",
+    omniApiKey: env.OMNI_API_KEY ?? "",
+    omniTimeoutMs: Number(env.OMNI_TIMEOUT_MS ?? 120000),
     aiBaseUrl: env.AI_BASE_URL ?? "",
     aiApiKey: env.AI_API_KEY ?? "",
     aiModel: env.AI_MODEL ?? "",
@@ -25,12 +30,32 @@ export function configFromEnv(env = process.env) {
 function validConfig(config) {
   if (!loopback(config.bind) && !config.token)
     throw new Error("PREVLEV_TOKEN é obrigatório ao escutar fora do loopback.");
-  if (config.aiBaseUrl) validateProvider(config.aiBaseUrl);
-  for (const origin of config.allowedOrigins) {
+  if (!["omni", "openai-compatible"].includes(config.aiProvider))
+    throw new Error("AI_PROVIDER deve ser omni ou openai-compatible.");
+  if (config.aiProvider === "omni") {
+    validateOmniBase(config.omniBaseUrl);
     if (
-      !/^chrome-extension:\/\/[a-p]{32}$/.test(origin) &&
-      !/^https:\/\/[^/]+$/.test(origin)
+      !Number.isInteger(config.omniTimeoutMs) ||
+      config.omniTimeoutMs < 1 ||
+      config.omniTimeoutMs > 300000
     )
+      throw new Error(
+        "OMNI_TIMEOUT_MS deve ser um inteiro entre 1 e 300000 milissegundos.",
+      );
+  } else if (config.aiBaseUrl) validateProvider(config.aiBaseUrl);
+  for (const origin of config.allowedOrigins) {
+    let exactHttps = false;
+    try {
+      const url = new URL(origin);
+      exactHttps =
+        url.protocol === "https:" &&
+        url.origin === origin &&
+        !url.username &&
+        !url.password;
+    } catch {
+      /* Rejected below. */
+    }
+    if (!/^chrome-extension:\/\/[a-p]{32}$/.test(origin) && !exactHttps)
       throw new Error(
         "ALLOWED_ORIGINS deve conter origens exatas de extensão ou HTTPS, sem curingas.",
       );
@@ -78,12 +103,31 @@ export function createPrevlevServer(options = {}, dependencies = {}) {
         status: "ok",
         source,
         data: {
-          version: "0.2.0",
-          aiTextConfigured: Boolean(config.aiBaseUrl && config.aiModel),
-          aiImageConfigured: Boolean(config.aiBaseUrl && config.aiImageModel),
+          version: "0.3.0",
+          aiProvider: config.aiProvider,
+          aiOrigin:
+            config.aiProvider === "omni"
+              ? validateOmniBase(config.omniBaseUrl)
+              : config.aiBaseUrl
+                ? new URL(validateProvider(config.aiBaseUrl)).origin
+                : null,
+          aiConfigurationConfigured:
+            config.aiProvider === "omni"
+              ? Boolean(config.omniBaseUrl)
+              : Boolean(config.aiBaseUrl),
+          aiReachable: null,
+          aiSelectionRequired: config.aiProvider === "omni",
+          aiTextConfigured:
+            config.aiProvider === "openai-compatible" &&
+            Boolean(config.aiBaseUrl && config.aiModel),
+          aiImageConfigured:
+            config.aiProvider === "openai-compatible" &&
+            Boolean(config.aiBaseUrl && config.aiImageModel),
         },
       });
-    if (req.url !== "/v1/analyze" || req.method !== "POST")
+    const catalogRequest = req.url === "/v1/ai/catalog" && req.method === "GET";
+    const analysisRequest = req.url === "/v1/analyze" && req.method === "POST";
+    if (!catalogRequest && !analysisRequest)
       return respond(404, {
         status: "error",
         source,
@@ -104,18 +148,42 @@ export function createPrevlevServer(options = {}, dependencies = {}) {
       return respond(429, {
         status: "error",
         source,
-        error: "Limite de 30 análises por minuto.",
+        error: "Limite de 30 solicitações por minuto.",
       });
     if (rates.size > 1000)
       for (const [address, value] of rates)
         if (now - value.start > 60000) rates.delete(address);
-    if (!(req.headers["content-type"] ?? "").startsWith("application/json"))
+    if (
+      analysisRequest &&
+      !(req.headers["content-type"] ?? "").startsWith("application/json")
+    )
       return respond(415, {
         status: "error",
         source,
         error: "Use Content-Type: application/json.",
       });
     try {
+      if (catalogRequest) {
+        if (
+          req.headers["transfer-encoding"] ||
+          Number(req.headers["content-length"] ?? 0) > 0
+        )
+          return respond(400, {
+            status: "error",
+            source,
+            error: "A consulta de catálogo não aceita corpo.",
+          });
+        const result =
+          config.aiProvider === "omni"
+            ? await discoverOmni(config, dependencies.fetcher)
+            : {
+                status: "unsupported",
+                source: "prevlev:ai",
+                error:
+                  "O catálogo Omni exige AI_PROVIDER=omni. O modo openai-compatible usa os modelos configurados explicitamente no servidor.",
+              };
+        return respond(result.status === "unsupported" ? 422 : 200, result);
+      }
       const chunks = [];
       let bytes = 0;
       for await (const chunk of req) {
@@ -166,8 +234,10 @@ export function createPrevlevServer(options = {}, dependencies = {}) {
           });
       respond(result.status === "unsupported" ? 422 : 200, result);
     } catch (error) {
-      const safe =
+      let safe =
         error instanceof Error ? error.message : "Falha ao processar análise.";
+      for (const secret of [config.omniApiKey, config.aiApiKey, config.token])
+        if (secret) safe = safe.split(secret).join("[redigido]");
       const status = error?.name === "TimeoutError" ? 504 : 400;
       respond(status, {
         status: "error",

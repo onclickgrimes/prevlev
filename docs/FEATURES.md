@@ -1,16 +1,22 @@
-# Cobertura dos 40 recursos · v0.2.0
+# Cobertura dos 40 recursos · v0.3.0
 
 Implementação independente; não há declaração de paridade completa com Nexlev 3.12.6.
 
 O estado de implementação descreve o escopo entregue; a validação de runtime e a configuração de produto são eixos separados. “Implementado” não declara paridade ou teste com extensão instalada. Dados faltantes permanecem desconhecidos.
 
+## Integração OmniProviders
+
+A versão 0.3 integra o serviço existente via backend Prevlev, com origem padrão `http://127.0.0.1:7814`, catálogo explícito e seleção por operações/modalidades. Transcrição/comentários usam o modelo exato e resposta JSON/SSE concluída; thumbnails exigem capacidade de geração de imagem e artefato autenticado. A seleção é revalidada antes de cada solicitação. O contrato foi lido no commit `cd4e6a2efd5cdd54ec9bcea274a86ed854932120`; os testes usam transporte simulado. O serviço, as contas e a cota do usuário não foram acessados. Isso não altera as lacunas de pesquisa global ou dados privados. Veja [OMNIPROVIDERS.md](OMNIPROVIDERS.md).
+
 ## Evidência e runtime
 
 - Testes unitários/DOM verificam módulos em fixtures; integração HTTP usa loopback. O adaptador de IA simula provedor somente nos testes.
-- Nove testes de navegador em fixtures passaram: dois de [UI/canvas](../tests/browser/ui.spec.ts), quatro de [Studio](../tests/browser/studio-ui.spec.ts) e três de [pesquisa/timeline](../tests/browser/research-ui.spec.ts). Os cenários integrados executam os bundles próprios `workspace.js`/`content.js` via transporte Chrome simulado, com URLs interceptadas. Não usam conta real.
+- Os nove cenários anteriores de navegador permanecem cobertos: dois de [UI/canvas](../tests/browser/ui.spec.ts), quatro de [Studio](../tests/browser/studio-ui.spec.ts) e três de [pesquisa/timeline](../tests/browser/research-ui.spec.ts). Os cenários integrados executam os bundles próprios `workspace.js`/`content.js` via transporte Chrome simulado, com URLs interceptadas. Não usam conta real.
 - Dois testes de [extensão instalada](../tests/browser/extension.spec.ts) foram explicitamente ignorados pela política `/etc/chromium`: `ExtensionInstallBlocklist=[*]`. Não houve contorno. **Ignorado não significa aprovado.**
 - Uma tentativa anônima de consultar `https://www.youtube.com/@YouTube/videos` retornou `fetch failed` neste ambiente. O parser está coberto por fixtures, mas a compatibilidade com a resposta pública atual permanece não verificada.
 - Nenhuma operação foi feita em conta/canal real e nenhum provedor de IA pago foi chamado. Seletores e aceitação do servidor real continuam pendentes.
+
+Outros cinco cenários de [UI Omni](../tests/browser/omni-ui.spec.ts) cobrem catálogo explícito, seleção sem fallback, capacidades, origem alterada, modelos indisponíveis e erros. [omni.test.ts](../tests/omni.test.ts) cobre JSON/SSE/artefatos; [backend-client.test.ts](../tests/backend-client.test.ts) cobre limites do cliente. Não houve geração real.
 
 O JSON registra separadamente `status`, `verificationStatus`, `runtimeVerificationStatus`, `installedExtensionVerification` e `configurationRequirements`. Testes citados comprovam seus cenários em fixtures, não cobertura completa em produção.
 
@@ -86,7 +92,7 @@ A matriz legível por ferramentas está em [feature-status.json](feature-status.
 
 ## Configuração e trabalho de produto pendentes
 
-- IA: provedor/modelo/credenciais e backend próprios.
+- IA: iniciar/configurar a ponte Prevlev na máquina do Omni existente e selecionar um modelo disponível; credenciais permanecem no Omni/servidor. A instalação do usuário não foi acessada.
 - Pesquisa global: fonte autorizada, aquisição e integração ainda não implementadas.
 - Studio privado: não há integração com APIs privadas de insights.
 - Financeiro: receita/RPM/geografia/contratos não disponíveis não são inventados.
