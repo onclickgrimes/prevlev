@@ -16,7 +16,59 @@ export interface TimedTranscriptSegment extends TranscriptSegment {end:number|nu
 const numeric=(value:unknown):number|undefined=>typeof value==='number'&&Number.isFinite(value)&&value>=0?value:typeof value==='string'&&/^\d+(?:\.\d+)?$/.test(value.trim())?Number(value):undefined;
 function captionTime(value:string):number|undefined {const parts=value.trim().replace(',','.').split(':');if(parts.length<2||parts.length>3||!parts.every((part,index)=>index===parts.length-1?/^\d{1,2}(?:\.\d{1,9})?$/.test(part):/^\d+$/.test(part))||parts.slice(1).some(part=>Number(part)>=60))return undefined;return parts.reduce((total,part)=>total*60+Number(part),0);}
 function captionDecode(value:string):string {return value.replace(/&(?:amp|lt|gt|quot|apos|nbsp|#\d+|#x[0-9a-f]+);/gi,entity=>{const named:Record<string,string>={'&amp;':'&','&lt;':'<','&gt;':'>','&quot;':'"','&apos;':"'",'&nbsp;':' '};if(named[entity.toLowerCase()])return named[entity.toLowerCase()];const code=entity[2]?.toLowerCase()==='x'?parseInt(entity.slice(3,-1),16):Number(entity.slice(2,-1));return code>0&&code<=0x10ffff&&!(code>=0xd800&&code<=0xdfff)?String.fromCodePoint(code):'�';});}
-function captionFile(value:string):TranscriptSegment[] {const blocks=value.replace(/^\uFEFF/,'').replace(/\r\n?/g,'\n').split(/\n[ \t]*\n+/),segments:TranscriptSegment[]=[];for(const block of blocks){const lines=block.split('\n');if(/^(?:WEBVTT|NOTE(?:\s|$)|STYLE(?:\s|$)|REGION(?:\s|$))/.test(lines[0]?.trim()??''))continue;const index=lines.findIndex(line=>line.includes('-->'));if(index<0||index>1)continue;const timing=/^\s*(\d+(?::\d{1,2}){1,2}[.,]\d{1,9})\s+-->\s+(\d+(?::\d{1,2}){1,2}[.,]\d{1,9})(?:\s+.*)?$/.exec(lines[index]);if(!timing)continue;const start=captionTime(timing[1]),end=captionTime(timing[2]);if(start===undefined||end===undefined||end<=start)continue;const text=captionDecode(lines.slice(index+1).join('\n').replace(/<\/?(?:c(?:\.[^\s>]*)?|v(?:\s+[^>]*)?|lang(?:\s+[^>]*)?|b|i|u|ruby|rt)>/gi,''));segments.push({start,duration:end-start,text});if(segments.length>=5000)break;}return validate(segments);}
+export interface TranscriptImportDiagnostic {line:number;code:'invalid-cue'|'invalid-timing'|'empty-cue'|'unexpected-metadata'|'too-many-cues'|'no-cues';message:string;}
+export class TranscriptImportError extends Error {
+  readonly diagnostics:readonly TranscriptImportDiagnostic[];
+  readonly diagnosticCount:number;
+  constructor(diagnostics:readonly TranscriptImportDiagnostic[],diagnosticCount=diagnostics.length){
+    const first=diagnostics[0];
+    super(`Legenda inválida${first?` na linha ${first.line}: ${first.message}`:''}${diagnosticCount>1?` (${diagnosticCount} problemas detectados; até 50 diagnósticos disponíveis)` : ''}. Importação cancelada; nenhum trecho foi aplicado.`);
+    this.name='TranscriptImportError';this.diagnostics=diagnostics;this.diagnosticCount=diagnosticCount;
+  }
+}
+function captionFile(value:string,strict=false):TranscriptSegment[] {
+  const lines=value.replace(/^\uFEFF/,'').replace(/\r\n?/g,'\n').split('\n'),segments:TranscriptSegment[]=[],diagnostics:TranscriptImportDiagnostic[]=[];
+  let diagnosticCount=0,blockNumber=0;
+  const problem=(line:number,code:TranscriptImportDiagnostic['code'],message:string)=>{if(!strict)return;diagnosticCount++;if(diagnostics.length<50)diagnostics.push({line,code,message});};
+  for(let offset=0;offset<lines.length;){
+    if(!lines[offset].trim()){offset++;continue;}
+    const first=offset,block:string[]=[];while(offset<lines.length&&lines[offset].trim())block.push(lines[offset++]);blockNumber++;
+    const heading=block[0].trim(),timingIndex=block.findIndex(line=>line.includes('-->'));
+    if(/^WEBVTT(?:\s|$)/.test(heading)){
+      if(strict&&(blockNumber!==1||timingIndex>=0))problem(first+(timingIndex>=0?timingIndex:0)+1,'unexpected-metadata','Cabeçalho WEBVTT deve preceder os cues e ser separado deles por uma linha vazia');
+      continue;
+    }
+    if(/^NOTE(?:\s|$)/.test(heading))continue;
+    if(/^(?:STYLE|REGION)(?:\s|$)/.test(heading)){
+      if(strict&&timingIndex>=0)problem(first+timingIndex+1,'unexpected-metadata','Bloco STYLE/REGION contém um cue; separe metadados e fala por uma linha vazia');
+      continue;
+    }
+    if(timingIndex<0||timingIndex>1){problem(first+1,'invalid-cue','Bloco de fala sem linha de início/fim reconhecida ou com mais de um identificador');continue;}
+    const timing=/^\s*(\d+(?::\d{1,2}){1,2}[.,]\d{1,9})\s+-->\s+(\d+(?::\d{1,2}){1,2}[.,]\d{1,9})(?:\s+.*)?$/.exec(block[timingIndex]);
+    if(!timing){problem(first+timingIndex+1,'invalid-timing','Horários de cue inválidos; use início --> fim com frações de segundo');continue;}
+    const start=captionTime(timing[1]),end=captionTime(timing[2]);
+    if(start===undefined||end===undefined||!Number.isFinite(start)||!Number.isFinite(end)||end<=start){problem(first+timingIndex+1,'invalid-timing','Início/fim inválidos, fora da faixa ou fim não posterior ao início');continue;}
+    const nestedTiming=block.slice(timingIndex+1).findIndex(line=>/^\s*\d+(?::\d{1,2}){1,2}[.,]\d{1,9}\s+-->/.test(line));
+    if(strict&&nestedTiming>=0){problem(first+timingIndex+nestedTiming+2,'invalid-cue','Há outro cue no mesmo bloco; separe os cues por uma linha vazia');continue;}
+    const text=captionDecode(block.slice(timingIndex+1).join('\n').replace(/<\/?(?:c(?:\.[^\s>]*)?|v(?:\s+[^>]*)?|lang(?:\s+[^>]*)?|b|i|u|ruby|rt)>/gi,''));
+    if(strict&&!text.trim()){problem(first+timingIndex+2,'empty-cue','Cue sem texto de fala');continue;}
+    if(strict&&segments.length>=5000){problem(first+timingIndex+1,'too-many-cues','O arquivo excede 5000 cues; divida-o antes de importar');break;}
+    segments.push({start,duration:end-start,text});
+    if(!strict&&segments.length>=5000)break;
+  }
+  if(strict&&!segments.length&&!diagnosticCount)problem(1,'no-cues','Nenhum cue de fala foi encontrado no arquivo de legendas');
+  if(diagnosticCount)throw new TranscriptImportError(diagnostics,diagnosticCount);
+  return validate(segments);
+}
+
+/** Import is atomic for captions: any malformed speech block rejects the entire file.
+ * parseTranscript remains tolerant for observed DOM and legacy consumers. */
+export function parseTranscriptImport(input:string,options:{fileName?:string}={}):TranscriptSegment[] {
+  if(input.length>5_000_000)throw new Error('Transcrição acima do limite de 5 milhões de caracteres.');
+  const text=input.trim(),captionHint=/\.(?:vtt|srt)$/i.test(options.fileName??'');
+  const captionContent=/^WEBVTT(?:\s|$)/.test(text)||/\d{1,2}:\d{2}[.,]\d{1,9}\s+-->/.test(text);
+  return captionHint||captionContent?captionFile(input,true):parseTranscript(input);
+}
 
 export function parseTranscript(
   input: string | Document | unknown,
@@ -128,7 +180,7 @@ export function transcriptMarkdown(
 ): string {
   const report=transcriptExport(segments,{...metadata,title},{},plainText);
   const header=`# ${markdownText(title)}\n\n${metadata?`Vídeo: ${markdownText(report.videoUrl??'não informado')}\n\nExportado em: ${report.exportedAt}\n\n`:''}`;
-  const original=segments.length?segments.map(segment=>`- **${timestamp(segment.start,false)}** ${markdownText(segment.text)}`).join('\n'):plainText?`## Transcrição sem timestamps\n\n${fencedText(plainText)}`:'';
+  const original=segments.length?segments.map(segment=>`- **${timestamp(segment.start)}** ${markdownText(segment.text)}`).join('\n'):plainText?`## Transcrição sem timestamps\n\n${fencedText(plainText)}`:'';
   const generated=(report.aiResults??[]).map(result=>`## ${AI_LABELS[result.feature]} · gerado por IA\n\nFonte: ${markdownText(result.source??'desconhecida')}\n\nModelo confirmado: ${markdownText(result.model??'desconhecido')}\n\nModelo solicitado: ${markdownText(result.requestedModel??'desconhecido')}\n\nOrigem do provedor: ${markdownText(result.origin??'desconhecida')}\n\nBackend: ${markdownText(result.backendOrigin??'desconhecido')}\n\nRecebido nesta sessão em: ${result.receivedAt}\n\nContexto: ${result.context.inputCharacters} caracteres, ${result.context.segmentCount} segmentos; ${result.context.inputKind==='timed-transcript'?'transcrição com horários conhecidos':'texto sem horários conhecidos'}. O conteúdo gerado não recebe timestamps da transcrição.\n\n${fencedText(result.text)}`).join('\n\n');
   return `${header}${original}${generated?`\n\n${generated}`:''}\n`;
 }
