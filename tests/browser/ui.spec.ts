@@ -164,7 +164,7 @@ test("UI with browser-API fixture scans, filters, saves, exports and reports IA 
   await expect(page.locator("#video-rows tr")).toHaveCount(2);
   await page.locator("#video-filter").fill("criativo");
   await expect(page.locator("#video-rows tr")).toHaveCount(1);
-  await page.locator("#video-rows button").click();
+  await page.locator("#video-rows").getByRole('button',{name:'+ Salvar',exact:true}).click();
   await page.locator('[data-page="swipe"]').click();
   await expect(page.locator("#swipe-list")).toContainText("Estúdio criativo");
   const downloading = page.waitForEvent("download");

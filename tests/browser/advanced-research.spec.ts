@@ -30,15 +30,15 @@ test.afterEach(async () => { await context?.close(); });
 test("workspace two-criterion directions and ratio priority produce exactly the native card order", async () => {
   await workspace.locator("#research-enhancements summary").click();
   await workspace.locator("#research-add-sort").click(); await workspace.locator("#research-sort-secondary").selectOption("subscribers"); await workspace.locator("#research-direction-secondary").selectOption("asc");
-  await expect(workspace.locator("#video-rows a")).toHaveText(["Alpha tie", "Zulu lead", "Short fixture", "Beta old", "Unknown metadata"]);
+  await expect(workspace.locator("#video-rows tr > td:first-child > a")).toHaveText(["Alpha tie", "Zulu lead", "Short fixture", "Beta old", "Unknown metadata"]);
   await workspace.locator("#research-direction-primary").selectOption("asc");
-  await expect(workspace.locator("#video-rows a")).toHaveText(["Beta old", "Short fixture", "Alpha tie", "Zulu lead", "Unknown metadata"]);
+  await expect(workspace.locator("#video-rows tr > td:first-child > a")).toHaveText(["Beta old", "Short fixture", "Alpha tie", "Zulu lead", "Unknown metadata"]);
   await workspace.locator("#research-priority").check(); await workspace.locator("#research-hide-feed").check();
-  await expect(workspace.locator("#video-rows a")).toHaveText(["Beta old", "Alpha tie", "Short fixture", "Zulu lead", "Unknown metadata"]);
+  await expect(workspace.locator("#video-rows tr > td:first-child > a")).toHaveText(["Beta old", "Alpha tie", "Short fixture", "Zulu lead", "Unknown metadata"]);
   await workspace.locator("#apply-page-filter").click();
   await expect(workspace.locator("#notice")).toContainText("5 de 5");
   await expect(source.locator("ytd-video-renderer #video-title")).toHaveText(["Beta old", "Alpha tie", "Short fixture", "Zulu lead", "Unknown metadata"]);
-  await workspace.locator("#research-hide-search").check(); await expect(workspace.locator("#video-rows a")).toHaveCount(4); await workspace.locator("#apply-page-filter").click();
+  await workspace.locator("#research-hide-search").check(); await expect(workspace.locator("#video-rows tr > td:first-child > a")).toHaveCount(4); await workspace.locator("#apply-page-filter").click();
   await expect(source.locator('ytd-video-renderer:not([data-prevlev-hidden="true"])')).toHaveCount(4);
   const applied = await workspace.evaluate(() => (window as unknown as FixtureWindow).__advancedRequests.filter(message => message.type === "APPLY_FILTER").at(-1));
   expect(applied).toMatchObject({ filter: { criteria: [{ key: "views", direction: "asc" }, { key: "subscribers", direction: "asc" }], priority: "views-per-subscriber", hideShortsOnFeed: true, hideShortsOnSearch: true, surface: "search" } });
@@ -47,13 +47,13 @@ test("workspace two-criterion directions and ratio priority produce exactly the 
 
 test("contextual presets keep precise dates, search-only Shorts and an explicit alternative comparison mode", async () => {
   await workspace.locator("#research-enhancements summary").click(); await expect(workspace.locator("#research-preset option")).toHaveCount(12);
-  await workspace.locator("#research-preset").selectOption("day-views"); await expect(workspace.locator("#video-rows a")).toHaveText(["Zulu lead", "Alpha tie", "Short fixture"]);
+  await workspace.locator("#research-preset").selectOption("day-views"); await expect(workspace.locator("#video-rows tr > td:first-child > a")).toHaveText(["Zulu lead", "Alpha tie", "Short fixture"]);
   await expect(workspace.locator("#research-status")).toContainText("Limites precisos UTC");
-  await workspace.locator("#research-preset").selectOption("search-shorts"); await expect(workspace.locator("#video-rows a")).toHaveText(["Short fixture"]); await workspace.locator("#apply-page-filter").click();
+  await workspace.locator("#research-preset").selectOption("search-shorts"); await expect(workspace.locator("#video-rows tr > td:first-child > a")).toHaveText(["Short fixture"]); await workspace.locator("#apply-page-filter").click();
   await expect(source.locator('ytd-video-renderer:not([data-prevlev-hidden="true"])')).toHaveAttribute("data-fixture-id", "defghijklmn");
   await workspace.locator("#research-comparison").selectOption("sample-channel-reference"); await expect(workspace.locator("#research-comparison-note")).toContainText("Não equivale ao índice proprietário");
   const downloadPromise = workspace.waitForEvent("download"); await workspace.locator("#research-export-markdown").click(); const download = await downloadPromise; expect(download.suggestedFilename()).toBe("prevlev-pesquisa.md"); const content = await readFile((await download.path())!, "utf8"); expect(content).toContain("Short fixture"); expect(content).not.toContain("Beta old"); expect(content).toContain("A amostra pode ser parcial");
-  await workspace.locator("#reset-filters").click(); await expect(workspace.locator("#video-rows a")).toHaveCount(5); await expect(workspace.locator("#research-preset")).toHaveValue(""); await expect(workspace.locator("#research-comparison")).toHaveValue("sample-median");
+  await workspace.locator("#reset-filters").click(); await expect(workspace.locator("#video-rows tr > td:first-child > a")).toHaveCount(5); await expect(workspace.locator("#research-preset")).toHaveValue(""); await expect(workspace.locator("#research-comparison")).toHaveValue("sample-median");
   expect(unexpected).toEqual([]);
 });
 

@@ -275,7 +275,7 @@ test("research UI validates full ranges and applies/clears the same filter in th
     await workspace.locator(`#${id}`).fill(value);
   await workspace.locator("#short-filter").selectOption("long");
   await workspace.locator("#sort").selectOption("outlier");
-  await expect(workspace.locator("#video-rows a")).toHaveText([
+  await expect(workspace.locator("#video-rows tr > td:first-child > a")).toHaveText([
     "Estúdio Alpha destaque",
   ]);
   // The outlier reference remains all comparable loaded videos, not this one-row result.
@@ -381,7 +381,7 @@ test("public-channel UI shows sample limits, keeps unknown monetization and dedu
   await workspace.locator("#channel-use").click();
   await workspace.locator('[data-page="research"]').click();
   await expect(workspace.locator("#video-rows tr")).toHaveCount(6);
-  await expect(workspace.locator("#video-rows a")).toContainText([
+  await expect(workspace.locator("#video-rows tr > td:first-child > a")).toContainText([
     "Canal Alpha atualizado",
   ]);
   await workspace.locator('[data-page="channel"]').click();

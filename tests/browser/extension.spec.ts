@@ -57,7 +57,7 @@ test("loaded MV3 extension scans fixture, filters, saves reference and refuses u
   await page.locator("#video-filter").fill("criativo");
   await expect(page.locator("#video-rows tr")).toHaveCount(1);
   await expect(page.locator("#video-rows")).toContainText("12 mil");
-  await page.locator("#video-rows button").click();
+  await page.locator("#video-rows").getByRole('button',{name:'+ Salvar',exact:true}).click();
   await page.locator('[data-page="swipe"]').click();
   await expect(page.locator("#swipe-list")).toContainText("Estúdio criativo");
   await page.locator('[data-page="transcript"]').click();
