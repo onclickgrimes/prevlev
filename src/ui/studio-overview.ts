@@ -3,6 +3,15 @@ import type { PageSnapshot } from "../shared/types";
 const DAY = 86_400_000;
 const PRESETS = [7, 14, 28, 60, 90, 180, 365] as const;
 
+/** Query/period changes do not change the video whose publication was declared. */
+function publicationContext(snapshot: PageSnapshot): string {
+  try {
+    const url = new URL(snapshot.url);
+    const id = snapshot.videoId || /^\/video\/([^/]+)/.exec(url.pathname)?.[1] || url.searchParams.get("v");
+    return id ? JSON.stringify([url.origin,id]) : JSON.stringify([url.origin,url.pathname]);
+  } catch { return JSON.stringify([snapshot.url,snapshot.videoId ?? ""]); }
+}
+
 /** Calendar days in UTC, including the publication date. A period is available only after its final UTC day has ended. */
 export function completedPublicationPeriod(publication: string, days: number, now = new Date()): { start: string; end: string } | undefined {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(publication) || !Number.isInteger(days) || days < 1 || !Number.isFinite(now.getTime())) return undefined;
@@ -15,7 +24,7 @@ export function completedPublicationPeriod(publication: string, days: number, no
 }
 
 /** Render only information explicitly captured from the visible Studio page. */
-export function initStudioOverview({ snapshot }: { snapshot: () => PageSnapshot }): { render(): void } {
+export function initStudioOverview({ snapshot }: { snapshot: () => PageSnapshot }): { render(): void; invalidateContext(): void } {
   const studio = document.querySelector<HTMLElement>("#studio");
   const start = document.querySelector<HTMLInputElement>("#period-start");
   const end = document.querySelector<HTMLInputElement>("#period-end");
@@ -38,12 +47,28 @@ export function initStudioOverview({ snapshot }: { snapshot: () => PageSnapshot 
   const publication = panel.querySelector<HTMLInputElement>("#studio-publication-date")!;
   const presets = panel.querySelector<HTMLDivElement>("#studio-period-presets")!;
   const status = panel.querySelector<HTMLElement>("#studio-period-status")!;
+  const periodInputs = [start,end];
+  let boundContext = publicationContext(snapshot());
+  function invalidateContext() {
+    publication.value = "";
+    for (const field of periodInputs) { field.value=""; field.dispatchEvent(new Event("input",{bubbles:true})); }
+    updatePresets();
+    status.textContent = "O vídeo ou contexto mudou. A publicação e o período anteriores foram descartados; informe a data deste vídeo.";
+  }
+  function syncContext(): boolean {
+    const next = publicationContext(snapshot());
+    if (next === boundContext) return false;
+    boundContext = next;
+    invalidateContext();
+    return true;
+  }
   for (const days of PRESETS) {
     const button = document.createElement("button");
     button.type = "button";
     button.dataset.days = String(days);
     button.textContent = `${days} dias`;
     button.addEventListener("click", () => {
+      if (syncContext()) return;
       const period = completedPublicationPeriod(publication.value, days);
       if (!period) { updatePresets(); return; }
       start.value = period.start;
@@ -60,8 +85,9 @@ export function initStudioOverview({ snapshot }: { snapshot: () => PageSnapshot 
     }
     status.textContent = publication.value ? "Intervalos indisponíveis ainda não completaram seu último dia UTC, ou a data é inválida." : "Informe a data de publicação para habilitar intervalos completos.";
   }
-  publication.addEventListener("input", updatePresets);
+  publication.addEventListener("input", () => { if (!syncContext()) updatePresets(); });
   function render() {
+    const changed = syncContext();
     const data = snapshot().studio;
     fields.replaceChildren();
     const row = (label: string, value: string) => {
@@ -77,8 +103,8 @@ export function initStudioOverview({ snapshot }: { snapshot: () => PageSnapshot 
     row("Moeda observada", data?.currency || data?.currencyCode ? `${[data.currency, data.currencyCode].filter(Boolean).join(" · ")}${source(data.sources?.currency)}` : "Desconhecida");
     row("Quantidade observada de vídeos", data?.videoCount !== undefined ? `${data.videoCount}${source(data.sources?.videoCount)} · escopo da contagem não confirmado` : "Desconhecida");
     warnings.replaceChildren(...(data?.warnings ?? []).map(message => { const item = document.createElement("li"); item.textContent = message; return item; }));
-    updatePresets();
+    if (!changed) updatePresets();
   }
   render();
-  return { render };
+  return { render, invalidateContext };
 }

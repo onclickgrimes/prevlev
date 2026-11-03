@@ -1,3 +1,11 @@
+# Checkpoint D20/D26 · vínculo de contexto
+
+Em 3 de novembro de 2026, `npm run check` passou com **630 testes em 54 arquivos**, typecheck, lint e build. **10 cenários direcionados de navegador** passaram no build final, incluindo troca de backend com reseleção do mesmo modelo/origem e troca de vídeo descartando publicação/período. A suíte integral anterior do follow-up (124 aprovações e dois ignorados) não foi repetida neste checkpoint localizado.
+
+O cache de transcrição inclui o backend salvo na identidade e é invalidado ao salvar/remover conexão, inclusive quando o endpoint é mantido e as credenciais podem ter mudado. A data declarada de publicação e os campos de período são limpos ao mudar vídeo/contexto da coleta ou aba selecionada. Mudanças somente de query/período no mesmo vídeo preservam a declaração. Os testes usam fixtures; nenhuma nova geração ou ação real no Studio foi executada.
+
+As outras sete frentes da auditoria pós-publicação continuam em desenvolvimento independente; este checkpoint não declara equivalência completa.
+
 # Validação do follow-up local de segurança
 
 Em 3 de novembro de 2026, `npm run check` passou: **typecheck, lint, 628 testes em 54 arquivos e build**. A regressão completa final de navegador passou em **124 cenários**, com **2 ignorados** por política de instalação da extensão, sem contorno. Saída de testes exclusiva; código congelado durante esta rodada. `git diff --check`, leitura dos JSONs e auditoria dos pontos de criação de imagens passaram.

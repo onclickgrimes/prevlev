@@ -1,5 +1,7 @@
 # Cobertura dos 40 recursos · v0.6.5
 
+Checkpoint de contexto D20/D26: cache inclui backend salvo e conexão invalida resultados; troca de vídeo/aba descarta publicação e período declarados. Verificação local:630 testes e10 cenários direcionados; demais lacunas continuam abertas.
+
 Revisão local adicional de segurança e correção: [coleta, imagens, transcrições e fontes](LOCAL_SAFETY_FOLLOWUP.md). Publicação suspensa; aceite por fixtures permanece separado do runtime real.
 
 Implementação independente; não há declaração de paridade completa com Nexlev 3.12.6.

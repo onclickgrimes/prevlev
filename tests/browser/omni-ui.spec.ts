@@ -591,3 +591,16 @@ test("clearing the collection discards a pending backend image preview", async (
   await expect(page.locator('#remote-images img')).toHaveCount(0);
   await expect(page.locator('#notice')).toContainText('Dados locais apagados');
 });
+
+test("switching backend invalidates transcript AI cache even after reselecting identical model and Omni origin",async()=>{
+  await connect();await discover();await selectModel('fixture:text');
+  await page.locator('[data-page="transcript"]').click();await page.locator('[data-ai="transcript-summary"]').click();
+  await expect(page.locator('#transcript-ai-state')).toContainText('concluído');
+  await page.locator('[data-ai="transcript-summary"]').click();await expect(page.locator('#transcript-ai-state')).toContainText('cache');expect(analyses()).toHaveLength(1);
+  await connect('http://127.0.0.1:8788');await discover();await selectModel('fixture:text');
+  await page.locator('[data-page="transcript"]').click();await expect(page.locator('#transcript-copy-summary')).toBeDisabled();
+  await page.locator('[data-ai="transcript-summary"]').click();await expect(page.locator('#transcript-ai-state')).toContainText('concluído');
+  expect(analyses()).toHaveLength(2);expect(analyses()[1].url).toBe('http://127.0.0.1:8788/v1/analyze');
+  await connect('http://127.0.0.1:8788');await page.locator('[data-page="transcript"]').click();
+  await expect(page.locator('#transcript-copy-summary')).toBeDisabled();
+});

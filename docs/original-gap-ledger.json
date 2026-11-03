@@ -1940,5 +1940,27 @@
       "review": "completed_no_remaining_P1_P2",
       "runtimeVerified": false
     }
-  }
+  },
+  "localGapCompletionCheckpoints": [
+    {
+      "ids": [
+        "D20",
+        "D26"
+      ],
+      "scope": "Backend-bound transcript cache and identity-bound publication declaration",
+      "status": "implemented_fixture_tested",
+      "automatedPassed": 630,
+      "browserTargetedPassed": 10,
+      "runtimeVerified": false,
+      "remainingAuditItems": [
+        "D09",
+        "D10",
+        "D19",
+        "D21",
+        "D24",
+        "D29",
+        "D30/D33"
+      ]
+    }
+  ]
 }

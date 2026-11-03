@@ -1,5 +1,7 @@
 # Ledger de diferenças comprovadas da referência
 
+Checkpoint de contexto D20/D26: cache inclui backend salvo e conexão invalida resultados; troca de vídeo/aba descarta publicação e período declarados. Verificação local:630 testes e10 cenários direcionados; demais lacunas continuam abertas.
+
 Revisão local adicional de segurança e correção: [coleta, imagens, transcrições e fontes](LOCAL_SAFETY_FOLLOWUP.md). Publicação suspensa; aceite por fixtures permanece separado do runtime real.
 
 Este ledger registra as33 diferenças transmitidas pelo coordenador. A evidência da referência é **estática e relatada pelo parent**; não foi executada a extensão original neste executor. IDs de módulos abaixo são os identificadores informados, não Evidence IDs inventados ou links para bundles publicados.

@@ -29,6 +29,23 @@ describe("UTC publication periods", () => {
 });
 
 describe("Studio overview on a real DOM fixture", () => {
+  it("clears declared publication and period when video changes and refuses an unrendered context switch",()=>{
+    fixture();const current=snapshot();current.url='https://studio.youtube.com/video/aaaaaaaaaaa/analytics';current.videoId='aaaaaaaaaaa';
+    const tools=initStudioOverview({snapshot:()=>current});const publication=document.querySelector<HTMLInputElement>('#studio-publication-date')!,seven=document.querySelector<HTMLButtonElement>('[data-days="7"]')!;
+    publication.value='2020-01-01';publication.dispatchEvent(new Event('input'));seven.click();
+    expect(document.querySelector<HTMLInputElement>('#period-start')!.value).toBe('2020-01-01');
+    current.url='https://studio.youtube.com/video/bbbbbbbbbbb/analytics';current.videoId='bbbbbbbbbbb';tools.render();
+    expect(publication.value).toBe('');expect(seven.disabled).toBe(true);expect(document.querySelector<HTMLInputElement>('#period-start')!.value).toBe('');expect(document.querySelector<HTMLInputElement>('#period-end')!.value).toBe('');
+    publication.value='2021-01-01';publication.dispatchEvent(new Event('input'));current.videoId='ccccccccccc';
+    seven.click();expect(publication.value).toBe('');expect(document.querySelector<HTMLInputElement>('#period-start')!.value).toBe('');
+  });
+  it("preserves the declaration for the same video when only query parameters or unrelated metrics change",()=>{
+    fixture();const current=snapshot();current.url='https://studio.youtube.com/video/aaaaaaaaaaa/analytics?period=28';current.videoId='aaaaaaaaaaa';const tools=initStudioOverview({snapshot:()=>current});
+    const publication=document.querySelector<HTMLInputElement>('#studio-publication-date')!;publication.value='2020-01-01';publication.dispatchEvent(new Event('input'));
+    current.url='https://studio.youtube.com/video/aaaaaaaaaaa/analytics?period=90';current.title='Changed metric render';tools.render();
+    expect(publication.value).toBe('2020-01-01');expect(document.querySelector<HTMLButtonElement>('[data-days="7"]')!.disabled).toBe(false);
+    tools.invalidateContext();expect(publication.value).toBe('');expect(document.querySelector<HTMLButtonElement>('[data-days="7"]')!.disabled).toBe(true);
+  });
   it("renders observed fields, provenance, unknowns and warnings without inventing a period or quantity", () => {
     fixture();
     const source = new DOMParser().parseFromString('<div id="TOTAL_ESTIMATED_EARNINGS-tab" data-currency="BRL"><span id="metric-total">R$ 1.234,56</span></div><span id="date-range-label">Últimos 28 dias</span><yta-key-metric-card data-metric="Quantidade de vídeos"><b id="metric-value">12</b></yta-key-metric-card>', "text/html");

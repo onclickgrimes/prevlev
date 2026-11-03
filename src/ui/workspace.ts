@@ -103,7 +103,7 @@ let aiSelectionSaving = false;
 let aiRequestRunning = false;
 let remoteOutputEpoch = 0;
 function invalidateRemoteOutput() { remoteOutputEpoch++; remoteImages.invalidate(); $("remote-result").textContent=""; }
-const transcriptExtras=initTranscriptExtras({segments:()=>segments,text:transcriptContent,metadata:()=>snapshot,aiContext:()=>JSON.stringify([selectedAiOrigin,selectedAiModel,selectedAiStreaming])});
+const transcriptExtras=initTranscriptExtras({segments:()=>segments,text:transcriptContent,metadata:()=>snapshot,aiContext:()=>JSON.stringify([savedBackendOrigin,selectedAiOrigin,selectedAiModel,selectedAiStreaming])});
 const commentTools = initCommentTools({snapshot: () => snapshot, onAi: async () => {showPage("remote"); await remote("comment-analysis");}});
 const swipeTools = initSwipeTools();
 const renderComments = () => commentTools.render();
@@ -1217,6 +1217,7 @@ on("save-settings", async () => {
     ...(old.backendUrl !== origin ? { aiModel: "", aiStreaming: false } : {}),
   });
   savedBackendOrigin = origin;
+  transcriptExtras.invalidate();
   invalidateRemoteOutput();
   if (old.backendUrl !== origin) {
     aiCatalog = undefined;
@@ -1240,6 +1241,7 @@ on("clear-connection", async () => {
     aiStreaming: false,
   });
   savedBackendOrigin = "";
+  transcriptExtras.invalidate();
   invalidateRemoteOutput();
   aiCatalog = undefined;
   selectedAiModel = "";
@@ -1296,6 +1298,8 @@ const thumbnailLab = mountThumbnailLab($("thumbnail-lab"), {
   showResult: response => { void displayRemote(response,"remote-result").catch(fail); showPage("remote"); },
 });
 const studioOverview = initStudioOverview({snapshot:()=>snapshot});
+$("tab-select").addEventListener("change",()=>studioOverview.invalidateContext());
+$("tab-select").addEventListener("input",()=>studioOverview.invalidateContext());
 mountDailyObservations($("daily-observations"));
 const channelReport = mountChannelReport($("channel-report"),()=>snapshot.videos);
 const nicheTools = initNicheTools({snapshot:()=>snapshot});

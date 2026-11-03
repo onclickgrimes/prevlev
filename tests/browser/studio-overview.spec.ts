@@ -30,3 +30,15 @@ test("renders observed Studio context and presets only fill workspace fields", a
   expect(requests).toEqual([]);
   await page.close();
 });
+
+test('changing video clears the publication declaration and prepared dates before another preset can run',async()=>{
+  const page=await browser.newPage();await page.setContent('<section id="studio"><input type="date" id="period-start"><input type="date" id="period-end"></section>');
+  const built=await build({stdin:{contents:`import {initStudioOverview} from './src/ui/studio-overview';
+let snapshot={url:'https://studio.youtube.com/video/aaaaaaaaaaa/analytics',videoId:'aaaaaaaaaaa',title:'A',videos:[],comments:[],transcript:[],warnings:[]};
+const tools=initStudioOverview({snapshot:()=>snapshot});window.changeVideo=()=>{snapshot={...snapshot,url:'https://studio.youtube.com/video/bbbbbbbbbbb/analytics',videoId:'bbbbbbbbbbb'};tools.render();};`,resolveDir:process.cwd(),loader:'ts'},bundle:true,write:false,format:'iife'});
+  await page.addScriptTag({content:built.outputFiles[0].text});await page.locator('#studio-publication-date').fill('2020-01-01');await page.locator('[data-days="7"]').click();
+  await expect(page.locator('#period-end')).toHaveValue('2020-01-07');
+  await page.evaluate(()=>(window as unknown as {changeVideo:()=>void}).changeVideo());
+  await expect(page.locator('#studio-publication-date')).toHaveValue('');await expect(page.locator('#period-start')).toHaveValue('');await expect(page.locator('#period-end')).toHaveValue('');await expect(page.locator('[data-days="7"]')).toBeDisabled();
+  await page.close();
+});

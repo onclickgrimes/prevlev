@@ -1,5 +1,7 @@
 # Auditoria de gaps · 40 recursos e extras
 
+Checkpoint de contexto D20/D26: cache inclui backend salvo e conexão invalida resultados; troca de vídeo/aba descarta publicação e período declarados. Verificação local:630 testes e10 cenários direcionados; demais lacunas continuam abertas.
+
 Revisão local adicional de segurança e correção: [coleta, imagens, transcrições e fontes](LOCAL_SAFETY_FOLLOWUP.md). Publicação suspensa; aceite por fixtures permanece separado do runtime real.
 
 Base inspecionada: `e22c7bf0c7d1ccf964390ab4db159bd8d70b0b46` (v0.4.0); 2026-11-03. A auditoria é uma fila de trabalho, não declaração de paridade ou encerramento da reconstrução.
