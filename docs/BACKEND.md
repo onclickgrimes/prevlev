@@ -51,6 +51,7 @@ Use HTTPS ao hospedar em outra máquina. O servidor exige `PREVLEV_TOKEN` ao esc
 | `POST /v1/analyze` | Dataset local ou ação de IA escolhida | Token, origem exata e limite compartilhado |
 | `POST /v1/youtube/search` | Uma página da API oficial opcional | Mesmos controles, opt-in no servidor e `apiConsent:true` |
 | `POST /v1/history` | Ações manuais de histórico próprio | Mesmos controles; exclusão exige `confirm:true` |
+| `POST /v1/library` | Biblioteca pessoal, leitura e gravação manual por revisão | Mesmos controles; gravação exige revisão atual |
 
 Todas as rotas protegidas compartilham 30 solicitações por minuto por endereço. Rotas POST recebem `Content-Type: application/json` e `Authorization: Bearer TOKEN` quando configurado. A consulta de catálogo não aceita corpo. Não há endpoint HTTP MCP nem rota para mudar credenciais/origem de provedor remotamente.
 
@@ -117,6 +118,12 @@ Os registros novos ficam em `DATA_DIR/observations-v1.json`, com versão de form
 
 Arquivos legados reconhecidos com nome SHA-256 do ID são preservados e continuam legíveis quando o ID é informado. Eles não formam um catálogo de IDs: listagem/exportação geral abrangem o índice novo, enquanto uma consulta/exportação por vídeo pode incluir o legado reconhecido. Arquivos corrompidos, caminhos arbitrários e arquivos desconhecidos não são sobrescritos. Exclusão geral preserva arquivos não reconhecidos. O contrato anterior `view-history` usa o mesmo armazenamento por compatibilidade. Apagar `DATA_DIR` remove os registros desse servidor, sem apagar downloads já exportados.
 
+## Biblioteca pessoal
+
+O Swipe File pode ser sincronizado manualmente com o mesmo backend pessoal. `POST /v1/library` recebe `action: "read"` ou `action: "commit"` com `baseRevision` e uma lista explícita de referências. A revisão é um hash do conteúdo; se o servidor mudou desde a consulta, a gravação retorna conflito e preserva os dados. A interface mostra destino, contagens e amostra antes de mesclar ou substituir, exige confirmação e verifica mudanças de conexão e da biblioteca local. Não há sincronização automática.
+
+A biblioteca fica em `DATA_DIR/library-v1.json`, com escrita temporária, troca atômica e permissões privadas quando suportadas. O limite é 5000 referências e 4 MiB, com limite HTTP específico ligeiramente maior para o envelope. O bloqueio entre gravações do servidor vale para um processo; não há coordenação distribuída, contas ou isolamento multiusuário. A origem marcada `youtube-data-api` é recusada. Arquivos inválidos são preservados. A conexão usa o token e a origem já configurados; não cria um provedor de nuvem.
+
 ## MCP somente para leitura
 
 O MCP é um **processo stdio separado**, desativado por padrão (`MCP_ENABLED=false`). Ativá-lo exige que o operador configure e inicie explicitamente o processo local; iniciar o servidor HTTP não o registra nem inicia em outros aplicativos. Não há chave de IA/YouTube no contrato MCP.
@@ -154,4 +161,4 @@ O adaptador compatível mantém os endpoints `/chat/completions` e `/images/gene
 
 O servidor não envia telemetria. Relatórios de dataset e a pesquisa oficial não persistem seus resultados. `/v1/history` e o contrato anterior `view-history` registram somente observações locais explícitas, conforme o formato e os limites acima. O código Prevlev não grava chaves API, comentários ou transcrições em logs. Omni, proxy e provedores podem ter políticas próprias de registro/retenção; `store: false` no contrato Responses não equivale a desligar todos os logs desses serviços.
 
-Há limite de 1 MiB por requisição HTTP, 2000 vídeos por análise de dataset e 30 requisições/minuto por endereço compartilhadas pelas rotas protegidas. MCP e histórico têm seus próprios limites descritos acima. Solicitações externas não seguem redirecionamentos e têm limites de resposta. Testes usam dados/transportes sintéticos, arquivos temporários, loopback e stdio local; não validam chaves reais, saldo, alcance de um serviço do usuário ou operação em conta real. Para hospedagem pública, acrescente proxy com HTTPS, limites por usuário, armazenamento e autenticação de produção. Este processo não implementa contas, cobrança, aquisição irrestrita de catálogo ou isolamento multiusuário.
+Há limite de 1 MiB por requisição HTTP (exceto a biblioteca, limitada a 4 MiB mais envelope), 2000 vídeos por análise de dataset e 30 requisições/minuto por endereço compartilhadas pelas rotas protegidas. MCP e histórico têm seus próprios limites descritos acima. Solicitações externas não seguem redirecionamentos e têm limites de resposta. Testes usam dados/transportes sintéticos, arquivos temporários, loopback e stdio local; não validam chaves reais, saldo, alcance de um serviço do usuário ou operação em conta real. Para hospedagem pública, acrescente proxy com HTTPS, limites por usuário, armazenamento e autenticação de produção. Este processo não implementa contas, cobrança, aquisição irrestrita de catálogo ou isolamento multiusuário.

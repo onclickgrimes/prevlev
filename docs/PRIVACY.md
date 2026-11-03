@@ -34,6 +34,12 @@ Sem seleção/configuração compatível, a função retorna indisponibilidade e
 
 Veja [BACKEND.md](BACKEND.md) para autenticação, CORS, limites, variáveis de ambiente e as limitações da instalação pessoal. Publicação multiusuário exige autenticação e isolamento próprios.
 
+## Sincronização manual de referências
+
+A biblioteca de referências pode ser enviada ao backend escolhido somente por ação explícita. Títulos, URLs, pastas, tags, notas, datas e referências de imagens incluídas na biblioteca serão enviados; confira-os antes de confirmar. Consultar uma revisão não altera o navegador. Mesclar ou substituir exige outra confirmação, e conflitos de revisão/conexão interrompem a operação. A prévia de imagem remota no Swipe File só carrega a URL quando solicitada.
+
+O arquivo de biblioteca fica no `DATA_DIR` do servidor. Apagar a biblioteca do navegador não apaga automaticamente essa cópia; para removê-la use uma substituição confirmada por biblioteca vazia ou remova o arquivo no servidor. Downloads exportados permanecem arquivos separados.
+
 ## Fonte oficial e MCP opcionais
 
 Na Pesquisa oficial, uma seleção de fonte e confirmação antecedem cada busca ou próxima página. A consulta e os filtros públicos seguem extensão → backend Prevlev → API oficial Google/YouTube; o Google recebe esses parâmetros e a chave do projeto do operador. A chave existente fica somente no ambiente do servidor, nunca no navegador ou links. O Prevlev não consulta essa fonte ao abrir o painel ou iniciar o servidor. Consulte os [Termos do YouTube](https://www.youtube.com/t/terms) e a [Política de Privacidade do Google](https://policies.google.com/privacy).

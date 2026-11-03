@@ -83,11 +83,11 @@ export function isAiFeature(feature: string): boolean {
 /** Explicit local-backend operations. Never retries or discovers a remote source. */
 export async function callBackendOperation(
   settings: Settings,
-  path: "/v1/youtube/search" | "/v1/history",
+  path: "/v1/youtube/search" | "/v1/history" | "/v1/library",
   payload: unknown,
   signal?: AbortSignal,
 ): Promise<RemoteResponse> {
-  if (!["/v1/youtube/search", "/v1/history"].includes(path))
+  if (!["/v1/youtube/search", "/v1/history", "/v1/library"].includes(path))
     throw new Error("Operação de backend desconhecida.");
   if (!settings.backendUrl)
     return {

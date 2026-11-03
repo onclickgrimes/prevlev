@@ -1,0 +1,1 @@
+export function diagnose(options?:{root?:string;env?:NodeJS.ProcessEnv;nodeVersion?:string;probe?:boolean;connect?:typeof import('node:net').connect}):Promise<{version:number;scope:string;networkProbed:boolean;ok:boolean;checks:{id:string;status:string;message:string}[]}>;

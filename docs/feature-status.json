@@ -1,6 +1,6 @@
 {
-  "version": "0.4.0",
-  "scope": "Implementação independente; não há declaração de paridade completa com Nexlev 3.12.6.",
+  "version": "0.5.0",
+  "scope": "Implementação independente; não há declaração de paridade completa com Nexlev 3.12.6. As entradas descrevem a base v0.4; consulte GAP_AUDIT e ORIGINAL_GAP_LEDGER para diferenças posteriores e limites.",
   "statusDefinitions": {
     "implemented": "Disponível no escopo local descrito, com evidência em fixtures; não significa validação em extensão instalada ou paridade completa.",
     "partial": "Parte funcional entregue, com diferença de produto/dados explícita; teste real de runtime é registrado separadamente.",
@@ -921,8 +921,8 @@
         "tests/browser/official-search.spec.ts",
         "tests/browser/history.spec.ts"
       ],
-      "scope": "Bundles próprios reais com Chrome/transporte/dados de fixtures; histórico usa relay HTTP ao servidor próprio real em loopback e arquivos temporários. Não equivale a extensão instalada, conta real, chave oficial ou Omni do usuário.",
-      "testsPassed": 27
+      "scope": "Bundles próprios com transporte Chrome em fixtures. Histórico e Swipe sync usam backend próprio temporário via relay; extensão instalada e serviços reais não verificados.",
+      "testsPassed": 70
     },
     "installedExtension": {
       "status": "blocked_by_environment_policy",
@@ -966,9 +966,9 @@
       "typecheck": "passed",
       "lint": "passed",
       "build": "passed",
-      "unitAndIntegrationTestsPassed": 295,
-      "testFiles": 20,
-      "browserTestsPassed": 27,
+      "unitAndIntegrationTestsPassed": 426,
+      "testFiles": 35,
+      "browserTestsPassed": 70,
       "installedExtensionTestsSkipped": 2
     },
     "nativeFixtureLoopback": {

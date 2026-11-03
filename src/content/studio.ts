@@ -9,6 +9,14 @@ export type StudioAction =
 export interface StudioInput {
   limit?: number;
   positions?: number[];
+  /** Explicit frame rate for the modern H:MM:SS:FF toolbar, never inferred. */
+  fps?: number;
+}
+export interface StudioMetricSource {selector:string;label:string;raw:string;}
+export interface StudioPeriod {label:string;selector:string;start?:string;end?:string;}
+export interface StudioMetrics {
+ source:'studio-dom';observedAt:string;revenue?:number;currency?:string;currencyCode?:string;videoCount?:number;period?:StudioPeriod;
+ sources:{revenue?:StudioMetricSource;currency?:StudioMetricSource;videoCount?:StudioMetricSource;period?:StudioMetricSource};warnings:string[];
 }
 export interface StudioPlan {
   readonly id: string;
@@ -54,6 +62,10 @@ interface MidrollContext {
   positions: readonly number[];
   initialFields: HTMLInputElement[];
 }
+interface ModernMidrollContext {
+ panel:HTMLElement;toolbar:HTMLElement;timeControl:HTMLElement;field:HTMLInputElement;addButton:HTMLElement;
+ fingerprint:string;addSignature:string;fieldSignature:string;positions:readonly number[];fps:number;
+}
 interface StoredPlan {
   publicPlan: StudioPlan;
   document: Document;
@@ -62,6 +74,7 @@ interface StoredPlan {
   steps: Step[];
   guards: Step[];
   midroll?: MidrollContext;
+  modernMidroll?:ModernMidrollContext;
   controller: AbortController;
   state: "pending" | "running";
 }
@@ -91,14 +104,15 @@ function label(element: Element): string {
 function visible(element: HTMLElement): boolean {
   if (!element.isConnected || element.closest('[hidden], [aria-hidden="true"]'))
     return false;
-  const style = element.ownerDocument.defaultView?.getComputedStyle(element);
-  return style?.display !== "none" && style?.visibility !== "hidden";
+  for(let node:HTMLElement|null=element;node;node=node.parentElement){const style=element.ownerDocument.defaultView?.getComputedStyle(node);if(style?.display==='none'||style?.visibility==='hidden')return false;}
+  return true;
 }
 function enabled(element: HTMLElement): boolean {
   return (
     visible(element) &&
     !element.hasAttribute("disabled") &&
-    element.getAttribute("aria-disabled") !== "true"
+    !element.matches(':disabled') &&
+    !element.closest('[aria-disabled="true"]')
   );
 }
 function signature(element: HTMLElement): string {
@@ -116,7 +130,7 @@ function signature(element: HTMLElement): string {
   ].join("|");
 }
 function studioDocument(doc: Document): boolean {
-  return doc.location.hostname === "studio.youtube.com";
+  return doc.location?.hostname === "studio.youtube.com";
 }
 function unique<T>(items: T[]): T[] {
   return [...new Set(items)];
@@ -222,6 +236,37 @@ function stepIsCurrent(step: Step): boolean {
 
 const editorSelector =
   "ytcp-ad-breaks-editor, ytcp-ad-break-editor, ytcp-video-ad-breaks-editor";
+function modernParts(doc:Document):Omit<ModernMidrollContext,'fingerprint'|'addSignature'|'fieldSignature'|'positions'|'fps'>|undefined{
+ const panels=Array.from(doc.querySelectorAll<HTMLElement>('ytve-ad-breaks-editor-options-panel')).filter(visible);
+ const times=Array.from(doc.querySelectorAll<HTMLElement>('ytve-toolbar ytcp-media-timestamp-input')).filter(visible);
+ const additions=Array.from(doc.querySelectorAll<HTMLElement>('#add-ad-break')).filter(enabled);
+ if(panels.length!==1||times.length!==1||additions.length!==1)return undefined;
+ const fields=Array.from(times[0].querySelectorAll<HTMLInputElement>('input')).filter(visible),toolbar=times[0].closest<HTMLElement>('ytve-toolbar');
+ if(fields.length!==1||!toolbar||!writable(fields[0]))return undefined;
+ const format=fields[0].value||fields[0].placeholder;
+ if(!/^\d{1,3}:\d{2}:\d{2}:\d{2}$/.test(format)&&!/^h{1,3}:mm:ss:ff$/i.test(format))return undefined;
+ return {panel:panels[0],toolbar,timeControl:times[0],field:fields[0],addButton:additions[0]};
+}
+function modernFingerprint(parts:ReturnType<typeof modernParts>,doc:Document):string{
+ if(!parts)return '';
+ const identity=(element:Element)=>[element.tagName,...['id','video-id','data-video-id','channel-id','data-channel-id','aria-label','data-fps','fps','frame-rate'].map(key=>element.getAttribute(key))];
+ const scope=parts.panel.closest('[video-id],[data-video-id],[channel-id],[data-channel-id]')??doc.body;
+ return JSON.stringify([identity(parts.panel),identity(parts.toolbar),identity(parts.timeControl),identity(scope),dateIdentity(parts.field),parts.field.placeholder,compactText(doc.querySelector('#entity-snapshot-title')?.textContent)]);
+}
+function validModernFps(parts:NonNullable<ReturnType<typeof modernParts>>,fps:unknown):fps is number{
+ if(typeof fps!=='number'||![24,25,30,48,50,60].includes(fps))return false;
+ const declared=[parts.panel,parts.timeControl].flatMap(element=>['data-fps','fps','frame-rate'].flatMap(key=>element.hasAttribute(key)?[Number(element.getAttribute(key))]:[]));
+ return declared.every(value=>value===fps);
+}
+function frameTimestamp(seconds:number,fps:number):string{
+ const frames=Math.round(seconds*fps),whole=Math.floor(frames/fps);return `${Math.floor(whole/3600)}:${String(Math.floor(whole/60)%60).padStart(2,'0')}:${String(whole%60).padStart(2,'0')}:${String(frames%fps).padStart(2,'0')}`;
+}
+function frameSeconds(value:string,fps:number):number|undefined{
+ const match=/^(\d{1,3}):(\d{2}):(\d{2}):(\d{2})$/.exec(value);if(!match)return undefined;const [,hours,minutes,seconds,frames]=match.map(Number);if(minutes>59||seconds>59||frames>=fps)return undefined;return hours*3600+minutes*60+seconds+frames/fps;
+}
+function modernIsCurrent(context:ModernMidrollContext,doc:Document,replaceField=false):boolean{
+ const parts=modernParts(doc);return !!parts&&parts.panel===context.panel&&parts.toolbar===context.toolbar&&parts.timeControl===context.timeControl&&parts.addButton===context.addButton&&modernFingerprint(parts,doc)===context.fingerprint&&validModernFps(parts,context.fps)&&signature(parts.addButton)===context.addSignature&&(replaceField||parts.field===context.field&&signature(parts.field)===context.fieldSignature);
+}
 function midrollEditors(doc: Document): HTMLElement[] {
   const editors = Array.from(
     doc.querySelectorAll<HTMLElement>(editorSelector),
@@ -331,59 +376,35 @@ function displayedMoney(value: string): number | undefined {
 }
 
 /** Only reads rendered cards; hidden reports/private Studio APIs are not queried. */
-export function readStudioMetrics(doc: Document = document): {
-  revenue?: number;
-  currency?: string;
-  videoCount?: number;
-  warnings: string[];
-} {
-  const result: {
-    revenue?: number;
-    currency?: string;
-    videoCount?: number;
-    warnings: string[];
-  } = { warnings: [] };
-  if (!studioDocument(doc)) {
-    result.warnings.push("Abra o YouTube Studio para ler métricas exibidas.");
-    return result;
-  }
-  const cards = doc.querySelectorAll<HTMLElement>(
-    "yta-key-metric-card, yta-key-metric-block, [data-metric]",
-  );
-  for (const card of cards) {
-    if (!visible(card)) continue;
-    const metricLabel = normalize(
-      card.getAttribute("data-metric") ??
-        card.querySelector("#title, #metric-title, .metric-title, [data-label]")
-          ?.textContent ??
-        "",
-    );
-    const value = card
-      .querySelector("#metric-value, #value, .metric-value, [data-value]")
-      ?.textContent?.trim();
-    if (!value) continue;
-    const number =
-      /estimated revenue|receita estimada|^revenue$|^receita$/.test(metricLabel)
-        ? displayedMoney(value)
-        : parseCount(value);
-    if (number === undefined || !Number.isFinite(number)) continue;
-    if (
-      /estimated revenue|receita estimada|^revenue$|^receita$/.test(metricLabel)
-    ) {
-      result.revenue = number;
-      result.currency = value.match(/R\$|US\$|€|£|\$/)?.[0];
-    }
-    if (/^videos$|video count|quantidade de videos/.test(metricLabel))
-      result.videoCount = number;
-  }
-  if (result.revenue === undefined)
-    result.warnings.push(
-      "Receita não identificada em um card visível. Informe o valor manualmente na calculadora.",
-    );
-  result.warnings.push(
-    "Somente métricas atualmente renderizadas; nenhuma consulta privada ao Studio foi feita.",
-  );
-  return result;
+export function readStudioMetrics(doc: Document = document):StudioMetrics {
+ const result:StudioMetrics={source:'studio-dom',observedAt:new Date().toISOString(),sources:{},warnings:[]};
+ if(!studioDocument(doc)){result.warnings.push('Abra o YouTube Studio para ler métricas exibidas.');return result;}
+ const revenueCandidates:{value:number;currency?:string;code?:string;source:StudioMetricSource}[]=[];
+ const quantityCandidates:{value:number;source:StudioMetricSource}[]=[];
+ const addRevenue=(element:HTMLElement,selector:string,metricLabel:string)=>{
+  if(!visible(element))return;const raw=compactText(element.textContent),value=displayedMoney(raw);if(value===undefined)return;
+  const currency=raw.match(/R\$|US\$|€|£|\$/)?.[0];
+  const declared=element.closest('[data-currency], [currency]')?.getAttribute('data-currency')??element.closest('[currency]')?.getAttribute('currency');
+  const code=declared&&/^[A-Z]{3}$/.test(declared)?declared:currency==='R$'?'BRL':currency==='US$'?'USD':currency==='€'?'EUR':currency==='£'?'GBP':undefined;
+  revenueCandidates.push({value,currency,code,source:{selector,label:metricLabel,raw}});
+ };
+ for(const element of doc.querySelectorAll<HTMLElement>('#TOTAL_ESTIMATED_EARNINGS-tab #metric-total'))addRevenue(element,'#TOTAL_ESTIMATED_EARNINGS-tab #metric-total','Receita estimada exibida');
+ for(const card of doc.querySelectorAll<HTMLElement>('yta-key-metric-card, yta-key-metric-block, [data-metric]')){
+  if(!visible(card))continue;const metricLabel=compactText(card.getAttribute('data-metric')??card.querySelector('#title, #metric-title, .metric-title, [data-label]')?.textContent);
+  const valueElement=card.querySelector<HTMLElement>('#metric-value, #metric-total, #value, .metric-value, [data-value]');if(!valueElement||!visible(valueElement))continue;
+  if(/estimated revenue|receita estimada|^revenue$|^receita$/.test(normalize(metricLabel)))addRevenue(valueElement,`${card.tagName.toLowerCase()} #metric-value/#metric-total`,metricLabel);
+  if(/^videos$|video count|quantidade de videos/.test(normalize(metricLabel))){const raw=compactText(valueElement.textContent),value=parseCount(raw);if(value!==undefined&&Number.isInteger(value)&&value>=0)quantityCandidates.push({value,source:{selector:`${card.tagName.toLowerCase()} #metric-value/#metric-total`,label:metricLabel,raw}});}
+ }
+ const revenueKeys=new Set(revenueCandidates.map(item=>JSON.stringify([item.value,item.currency??'',item.code??''])));
+ if(revenueKeys.size===1){const candidate=revenueCandidates[0];result.revenue=candidate.value;result.currency=candidate.currency;result.currencyCode=candidate.code;result.sources.revenue=candidate.source;if(candidate.currency||candidate.code)result.sources.currency=candidate.source;if(candidate.currency==='$'&&!candidate.code)result.warnings.push('O símbolo $ não identifica sozinho a moeda; nenhum código ISO foi presumido.');}
+ else if(revenueKeys.size>1)result.warnings.push('Mais de um valor de receita visível diverge. A receita permanece desconhecida; escolha o valor e o período manualmente.');
+ const quantities=new Set(quantityCandidates.map(item=>item.value));if(quantities.size===1){result.videoCount=quantityCandidates[0].value;result.sources.videoCount=quantityCandidates[0].source;}else if(quantities.size>1)result.warnings.push('Há quantidades de vídeos divergentes na página; nenhuma foi escolhida automaticamente.');
+ const periods=Array.from(doc.querySelectorAll<HTMLElement>('#date-range-label, yta-date-range-selector #label, yta-date-range-picker #label')).filter(visible).map(element=>({element,raw:compactText(element.textContent)})).filter(item=>item.raw);
+ const periodLabels=new Set(periods.map(item=>item.raw));if(periodLabels.size===1){const first=periods[0],selector=first.element.id==='date-range-label'?'#date-range-label':`${first.element.parentElement?.tagName.toLowerCase()} #label`;result.period={label:first.raw,selector};result.sources.period={selector,label:'Período exibido no Studio',raw:first.raw};}else if(periodLabels.size>1)result.warnings.push('Mais de um período visível foi encontrado; nenhum foi associado à receita.');
+ if(result.revenue===undefined)result.warnings.push('Receita não identificada em um card visível. Informe o valor manualmente na calculadora.');
+ if(result.videoCount===undefined)result.warnings.push('Quantidade de vídeos não identificada em um card explícito. O valor 1 da calculadora é padrão do usuário, não uma contagem lida.');
+ if(!result.period)result.warnings.push('Período das métricas não identificado em um rótulo visível. Campos de data em edição não comprovam o período aplicado.');
+ result.warnings.push('Somente métricas atualmente renderizadas; nenhuma consulta privada ao Studio foi feita.');return result;
 }
 
 /** The returned plan is a short-lived preview, not an authorization to run on load. */
@@ -398,6 +419,7 @@ export function previewStudioAction(
   const steps: Step[] = [];
   const guards: Step[] = [];
   let midroll: MidrollContext | undefined;
+  let modernMidroll:ModernMidrollContext|undefined;
   const notes = [...warnings];
   let description = "";
   let unsupported = "";
@@ -474,9 +496,22 @@ export function previewStudioAction(
       unsupported =
         "Informe de 1 a 50 posições positivas em segundos, distintas após arredondamento e em ordem crescente.";
     } else {
+      // Frame-based controls must never fall through to the seconds-only adapter.
+      const modernPresent=!!doc.querySelector('ytve-ad-breaks-editor-options-panel, ytve-toolbar ytcp-media-timestamp-input, #add-ad-break');
+      const modern=modernParts(doc);
+      if(modernPresent){
+        if(!modern)unsupported='O editor moderno exige um painel, um timestamp H:MM:SS:FF editável e um único controle #add-ad-break visível.';
+        else if(!validModernFps(modern,input.fps))unsupported='O timestamp usa frames. Informe explicitamente FPS 24, 25, 30, 48, 50 ou 60 e confira se corresponde ao editor; FPS ausente, fracionário ou divergente não é presumido.';
+        else{
+          modernMidroll={...modern,fingerprint:modernFingerprint(modern,doc),addSignature:signature(modern.addButton),fieldSignature:signature(modern.field),positions:Object.freeze([...positions]),fps:input.fps};
+          description=`Posicionar o cursor e solicitar ${positions.length} intervalos a ${input.fps} FPS: ${positions.map(value=>frameTimestamp(value,input.fps!)).join(', ')}.`;
+          notes.push('Usa os controles visíveis de timestamp e Adicionar intervalo. Intervalos existentes não são deduplicados; revise a timeline antes de confirmar.','A execução conta cliques enviados, sem inventar confirmação da criação dos intervalos. Não clica em Continuar, Salvar ou questionários.');
+        }
+      }else{
       const editors = midrollEditors(doc);
       if (editors.length !== 1)
         unsupported = `Abra um único editor de intervalos reconhecido. Foram encontrados ${editors.length} editores visíveis.`;
+      else if(Array.from(editors[0].querySelectorAll<HTMLInputElement>('input')).some(field=>visible(field)&&/^\d{1,3}:\d{2}:\d{2}:\d{2}$/.test(field.value||field.placeholder)))unsupported='O editor contém timestamps com frames, mas não possui o conjunto de controles modernos reconhecido. Nenhum FPS foi presumido.';
       else {
         const editor = editors[0];
         const fields = midrollFields(editor);
@@ -512,6 +547,7 @@ export function previewStudioAction(
           );
         }
       }
+      }
     }
   } else unsupported = "Ação de Studio desconhecida.";
   if (unsupported) notes.unshift(unsupported);
@@ -519,8 +555,8 @@ export function previewStudioAction(
     id: globalThis.crypto.randomUUID(),
     action,
     status: unsupported ? "unsupported" : "ready",
-    targetCount: unsupported ? 0 : (midroll?.positions.length ?? steps.length),
-    ...(midroll
+    targetCount: unsupported ? 0 : (modernMidroll?.positions.length??midroll?.positions.length ?? steps.length),
+    ...(modernMidroll?{slotsToCreate:modernMidroll.positions.length,positions:Object.freeze(modernMidroll.positions.map(value=>frameTimestamp(value,modernMidroll!.fps)))}:midroll
       ? {
           slotsToCreate:
             midroll.positions.length - midroll.initialFields.length,
@@ -530,7 +566,7 @@ export function previewStudioAction(
     targets: Object.freeze(
       unsupported
         ? []
-        : midroll
+        : modernMidroll?modernMidroll.positions.map(position=>Object.freeze({control:'#add-ad-break + ytcp-media-timestamp-input',context:description,value:frameTimestamp(position,modernMidroll!.fps)})):midroll
           ? midroll.positions.map((position, index) =>
               Object.freeze({
                 control:
@@ -565,6 +601,7 @@ export function previewStudioAction(
       steps,
       guards,
       midroll,
+      modernMidroll,
       controller: new AbortController(),
       state: "pending",
     });
@@ -723,6 +760,24 @@ async function executeMidrolls(stored: StoredPlan): Promise<StudioExecution> {
 }
 
 /** Call only from the explicit confirm action after displaying the complete preview. */
+async function executeModernMidrolls(stored:StoredPlan):Promise<StudioExecution>{
+ const context=stored.modernMidroll!,doc=stored.document,signal=stored.controller.signal,total=context.positions.length;let submitted=0,addClicks=0;
+ const check=(replaceField=false)=>{if(signal.aborted)throw new Error('cancelled');if(doc.location.href!==stored.url||!modernIsCurrent(context,doc,replaceField))throw new StudioContextChanged('O vídeo, o painel moderno, FPS ou os controles mudaram; nenhum próximo clique foi enviado.');};
+ try{
+  for(const position of context.positions){
+   check();const value=frameTimestamp(position,context.fps),expected=frameSeconds(value,context.fps);if(expected===undefined)throw new Error('Posição fora do formato de timestamp reconhecido.');
+   const setter=Object.getOwnPropertyDescriptor(doc.defaultView!.HTMLInputElement.prototype,'value')?.set;if(!setter)throw new Error('Setter nativo do timestamp indisponível.');
+   setter.call(context.field,value);context.field.dispatchEvent(new doc.defaultView!.Event('input',{bubbles:true}));check(true);
+   let field=modernParts(doc)!.field;if(frameSeconds(field.value,context.fps)!==expected)throw new StudioContextChanged('O timestamp não preservou a posição; a rotina foi interrompida antes de adicionar o intervalo.');
+   field.dispatchEvent(new doc.defaultView!.Event('change',{bubbles:true}));check(true);field=modernParts(doc)!.field;
+   if(frameSeconds(field.value,context.fps)!==expected)throw new StudioContextChanged('O Studio alterou o timestamp durante a edição; confira o cursor antes de continuar.');
+   context.field=field;context.fieldSignature=signature(field);check();context.addButton.click();addClicks++;submitted++;check();
+   if(submitted<total)await wait(150,signal);
+  }
+  return {status:'completed',submitted,total,addClicks,message:'Posições preenchidas e cliques Adicionar enviados. A criação dos intervalos não foi confirmada por este adaptador. Revise a timeline e use Continuar/Salvar manualmente; nenhuma entrega de anúncios é garantida.'};
+ }catch(error){return {status:signal.aborted?'cancelled':error instanceof StudioContextChanged?'stale':'error',submitted,total,addClicks,message:signal.aborted?'Execução cancelada. Um clique já enviado pode ter criado um rascunho; confira o Studio. Nenhum próximo clique foi enviado.':error instanceof Error?error.message:'Não foi possível operar o editor moderno.'};}
+}
+
 export async function executeStudioPlan(
   planId: string,
   signal?: AbortSignal,
@@ -740,15 +795,16 @@ export async function executeStudioPlan(
     return {
       status: "unsupported",
       submitted: 0,
-      total: stored.midroll?.positions.length ?? stored.steps.length,
+      total: stored.modernMidroll?.positions.length??stored.midroll?.positions.length ?? stored.steps.length,
       message: "Esta prévia já está em execução.",
     };
   const { document: doc, steps, controller } = stored;
-  const total = stored.midroll?.positions.length ?? steps.length;
+  const total = stored.modernMidroll?.positions.length??stored.midroll?.positions.length ?? steps.length;
   if (
     Date.now() > stored.expires ||
     doc.location.href !== stored.url ||
     [...steps, ...stored.guards].some((step) => !stepIsCurrent(step)) ||
+    (stored.modernMidroll&&!modernIsCurrent(stored.modernMidroll,doc))||
     (stored.midroll &&
       (!midrollContextIsCurrent(stored.midroll, doc) ||
         midrollFields(stored.midroll.editor).length !==
@@ -773,6 +829,7 @@ export async function executeStudioPlan(
   if (signal?.aborted) controller.abort();
   let submitted = 0;
   try {
+    if(stored.modernMidroll)return await executeModernMidrolls(stored);
     if (stored.midroll) return await executeMidrolls(stored);
     for (const step of steps) {
       if (controller.signal.aborted)
@@ -835,61 +892,77 @@ export function cancelStudioPlan(planId: string): boolean {
   return true;
 }
 
-/** Fills already-open native date controls; the user applies the chosen range. */
-export function setStudioPeriod(
-  start: string,
-  end: string,
-  doc: Document = document,
-): { status: "ready" | "unsupported"; message: string } {
-  const validDate = (date: string) =>
-    /^\d{4}-\d{2}-\d{2}$/.test(date) &&
-    Number.isFinite(Date.parse(date)) &&
-    new Date(date).toISOString().slice(0, 10) === date;
-  if (!validDate(start) || !validDate(end) || start > end)
-    return {
-      status: "unsupported",
-      message:
-        "Use datas válidas no formato AAAA-MM-DD, com início anterior ao fim.",
-    };
-  if (!studioDocument(doc))
-    return { status: "unsupported", message: "Abra o YouTube Studio." };
-  const dialogs = doc.querySelectorAll(
-    'yta-date-range-dialog, yta-date-picker-dialog, yta-date-range-picker, [role="dialog"]',
-  );
-  const fields = unique(
-    Array.from(dialogs).flatMap((dialog) =>
-      Array.from(
-        dialog.querySelectorAll<HTMLInputElement>('input[type="date"]'),
-      ),
-    ),
-  ).filter((field) => enabled(field));
-  if (fields.length !== 2)
-    return {
-      status: "unsupported",
-      message:
-        "Abra o seletor de período personalizado do Studio com dois campos nativos de data. Esse layout não foi reconhecido; ajuste o período manualmente.",
-    };
-  fields.forEach((field, index) => {
-    field.value = index === 0 ? start : end;
-    field.dispatchEvent(new doc.defaultView!.Event("input", { bubbles: true }));
-    field.dispatchEvent(
-      new doc.defaultView!.Event("change", { bubbles: true }),
-    );
-  });
-  return {
-    status: "ready",
-    message: "Período preenchido. Revise e clique em Aplicar no Studio.",
-  };
+export interface StudioPeriodResult {status:'ready'|'unsupported';message:string;filled?:number;source?:'studio-dom';}
+const validStudioDate=(value:string)=>/^\d{4}-\d{2}-\d{2}$/.test(value)&&Number.isFinite(Date.parse(value))&&new Date(value).toISOString().slice(0,10)===value;
+function dateIdentity(field:HTMLInputElement):string{return JSON.stringify(['id','name','type','aria-label','min','max','step'].map(name=>field.getAttribute(name)));}
+function writable(field:HTMLInputElement):boolean{return enabled(field)&&!field.readOnly&&field.getAttribute('aria-readonly')!=='true'&&!field.closest('ytcp-media-timestamp-input[disabled],ytcp-media-timestamp-input[readonly]');}
+function openDateDialog(doc:Document):{dialog:HTMLElement;fields:HTMLInputElement[]}|undefined{
+ const dialogs=Array.from(doc.querySelectorAll<HTMLElement>('yta-date-range-dialog, yta-date-picker-dialog, yta-date-range-picker, [role="dialog"]')).filter(visible);
+ const candidates=dialogs.map(dialog=>({dialog,fields:Array.from(dialog.querySelectorAll<HTMLInputElement>('input[type="date"]')).filter(visible)})).filter(item=>item.fields.length===2);
+ const inner=candidates.filter(item=>!candidates.some(other=>other!==item&&item.dialog.contains(other.dialog)));
+ return inner.length===1?inner[0]:undefined;
+}
+function periodContext(doc:Document,dialog:HTMLElement):string{
+ const root=dialog.closest('[video-id],[data-video-id],[channel-id],[data-channel-id]')??dialog;
+ return JSON.stringify({url:doc.location?.href,dialog:['id','role','aria-label','data-date-context','data-period','data-context-id'].map(key=>dialog.getAttribute(key)),root:[root.tagName,...['id','video-id','data-video-id','channel-id','data-channel-id'].map(key=>root.getAttribute(key))]});
+}
+function fillPeriod(start:string,end:string,doc:Document):{result:StudioPeriodResult;verify?:()=>boolean}{
+ const bad=(message:string,filled=0)=>({result:{status:'unsupported' as const,message,filled,source:'studio-dom' as const}});
+ if(!validStudioDate(start)||!validStudioDate(end)||start>end)return bad('Use datas válidas no formato AAAA-MM-DD, com início anterior ao fim.');
+ if(!studioDocument(doc))return bad('Abra o YouTube Studio.');
+ const initial=openDateDialog(doc);if(!initial||initial.fields.some(field=>!writable(field)))return bad('Abra um único seletor de período personalizado com dois campos nativos de data editáveis. Campos somente leitura, desativados ou desconhecidos não são alterados.');
+ const context=periodContext(doc,initial.dialog),identities=initial.fields.map(dateIdentity),originalValues=initial.fields.map(field=>field.value);let filled=0;
+ const current=()=>{const next=openDateDialog(doc);if(!next||next.dialog!==initial.dialog||periodContext(doc,next.dialog)!==context||next.fields.some((field,index)=>!writable(field)||dateIdentity(field)!==identities[index]))throw new Error('O diálogo, a identidade do canal/vídeo ou os controles de data mudaram.');return next.fields;};
+ const setter=Object.getOwnPropertyDescriptor(doc.defaultView!.HTMLInputElement.prototype,'value')?.set;
+ if(!setter)return bad('O setter nativo dos campos de data não está disponível.');
+ try{
+  for(let index=0;index<2;index++){
+   let fields=current();if(fields[index].value!==originalValues[index])throw new Error('O contexto dos valores de data mudou antes do preenchimento.');
+   const value=index===0?start:end;setter.call(fields[index],value);filled++;
+   fields[index].dispatchEvent(new doc.defaultView!.Event('input',{bubbles:true}));
+   fields=current();if(fields[index].value!==value)throw new Error('O campo não preservou a data após o evento input.');
+   fields[index].dispatchEvent(new doc.defaultView!.Event('change',{bubbles:true}));
+   fields=current();if(fields[index].value!==value||index===1&&fields[0].value!==start)throw new Error('O período foi alterado pela página durante o preenchimento.');
+  }
+  const verify=()=>{try{const fields=current();return fields[0].value===start&&fields[1].value===end;}catch{return false;}};
+  return {result:{status:'ready',message:'Período preenchido. Revise e clique em Aplicar manualmente no Studio.',filled,source:'studio-dom'},verify};
+ }catch(error){return bad(`${error instanceof Error?error.message:'O preenchimento foi interrompido.'} ${filled?'Pode haver preenchimento parcial; confira as duas datas no Studio.':'Nenhum campo foi preenchido.'} Nenhum botão Aplicar foi acionado.`,filled);}
+}
+/** Synchronous compatibility helper, checked after every dispatched native event. */
+export function setStudioPeriod(start:string,end:string,doc:Document=document):StudioPeriodResult{return fillPeriod(start,end,doc).result;}
+/** Production path: also catches deferred DOM replacement/reset before reporting readiness. */
+export async function setStudioPeriodVerified(start:string,end:string,doc:Document=document):Promise<StudioPeriodResult>{
+ const operation=fillPeriod(start,end,doc);if(operation.result.status!=='ready')return operation.result;
+ await new Promise<void>(resolve=>setTimeout(resolve,40));
+ if(!operation.verify?.())return {status:'unsupported',source:'studio-dom',filled:operation.result.filled,message:'O Studio refez ou alterou o período após o preenchimento. O estado pode ser parcial; confira as datas e aplique manualmente. Nenhum botão Aplicar foi acionado.'};
+ return operation.result;
 }
 
-export function getStudioRedactionTargets(
-  doc: Document = document,
-): HTMLElement[] {
-  return unique(
-    Array.from(
-      doc.querySelectorAll<HTMLElement>(
-        "yta-key-metric-card, yta-key-metric-block, #channel-name, #channel-avatar, ytcp-avatar, [data-prevlev-sensitive]",
-      ),
-    ),
-  ).filter(visible);
+export function getStudioScreenshotTargets(kind:'analytics'|'latest-performance',doc:Document=document):HTMLElement[]{
+ if(!studioDocument(doc))return [];
+ const selectors=kind==='latest-performance'?['.main #video-snapshot','ytcp-video-performance-card,ytcp-latest-video-card,ytcd-video-snapshot']:['#top-section','ytcp-analytics-section,ytcp-channel-analytics,#analytics-content'];
+ for(const selector of selectors){const candidates=unique(Array.from(doc.querySelectorAll<HTMLElement>(selector))).filter(visible);if(candidates.length===1)return candidates;if(candidates.length>1)return [];}
+ return [];
 }
+export function getStudioScreenshotTarget(kind:'analytics'|'latest-performance',doc:Document=document):HTMLElement|undefined{return getStudioScreenshotTargets(kind,doc)[0];}
+
+export type StudioRedactionCategory='channel'|'revenue'|'subscribers'|'views'|'video-info';
+export interface StudioRedactionDetails {elements:HTMLElement[];coarse:boolean;coarseSelectors:string[];categories:StudioRedactionCategory[];}
+export function getStudioRedactionDetails(doc:Document=document,categories:readonly StudioRedactionCategory[]=['channel','revenue','subscribers','views','video-info']):StudioRedactionDetails{
+ const selected=new Set(categories),elements:HTMLElement[]=[],coarseSelectors:string[]=[];
+ const add=(selector:string,coarse=false)=>{const found=Array.from(doc.querySelectorAll<HTMLElement>(selector)).filter(visible);elements.push(...found);if(coarse&&found.length)coarseSelectors.push(selector);};
+ if(!studioDocument(doc))return {elements:[],coarse:false,coarseSelectors:[],categories:[]};
+ if(selected.has('channel')){add('#channel-name, #channel-avatar, ytcp-avatar');if(!elements.length)add('#right-side-bar',true);}
+ if(selected.has('video-info'))add('#entity-snapshot-title');
+ if(selected.has('revenue'))add('#TOTAL_ESTIMATED_EARNINGS-tab #metric-total');
+ const allMetrics=['revenue','subscribers','views'].every(category=>selected.has(category as StudioRedactionCategory));
+ for(const card of doc.querySelectorAll<HTMLElement>('yta-key-metric-card, yta-key-metric-block, [data-metric]')){
+  if(!visible(card))continue;const metric=normalize(card.getAttribute('data-metric')??card.querySelector('#title,#metric-title,.metric-title,[data-label]')?.textContent??'');
+  if(selected.has('revenue')&&/revenue|receita/.test(metric)||selected.has('subscribers')&&/subscribers|inscritos/.test(metric)||selected.has('views')&&/views|visualiz/.test(metric))elements.push(card);
+  else if(allMetrics&&!metric){elements.push(card);coarseSelectors.push('card de métricas sem rótulo reconhecido');}
+ }
+ if(allMetrics)add('#key-metric-header',true);
+ if(selected.size===5)add('[data-prevlev-sensitive]',true);
+ return {elements:unique(elements),coarse:coarseSelectors.length>0,coarseSelectors:unique(coarseSelectors),categories:[...selected]};
+}
+export function getStudioRedactionTargets(doc:Document=document,categories?:readonly StudioRedactionCategory[]):HTMLElement[]{return getStudioRedactionDetails(doc,categories).elements;}

@@ -18,8 +18,8 @@ export interface CommentRecord {
   id: string;
   text: string;
   author: string;
-  likes: number;
-  replies: number;
+  likes?: number;
+  replies?: number;
   hearted?: boolean;
 }
 export interface TranscriptSegment {
@@ -29,6 +29,8 @@ export interface TranscriptSegment {
 }
 export interface Settings {
   hideShorts: boolean;
+  hideShortsOnFeed?: boolean;
+  hideShortsOnSearch?: boolean;
   showMetrics: boolean;
   backendUrl: string;
   backendToken: string;

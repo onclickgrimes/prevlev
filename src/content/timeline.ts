@@ -4,6 +4,7 @@ import {
   parseTranscript,
   transcriptText,
   transcriptVtt,
+  TRANSCRIPT_ROW_SELECTOR,
 } from "../core/transcript";
 import type { TranscriptSegment } from "../shared/types";
 
@@ -62,9 +63,12 @@ export function mountTimeline(doc: Document = document): TimelineController {
   let segmentSignature = "";
   let videoIdentity = "";
   let transcriptTruncated = false;
+  const accumulated = new Map<number, TranscriptSegment>();
+  let lastLoadedSignature = '', staleSignature = '';
   let query = "";
   let destroyed = false;
   const selected = new Set<number>();
+  const segmentKey = (segment:TranscriptSegment) => Math.round(segment.start*1000);
 
   const field = <T extends HTMLElement>(id: string): T | undefined =>
     shadow?.getElementById(id) as T | undefined;
@@ -88,6 +92,7 @@ export function mountTimeline(doc: Document = document): TimelineController {
       limitations: [
         "Passo de frame estimado em 1/30 s; a taxa de quadros real não é conhecida.",
         "Transcrição usa somente trechos já carregados pelo YouTube. Abra Mostrar transcrição para disponibilizá-los.",
+        "Trechos observados são acumulados por timestamp até mudar de vídeo. Conflitos no mesmo timestamp usam o último texto observado; a lista é ordenada pelo início.",
         ...(!duration
           ? [
               "Duração ainda não disponível ou transmissão ao vivo. Busca temporal desativada.",
@@ -131,7 +136,7 @@ export function mountTimeline(doc: Document = document): TimelineController {
       const segment = segments[index];
       const end = segment
         ? (segments[index + 1]?.start ??
-          segment.start + Math.max(segment.duration, 2))
+          (segment.duration>0?segment.start+segment.duration:(state.duration??segment.start)))
         : 0;
       if (
         segment &&
@@ -150,7 +155,7 @@ export function mountTimeline(doc: Document = document): TimelineController {
     );
   }
   function selectedSegments(): TranscriptSegment[] {
-    return segments.filter((_, index) => selected.has(index));
+    return segments.filter((segment) => selected.has(segmentKey(segment)));
   }
   function exportSegments(): TranscriptSegment[] {
     return selected.size
@@ -182,14 +187,14 @@ export function mountTimeline(doc: Document = document): TimelineController {
       row.dataset.segment = String(index);
       const checkbox = doc.createElement("input");
       checkbox.type = "checkbox";
-      checkbox.checked = selected.has(index);
+      checkbox.checked = selected.has(segmentKey(segment));
       checkbox.setAttribute(
         "aria-label",
         `Selecionar trecho ${time(segment.start)}: ${segment.text}`,
       );
       checkbox.addEventListener("change", () => {
-        if (checkbox.checked) selected.add(index);
-        else selected.delete(index);
+        if (checkbox.checked) selected.add(segmentKey(segment));
+        else selected.delete(segmentKey(segment));
         updateCount();
       });
       const button = doc.createElement("button");
@@ -295,8 +300,9 @@ export function mountTimeline(doc: Document = document): TimelineController {
       query = field<HTMLInputElement>("search")?.value ?? "";
       renderTranscript();
     });
+    const restoredSearch=field<HTMLInputElement>('search');if(restoredSearch)restoredSearch.value=query;
     field("select-filtered")?.addEventListener("click", () => {
-      filteredIndices().forEach((index) => selected.add(index));
+      filteredIndices().forEach((index) => selected.add(segmentKey(segments[index])));
       renderTranscript();
     });
     field("clear")?.addEventListener("click", () => {
@@ -329,7 +335,7 @@ export function mountTimeline(doc: Document = document): TimelineController {
           return;
         }
         const text =
-          format === "vtt" ? transcriptVtt(chosen) : transcriptText(chosen);
+          format === "vtt" ? transcriptVtt(chosen,{playerEndSeconds:getState().duration}) : transcriptText(chosen);
         downloadBlob(
           new Blob([text], {
             type:
@@ -363,40 +369,37 @@ export function mountTimeline(doc: Document = document): TimelineController {
             "video.html5-main-video,#movie_player video,video",
           );
     const nextIdentity = videoIdFromUrl(doc.location?.href ?? "") ?? "";
-    if (nextVideo !== video || nextIdentity !== videoIdentity) {
+    const identityChanged=nextIdentity!==videoIdentity;
+    if(identityChanged){staleSignature=videoIdentity?lastLoadedSignature:'';videoIdentity=nextIdentity;accumulated.clear();segments=[];selected.clear();query='';segmentSignature='';transcriptTruncated=false;const search=field<HTMLInputElement>('search');if(search)search.value='';status('');}
+    if (nextVideo !== video) {
       if (video)
         MEDIA_EVENTS.forEach((event) =>
           video?.removeEventListener(event, renderTime),
         );
       video = nextVideo;
-      videoIdentity = nextIdentity;
       if (video)
         MEDIA_EVENTS.forEach((event) =>
           video?.addEventListener(event, renderTime),
         );
-      selected.clear();
-      query = "";
-      segmentSignature = "";
-      const search = field<HTMLInputElement>("search");
-      if (search) search.value = "";
-      status("");
     }
     if (!video) {
       host?.remove();
       host = undefined;
       shadow = undefined;
-      segments = [];
       return getState();
     }
     mountPanel();
     const loaded = parseTranscript(doc);
-    transcriptTruncated = loaded.length > MAX_SEGMENTS;
-    const nextSegments = loaded.slice(0, MAX_SEGMENTS);
+    const loadedSignature=JSON.stringify(loaded);
+    const stale=!!staleSignature&&loadedSignature===staleSignature;
+    if(!stale){staleSignature='';lastLoadedSignature=loadedSignature;for(const segment of loaded){const key=segmentKey(segment);if(!accumulated.has(key)&&accumulated.size>=MAX_SEGMENTS){transcriptTruncated=true;continue;}accumulated.set(key,{...segment});}}
+    transcriptTruncated ||= doc.querySelectorAll(TRANSCRIPT_ROW_SELECTOR).length>MAX_SEGMENTS;
+    const ordered=[...accumulated.values()].sort((a,b)=>a.start-b.start);
+    const nextSegments=ordered.map((segment,index)=>{const next=ordered[index+1]?.start;return {...segment,duration:next!==undefined&&next>segment.start?Math.min(segment.duration>0?segment.duration:Infinity,next-segment.start):segment.duration};});
     const signature = JSON.stringify(nextSegments);
     if (signature !== segmentSignature) {
       segments = nextSegments;
       segmentSignature = signature;
-      selected.clear();
       renderTranscript();
     } else {
       updateCount();
@@ -421,6 +424,7 @@ export function mountTimeline(doc: Document = document): TimelineController {
     host = undefined;
     shadow = undefined;
     selected.clear();
+    accumulated.clear();
     segments = [];
     controllers.delete(doc);
   }

@@ -1,11 +1,11 @@
 import type { PageSnapshot } from "../shared/types";
-import type { VideoFilter } from "../core/metrics";
+import { describeResearchFilter, type ResearchFilter } from "../core/research";
 import { buildAnalyticsReport, reportMarkdown, reportRows, type AnalyticsReport } from "../core/analytics";
 import { toCsv } from "../core/export";
 import { downloadBlob } from "../core/media";
 import { videoIdFromUrl } from "../core/parse";
 
-export function initAnalyticsTools(deps: { snapshot: () => PageSnapshot; filter: () => VideoFilter }): void {
+export function initAnalyticsTools(deps: { snapshot: () => PageSnapshot; filter: () => ResearchFilter }): void {
   const section = document.getElementById("analytics");
   if (!section || section.dataset.analyticsReady) return;
   section.dataset.analyticsReady = "true";
@@ -65,7 +65,7 @@ export function initAnalyticsTools(deps: { snapshot: () => PageSnapshot; filter:
     get("scope").textContent = `${scope.inputCount} registros recebidos · ${scope.includedCount} vídeos incluídos · ${scope.excludedApiCount} da API oficial excluídos · ${scope.excludedDuplicateCount} duplicatas excluídas · ${scope.excludedByFilterCount} excluídos pelos filtros (${scope.excludedByDateCount} por data).`;
     const names: Record<string, string> = { "youtube-dom": "página YouTube", "public-page": "página pública", "user-provided": "fornecido pelo usuário", "youtube-data-api": "API oficial", unspecified: "origem não declarada" };
     get("provenance").textContent = `Origem dos vídeos incluídos: ${Object.entries(current.provenance).map(([key, count]) => `${names[key] ?? key}: ${count}`).join(" · ")}.`;
-    get("filter-summary").textContent = source.value === "filtered" ? `Filtros da pesquisa aplicados: ${describeFilter(scope.filter ?? {})}` : "Toda a coleção elegível, após excluir dados da API oficial e duplicatas. Campos ausentes permanecem desconhecidos.";
+    get("filter-summary").textContent = source.value === "filtered" ? `Filtros da pesquisa aplicados: ${describeResearchFilter(scope.filter ?? {})}` : "Toda a coleção elegível, após excluir dados da API oficial e duplicatas. Campos ausentes permanecem desconhecidos.";
     const cards: [string, number | undefined, string][] = [
       ["Views conhecidas", current.totals.knownViews, "Soma dos contadores disponíveis"],
       ["Média de views", current.totals.meanViews, "Somente contadores conhecidos"],
@@ -87,7 +87,7 @@ export function initAnalyticsTools(deps: { snapshot: () => PageSnapshot; filter:
     get("months").replaceChildren(...current.publicationMonths.map(month => row([month.month, number(month.videoCount), number(month.totalViews), number(month.missingViews), number(month.totalDurationSeconds), number(month.missingDurationCount)])));
     if (!current.publicationMonths.length) get("months").append(emptyRow("Nenhuma data válida de publicação na amostra incluída.", 6));
     get("top").replaceChildren(...current.topVideos.map(video => {
-      const videoRow = row(["", video.channel ?? "desconhecido", video.format === "short" ? "Short" : video.format === "long" ? "Não Short" : "desconhecido", number(video.views), number(video.lifetimeVph), video.outlierScore === undefined ? "desconhecido" : `${number(video.outlierScore)}×`]);
+      const videoRow = row(["", video.channel ?? "desconhecido", video.format === "short" ? "Short" : video.format === "long" ? "Não Short" : "desconhecido", number(video.views), number(video.lifetimeVph), `${video.outlierScore === undefined ? "desconhecido" : `${number(video.outlierScore)}×`} (${video.outlierReferenceCount ?? 0} refs)`]);
       const id = videoIdFromUrl(video.url);
       const title = id ? element("a", video.title) : element("span", video.title);
       if (title instanceof HTMLAnchorElement && id) { title.href = `https://www.youtube.com/watch?v=${id}`; title.target = "_blank"; title.rel = "noopener noreferrer"; }
@@ -99,18 +99,6 @@ export function initAnalyticsTools(deps: { snapshot: () => PageSnapshot; filter:
 }
 
 function number(value: number | undefined): string { return value === undefined || !Number.isFinite(value) ? "desconhecido" : new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 }).format(value); }
-function describeFilter(filter: VideoFilter): string {
-  const parts: string[] = [];
-  if (filter.query) parts.push(`texto “${filter.query}”`);
-  if (filter.channel) parts.push(`canal “${filter.channel}”`);
-  const labels = { minViews: "views mínimas", maxViews: "views máximas", minSubscribers: "inscritos mínimos", maxSubscribers: "inscritos máximos", minDurationSeconds: "duração mínima (s)", maxDurationSeconds: "duração máxima (s)", minVph: "VPH mínimo", maxVph: "VPH máximo", minOutlier: "outlier mínimo", maxOutlier: "outlier máximo" } as const;
-  for (const key of Object.keys(labels) as (keyof typeof labels)[]) if (filter[key] !== undefined) parts.push(`${labels[key]}: ${number(filter[key])}`);
-  if (filter.publishedAfter) parts.push(`publicação a partir de ${filter.publishedAfter}`);
-  if (filter.publishedBefore) parts.push(`publicação até ${filter.publishedBefore}`);
-  if (filter.shorts === "only") parts.push("somente Shorts");
-  if (filter.shorts === "exclude") parts.push("excluir Shorts");
-  return parts.length ? parts.join(" · ") : "nenhum limite adicional";
-}
 function element<K extends keyof HTMLElementTagNameMap>(tag: K, text?: string): HTMLElementTagNameMap[K] { const element = document.createElement(tag); if (text !== undefined) element.textContent = text; return element; }
 function row(values: readonly string[]): HTMLTableRowElement { const result = element("tr"); result.append(...values.map(value => element("td", value))); return result; }
 function emptyRow(message: string, columns: number): HTMLTableRowElement { const result = row([message]); result.cells[0].colSpan = columns; return result; }

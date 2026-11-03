@@ -24,6 +24,7 @@
           ><button data-page="comments">☷ &nbsp; Comentários</button
           ><button data-page="studio">▥ &nbsp; Studio</button
           ><button data-page="swipe">▣ &nbsp; Swipe File</button
+          ><button data-page="sponsorships">⌁ &nbsp; Patrocínios</button
           ><button data-page="remote">✧ &nbsp; Análises</button
           ><button data-page="connection">⚙ &nbsp; Conexão</button>
         </nav>
@@ -32,7 +33,7 @@
           <p>
             Seus dados ficam aqui até você solicitar uma análise no seu backend.
           </p>
-          <span class="pill">VERSÃO 0.4 · INDEPENDENTE</span>
+          <span class="pill">VERSÃO 0.5 · INDEPENDENTE</span>
         </div>
       </aside>
       <main>
@@ -49,6 +50,7 @@
         <div id="notice" role="status" aria-live="polite">
           Abra o YouTube e colete os vídeos carregados para começar.
         </div>
+        <section id="sponsorships" class="page" hidden></section>
         <section id="official-search" class="page" hidden></section>
         <section id="analytics" class="page" hidden></section>
         <section id="history" class="page" hidden></section>
@@ -268,7 +270,7 @@
               ou receita do criador.
             </p>
             <label
-              >Quantidade de vídeos<input
+              >Quantidade de vídeos do mesmo período (informada por você)<input
                 id="monetization-count"
                 type="number"
                 min="1"
@@ -278,79 +280,7 @@
             <pre id="channel-monetization"></pre>
           </div>
         </section>
-        <section id="images" class="page" hidden>
-          <div class="section-intro">
-            <h2>Uma boa ideia começa no enquadramento.</h2>
-            <p>
-              Comprima imagens e veja o título junto da thumbnail. Tudo no
-              navegador.
-            </p>
-          </div>
-          <div class="grid two">
-            <div class="card">
-              <h2>Comprimir e preparar</h2>
-              <label class="drop"
-                >Escolher imagem<input
-                  type="file"
-                  id="image-file"
-                  accept="image/png,image/jpeg,image/webp"
-              /></label>
-              <div class="form-grid">
-                <label
-                  >Largura máxima<input
-                    id="image-width"
-                    type="number"
-                    value="1280"
-                    min="1"
-                    max="8192" /></label
-                ><label
-                  >Qualidade JPEG<input
-                    id="image-quality"
-                    type="number"
-                    value="85"
-                    min="10"
-                    max="100"
-                /></label>
-              </div>
-              <label
-                >Título da prévia<input
-                  id="preview-title"
-                  placeholder="O título do seu próximo vídeo" /></label
-              ><label
-                >Canal<input id="preview-channel" value="Seu canal"
-              /></label>
-              <div class="actions">
-                <button id="compress" class="primary">Comprimir e baixar</button
-                ><button id="image-preview">Gerar prévia</button>
-              </div>
-              <p id="image-info" class="muted"></p>
-            </div>
-            <div class="card">
-              <h2>Prévia</h2>
-              <div id="image-preview-empty" class="empty">
-                Sua composição aparece aqui.
-              </div>
-              <img
-                id="image-output"
-                alt="Prévia de thumbnail e título"
-                hidden
-              />
-              <p class="footnote">
-                Simulação visual local. Não é teste A/B com audiência.
-              </p>
-            </div>
-          </div>
-          <div class="card">
-            <h2>Thumbnail do vídeo</h2>
-            <label
-              >ID ou URL do YouTube<input
-                id="thumbnail-id"
-                placeholder="https://www.youtube.com/watch?v=..." /></label
-            ><button id="download-thumbnail">
-              Baixar melhor imagem disponível</button
-            ><button id="copy-thumbnail">Copiar thumbnail</button>
-          </div>
-        </section>
+        <section id="images" class="page" hidden></section>
         <section id="transcript" class="page" hidden>
           <div class="card">
             <div class="row">
@@ -418,37 +348,7 @@
             <pre id="transcript-result"></pre>
           </div>
         </section>
-        <section id="comments" class="page" hidden>
-          <div class="card">
-            <h2>Comentários carregados</h2>
-            <div class="filters">
-              <input
-                id="comment-filter"
-                placeholder="Texto ou autor"
-                aria-label="Filtrar comentários"
-              /><input
-                id="comment-likes"
-                type="number"
-                min="0"
-                placeholder="Curtidas mínimas"
-                aria-label="Curtidas mínimas"
-              /><label class="toggle"
-                ><input type="checkbox" id="comment-questions" /> Só
-                perguntas</label
-              >
-            </div>
-            <div class="actions">
-              <button id="comments-copy">Copiar filtrados</button
-              ><button id="comments-export">Exportar CSV</button
-              ><button id="comments-ai">Analisar com IA no backend</button>
-            </div>
-            <div id="comment-list"></div>
-            <p class="footnote">
-              Amostra limitada aos comentários presentes no DOM. A coleta não
-              percorre o canal.
-            </p>
-          </div>
-        </section>
+        <section id="comments" class="page" hidden></section>
         <section id="studio" class="page" hidden>
           <div class="grid two">
             <div class="card">
@@ -471,7 +371,7 @@
                   min="0"
                   value="0" /></label
               ><label
-                >Quantidade de vídeos<input
+                >Quantidade de vídeos do mesmo período (informada por você)<input
                   id="video-total"
                   type="number"
                   min="0"
@@ -539,6 +439,7 @@
                   min="60"
               /></label>
             </div>
+            <label>FPS declarado do editor (somente timestamps com frames)<select id="studio-fps"><option value="">Não informado</option><option>24</option><option>25</option><option>30</option><option>48</option><option>50</option><option>60</option></select></label>
             <label
               >Áudio local opcional para detectar silêncios<input
                 id="midroll-audio"
@@ -560,35 +461,7 @@
             </p>
           </div>
         </section>
-        <section id="swipe" class="page" hidden>
-          <div class="card">
-            <div class="row">
-              <div>
-                <h2>Swipe File local</h2>
-                <p class="muted">
-                  Referências guardadas neste perfil do Chrome. Exporte para
-                  fazer backup.
-                </p>
-              </div>
-              <button id="swipe-export">Exportar biblioteca</button>
-            </div>
-            <div class="form-grid">
-              <label>Pasta<input id="swipe-folder" value="Referências" /></label
-              ><label>Título<input id="swipe-title" /></label
-              ><label>URL<input id="swipe-url" type="url" /></label>
-            </div>
-            <div class="actions">
-              <button id="swipe-add" class="primary">Salvar referência</button
-              ><label class="import-label"
-                >Importar JSON<input
-                  id="swipe-import"
-                  type="file"
-                  accept=".json"
-              /></label>
-            </div>
-            <div id="swipe-list"></div>
-          </div>
-        </section>
+        <section id="swipe" class="page" hidden></section>
         <section id="remote" class="page" hidden>
           <div class="section-intro">
             <h2>Seu backend, seus dados.</h2>

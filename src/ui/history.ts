@@ -1,13 +1,13 @@
 import {getSettings} from '../shared/storage';
 import {callBackendOperation} from '../shared/backend';
 import type {PageSnapshot,RemoteResponse,Settings,VideoRecord} from '../shared/types';
-import {filterVideos,type VideoFilter} from '../core/metrics';
+import {selectResearchVideos,describeResearchFilter,type ResearchFilter} from '../core/research';
 import {deriveHistoryTrend} from '../core/analytics';
 import {toCsv} from '../core/export';
 import {downloadBlob} from '../core/media';
 import type {Observation} from '../../server/history.mjs';
 
-interface HistoryTools {snapshot:()=>PageSnapshot;filter:()=>VideoFilter;}
+interface HistoryTools {snapshot:()=>PageSnapshot;filter:()=>ResearchFilter;}
 interface HistoryData {records?:Observation[];total?:number;recorded?:number;duplicates?:number;skipped?:number;skippedApi?:number;skippedUnknown?:number;evicted?:number;deleted?:number;legacyFilesDeleted?:number;legacyFilesSkipped?:number;}
 const plain=(value:unknown):value is Record<string,unknown>=>value!==null&&typeof value==='object'&&!Array.isArray(value);
 const number=(value?:number)=>value===undefined?'—':new Intl.NumberFormat('pt-BR',{maximumFractionDigits:3}).format(value);
@@ -41,11 +41,11 @@ export function initHistoryTools(deps:HistoryTools):void {
   function limit(){const value=Number(field<HTMLInputElement>('limit').value);if(!Number.isInteger(value)||value<1||value>500)throw new Error('Escolha um limite inteiro entre 1 e 500.');return value;}
   function on(id:string,work:(signal:AbortSignal)=>Promise<void>){field(id).addEventListener('click',()=>{if(busy)return;controller=new AbortController();setBusy(true);status('Solicitação explícita em andamento…');void work(controller.signal).catch((error:unknown)=>status(error instanceof DOMException&&error.name==='AbortError'?'Espera cancelada. Uma ação já aceita pelo servidor pode ter sido concluída; consulte antes de repetir.':error instanceof Error?error.message:String(error),true)).finally(()=>{controller=undefined;setBusy(false);});});}
   on('record',async signal=>{
-    const snapshot=deps.snapshot(),eligible=snapshot.videos.filter(video=>video.source!=='youtube-data-api'),selected=filterVideos(eligible,deps.filter()),chosen=selected.slice(0,100);
+    const snapshot=deps.snapshot(),eligible=snapshot.videos.filter(video=>video.source!=='youtube-data-api'),filter=deps.filter(),selected=selectResearchVideos(eligible,filter),chosen=selected.slice(0,100);
     if(!chosen.length)throw new Error(snapshot.videos.some(video=>video.source==='youtube-data-api')?'Não há observações locais elegíveis; dados da API oficial não são enviados ao histórico.':'Colete uma amostra local e confira seus filtros antes de registrar.');
     const videos=chosen.map(video=>{const record:Partial<VideoRecord>={id:video.id,title:video.title,url:video.url,source:video.source??'user-provided'};for(const key of ['channel','channelId','channelUrl','views','subscribers','observedAt'] as const)if(video[key]!==undefined)Object.assign(record,{[key]:video[key]});return record;});
     const result=await request({action:'record',videos},signal),data=result.data;render(recordsFrom(data),'Resultado desta gravação',data.records?.length,result.limitations);
-    status(`Gravados ${data.recorded??0}; duplicados ${data.duplicates??0}; omitidos ${data.skipped??0}; removidos por retenção ${data.evicted??0}. Enviados ${chosen.length} de ${selected.length} vídeos locais filtrados. ${snapshot.videos.length-eligible.length} itens da API oficial excluídos antes dos cálculos.`);
+    status(`Gravados ${data.recorded??0}; duplicados ${data.duplicates??0}; omitidos ${data.skipped??0}; removidos por retenção ${data.evicted??0}. Enviados ${chosen.length} de ${selected.length} vídeos locais filtrados. ${snapshot.videos.length-eligible.length} itens da API oficial excluídos antes dos cálculos. Filtros aplicados: ${describeResearchFilter(filter)}.`);
   });
   on('list',async signal=>{const id=videoId(),result=await request({action:id?'get':'list',...(id?{videoId:id}:{}),limit:limit()},signal);render(recordsFrom(result.data),id?`Vídeo ${id}`:'Índice geral de observações novas',result.data.total,result.limitations);status('Consulta concluída. Nenhuma nova observação foi registrada.');});
   for(const format of ['json','csv'] as const)on(`export-${format}`,async signal=>{const id=videoId(),result=await request({action:'export',...(id?{videoId:id}:{})},signal),records=recordsFrom(result.data);render(records,id?`Exportação do vídeo ${id}`:'Exportação do índice novo',result.data.total,result.limitations);const columns=['id','videoId','title','url','channel','channelId','channelUrl','observedAt','recordedAt','views','subscribers','source'];const text=format==='json'?JSON.stringify({version:1,records,limitations:result.limitations??[]},null,2):toCsv(records.map(record=>({...record})),columns);downloadBlob(new Blob([text],{type:format==='json'?'application/json':'text/csv;charset=utf-8'}),`prevlev-historico.${format}`);status(`${records.length} registros exportados em ${format.toUpperCase()}. Nenhum timestamp ou contador foi recalculado.`);});

@@ -1,8 +1,8 @@
-# Cobertura dos 40 recursos · v0.4.0
+# Cobertura dos 40 recursos · v0.5.0
 
 Implementação independente; não há declaração de paridade completa com Nexlev 3.12.6.
 
-O estado de implementação descreve o escopo entregue; validação de runtime e configuração de produto são eixos separados. “Implementado” não declara paridade ou teste com extensão instalada. Dados faltantes permanecem desconhecidos. Os estados dos 40 recursos foram preservados nesta etapa; ampliar um relatório local não equivale a entregar a base de pesquisa e os serviços privados da referência.
+O detalhamento por linha abaixo registra a base v0.4; as ampliações posteriores e seus limites estão em [GAP_AUDIT.md](GAP_AUDIT.md) e [ORIGINAL_GAP_LEDGER.md](ORIGINAL_GAP_LEDGER.md). O estado de implementação descreve o escopo entregue; validação de runtime e configuração de produto são eixos separados. “Implementado” não declara paridade ou teste com extensão instalada. Dados faltantes permanecem desconhecidos. Os estados dos 40 recursos foram preservados nesta etapa; ampliar um relatório local não equivale a entregar a base de pesquisa e os serviços privados da referência.
 
 ## Evidência e runtime
 

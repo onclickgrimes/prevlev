@@ -2,10 +2,9 @@ import { getSettings, saveSettings } from "../shared/storage";
 import type { Settings, VideoRecord } from "../shared/types";
 import {
   lifetimeVph,
-  outlierScore,
   inferMonetization,
-  sortVideos,
 } from "../core/metrics";
+import {sortResearchVideos,researchSurface,researchComparison} from '../core/research';
 import { captureFrame } from "../core/media";
 import {
   readYouTubeSnapshot,
@@ -19,14 +18,26 @@ import {
   previewStudioAction,
   executeStudioPlan,
   cancelStudioPlan,
-  setStudioPeriod,
-  getStudioRedactionTargets,
+  setStudioPeriodVerified,
+  getStudioRedactionDetails,
+  getStudioScreenshotTargets,
 } from "./studio";
-import { mountTimeline, dispatchTimeline } from "./timeline";
+import { mountTimeline, refreshTimeline, dispatchTimeline } from "./timeline";
+import {createCollectionController,mountCollectionControls,type CollectionKind} from './collection';
+import {videoIdFromUrl} from '../core/parse';
+import {mountContextualTools,type ContextualController} from './contextual';
+import {mountResearchOverlay} from './research-overlay';
 
+const contentScope=globalThis as typeof globalThis&{__prevlevContentInitialized?:boolean};
+if(!contentScope.__prevlevContentInitialized){
+contentScope.__prevlevContentInitialized=true;
 const HOST_ID = "prevlev-controls";
 const HIDDEN = "data-prevlev-hidden";
-let settings: Settings;
+const collector=createCollectionController(document);
+let collectionControlsCleanup:(()=>void)|undefined;
+let contextual:ContextualController|undefined;
+let researchOverlay:ReturnType<typeof mountResearchOverlay>|undefined;
+let settings: Settings & {hideShortsOnFeed?:boolean;hideShortsOnSearch?:boolean};
 let observer: MutationObserver | undefined;
 let timer: ReturnType<typeof setTimeout> | undefined;
 let suspended = false;
@@ -39,6 +50,17 @@ let filter: CardFilter = {
 };
 let filterError = "";
 let syncFilterForm: () => void = () => {};
+function shortsPreferences():Pick<CardFilter,'hideShortsOnFeed'|'hideShortsOnSearch'>{
+  return {hideShortsOnFeed:typeof settings.hideShortsOnFeed==='boolean'?settings.hideShortsOnFeed:settings.hideShorts,hideShortsOnSearch:typeof settings.hideShortsOnSearch==='boolean'?settings.hideShortsOnSearch:settings.hideShorts};
+}
+function setFilter(candidate:CardFilter):void{
+  const before=shortsPreferences();
+  filter={...before,...candidate};
+  if(filter.hideShortsOnFeed!==before.hideShortsOnFeed||filter.hideShortsOnSearch!==before.hideShortsOnSearch){
+    settings={...settings,hideShortsOnFeed:filter.hideShortsOnFeed,hideShortsOnSearch:filter.hideShortsOnSearch};
+    void saveSettings(settings).catch(error=>{filterError=error instanceof Error?error.message:String(error);updatePanel();});
+  }
+}
 const channelEnrichment = new Map<
   string,
   { subscribers: number; channel?: string }
@@ -145,6 +167,9 @@ window.addEventListener("pagehide", () => {
   if (timer) clearTimeout(timer);
   timer = undefined;
   navigation(false);
+  collector.dispose();
+  contextual?.cleanup();contextual=undefined;
+  researchOverlay?.dispose();researchOverlay=undefined;
 });
 window.addEventListener("pageshow", (event) => {
   if (!event.persisted || !suspended) return;
@@ -161,16 +186,20 @@ function apply(): void {
   try {
     mount();
     mountTimeline(document).refresh();
+    const surface=researchSurface(location.href);
+    if(filter.surface!==undefined&&filter.surface!==surface){filter=normalizeCardFilter({sort:'default',surface,hideShortsOnFeed:filter.hideShortsOnFeed,hideShortsOnSearch:filter.hideShortsOnSearch});filterError='O contexto da página mudou. Os filtros específicos foram reiniciados.';syncFilterForm();}
+    const effectiveFilter={...filter,surface};
+    const hideShorts=surface==='search'?(effectiveFilter.hideShortsOnSearch??settings.hideShorts):surface==='home'||surface==='subscriptions'?(effectiveFilter.hideShortsOnFeed??settings.hideShorts):settings.hideShorts;
     const cards = loadedCards();
     const base = cards.map((card) => card.video);
     for (const { element } of cards)
       if (!originalOrder.has(element)) originalOrder.set(element, nextOrder++);
     const allowed = new Set(
-      filterAndSortCards(cards, filter).map((card) => card.element),
+      filterAndSortCards(cards, effectiveFilter).map((card) => card.element),
     );
     for (const { element, video } of cards) {
       const hidden =
-        !allowed.has(element) || (settings.hideShorts && !!video.isShort);
+        !allowed.has(element) || (hideShorts && !!video.isShort);
       if (hidden) element.setAttribute(HIDDEN, "true");
       else element.removeAttribute(HIDDEN);
       let badge = element.querySelector<HTMLElement>("[data-prevlev-metric]");
@@ -185,24 +214,21 @@ function apply(): void {
           "display:block;color:#8e83ff;font:12px/1.5 system-ui;padding:3px 0";
         element.append(badge);
       }
-      const vph = lifetimeVph(video),
-        outlier = outlierScore(video, base);
-      const label = `Prevlev · ${video.subscribers === undefined ? "inscritos indisponíveis" : `${number(video.subscribers)} inscritos`} · ${vph === undefined ? "VPH indisponível" : `${number(vph)} VPH médio`} · ${outlier === undefined ? "outlier indisponível" : `${outlier.toFixed(1)}× outlier`}`;
+      const vph = lifetimeVph(video),comparison=researchComparison(video,base,effectiveFilter.comparisonMode),outlier=comparison.score;
+      const label = `Prevlev · ${video.subscribers === undefined ? "inscritos indisponíveis" : `${number(video.subscribers)} inscritos`} · ${vph === undefined ? "VPH indisponível" : `${number(vph)} VPH médio`} · ${outlier === undefined ? "outlier indisponível" : `${outlier.toFixed(1)}× outlier aproximado da amostra`}`;
       if (badge.textContent !== label) badge.textContent = label;
       badge.title =
-        "VPH médio desde a publicação; não mede a última hora. Outlier usa mediana dos vídeos carregados comparáveis (mínimo 3).";
+        `VPH médio desde a publicação; não mede a última hora. ${comparison.limitation} Método: ${comparison.method}; ${comparison.referenceCount} referências observadas.`;
     }
     for (const element of document.querySelectorAll<HTMLElement>(
       "ytd-rich-shelf-renderer[is-shorts],ytd-reel-shelf-renderer,ytm-shorts-lockup-view-model",
     )) {
-      if (settings.hideShorts) element.setAttribute(HIDDEN, "true");
+      if (hideShorts) element.setAttribute(HIDDEN, "true");
       else if (!cards.some((c) => c.element === element))
         element.removeAttribute(HIDDEN);
     }
     const ranked =
-      filter.sort === "default"
-        ? base
-        : sortVideos(base, filter.sort, Date.now(), base);
+      sortResearchVideos(base,effectiveFilter,Date.now(),base);
     const rank = new Map(ranked.map((video, index) => [video, index]));
     const groups = new Map<HTMLElement, typeof cards>();
     for (const card of cards)
@@ -212,7 +238,7 @@ function apply(): void {
       }
     for (const [parent, group] of groups) {
       const sorted =
-        filter.sort === "default"
+        filter.sort === "default"&&!filter.criteria?.length&&filter.priority!=='views-per-subscriber'
           ? [...group].sort(
               (a, b) =>
                 (originalOrder.get(a.element) ?? 0) -
@@ -237,10 +263,14 @@ function apply(): void {
       }
     }
     updatePanel();
+    contextual??=mountContextualTools(document,{getVideos:()=>{const at=new Date().toISOString();return loadedCards().map(card=>({...card.video,source:'youtube-dom' as const,observedAt:at}));}});contextual.refresh();
+    ensureResearchOverlay();researchOverlay?.refresh();
   } finally {
     listen();
   }
 }
+function observedVideos():VideoRecord[]{const result=collector.snapshot();const saved=result?.url===location.href?result.videos:[];const at=new Date().toISOString();const current=loadedCards().map(card=>({...card.video,source:'youtube-dom' as const,observedAt:at}));return[...new Map([...saved,...current].map(video=>[video.id,video])).values()];}
+function ensureResearchOverlay():void{const shadow=document.getElementById(HOST_ID)?.shadowRoot;if(!shadow)return;let container=shadow.getElementById('prevlev-research-overlay-tools');if(!container){container=document.createElement('div');container.id='prevlev-research-overlay-tools';shadow.querySelector('section')!.append(container);}researchOverlay??=mountResearchOverlay(container,{getVideos:observedVideos,getFilter:()=>filter,getUrl:()=>location.href,collector,getMetrics:()=>settings.showMetrics,setMetrics:enabled=>{settings.showMetrics=enabled;void saveSettings(settings).catch(()=>{});apply();},setFilter:value=>{const normalized=normalizeCardFilter(value);if(normalized.surface!==undefined&&normalized.surface!==researchSurface(location.href))throw new Error('O filtro pertence a outro contexto de página.');filterError='';setFilter(normalized);syncFilterForm();apply();}});}
 function number(value: number): string {
   return new Intl.NumberFormat("pt-BR", {
     maximumFractionDigits: 1,
@@ -250,6 +280,7 @@ function number(value: number): string {
 
 function mount(): void {
   if (document.getElementById(HOST_ID)) return;
+  collectionControlsCleanup?.();
   if (!document.getElementById("prevlev-page-style")) {
     const style = document.createElement("style");
     style.id = "prevlev-page-style";
@@ -294,6 +325,9 @@ function mount(): void {
   field<HTMLInputElement>("metrics").checked = settings.showMetrics;
   field("shorts").addEventListener("change", () => {
     settings.hideShorts = field<HTMLInputElement>("shorts").checked;
+    settings.hideShortsOnFeed=settings.hideShorts;
+    settings.hideShortsOnSearch=settings.hideShorts;
+    filter={...filter,...shortsPreferences()};
     void saveSettings(settings).catch(showError);
     apply();
   });
@@ -305,6 +339,7 @@ function mount(): void {
   const readForm = () => {
     try {
       const input: Record<string, unknown> = {
+        ...filter,
         query: field<HTMLInputElement>("query").value,
         channel: field<HTMLInputElement>("channel").value,
         shorts: field<HTMLSelectElement>("format").value,
@@ -316,7 +351,7 @@ function mount(): void {
         const control = field<HTMLInputElement>(id);
         if (!control.validity.valid)
           throw new Error("Use limites numéricos não negativos.");
-        if (control.value !== "") input[key] = Number(control.value);
+        input[key] = control.value === ""?undefined:Number(control.value);
       }
       filter = normalizeCardFilter(input);
       filterError = "";
@@ -337,7 +372,7 @@ function mount(): void {
   for (const id of ["format", "sort"])
     field(id).addEventListener("change", readForm);
   field("clear-filter").addEventListener("click", () => {
-    filter = normalizeCardFilter({});
+    setFilter(normalizeCardFilter({}));
     filterError = "";
     syncFilterForm();
     apply();
@@ -360,9 +395,13 @@ function mount(): void {
     field("status").textContent =
       filterError ||
       `${cards.filter((c) => !c.element.hasAttribute(HIDDEN)).length} de ${cards.length} vídeos carregados visíveis`;
-    field<HTMLInputElement>("shorts").checked = settings.hideShorts;
+    const preferences=shortsPreferences(),shortsControl=field<HTMLInputElement>("shorts");
+    shortsControl.checked=preferences.hideShortsOnFeed===true&&preferences.hideShortsOnSearch===true;
+    shortsControl.indeterminate=preferences.hideShortsOnFeed!==preferences.hideShortsOnSearch;
     field<HTMLInputElement>("metrics").checked = settings.showMetrics;
   };
+  const collectionContainer=document.createElement('div');collectionContainer.id='prevlev-collection-tools';shadow.querySelector('section')!.append(collectionContainer);
+  collectionControlsCleanup=mountCollectionControls(collectionContainer,collector,async value=>{await chrome.storage.local.set({snapshot:value});await chrome.runtime.sendMessage({type:'OPEN_WORKSPACE'});});
   document.documentElement.append(host);
   function showError(error: unknown): void {
     field("status").textContent =
@@ -373,13 +412,11 @@ function mount(): void {
 async function snapshot() {
   const value = readYouTubeSnapshot(document);
   value.videos = value.videos.map(enrichedVideo);
+  const timeline=refreshTimeline(document);
+  if(value.videoId&&timeline.videoId===value.videoId&&(timeline.available||timeline.segments.length>0))value.transcript=timeline.segments;
   if (location.hostname === "studio.youtube.com") {
     const metrics = readStudioMetrics(document);
-    value.studio = {
-      revenue: metrics.revenue,
-      currency: metrics.currency,
-      videoCount: metrics.videoCount,
-    };
+    value.studio = metrics;
     value.warnings.push(...metrics.warnings);
   }
   await chrome.storage.local.set({ snapshot: value });
@@ -407,16 +444,36 @@ interface Message {
   videos?: unknown;
   seconds?: unknown;
   expectedVideoId?: unknown;
+  targetVideoId?:unknown;
+  maxItems?:number;
+  maxSteps?:number;
+  timeoutMs?:number;
+  jobId?:string;
+  includeResults?:boolean;
 }
 async function dispatch(message: Message): Promise<unknown> {
   switch (message.type) {
+    case 'START_COLLECTION':{
+      if(suspended)throw new Error('Ative a página antes de iniciar a coleta.');
+      return{status:'ok',collection:collector.start({kind:message.kind as CollectionKind,maxItems:message.maxItems,maxSteps:message.maxSteps,timeoutMs:message.timeoutMs})};
+    }
+    case 'COLLECTION_STATUS':{
+      if(message.includeResults!==undefined&&typeof message.includeResults!=='boolean')throw new Error('includeResults deve ser booleano.');
+      const collection=collector.status(message.jobId);return{status:'ok',collection,...(message.includeResults&&collection.phase!=='running'?{snapshot:collector.snapshot(message.jobId)}:{})};
+    }
+    case 'CANCEL_COLLECTION':return{status:'ok',collection:collector.cancel(message.jobId)};
+    case 'GET_CURRENT_METADATA':{
+      const title=document.querySelector('ytd-watch-metadata h1,h1.ytd-video-primary-info-renderer')?.textContent?.replace(/\s+/g,' ').trim()||document.title.replace(/\s*- YouTube$/,'');const id=videoIdFromUrl(location.href);return{status:'ok',metadata:{title,id,videoId:id,url:location.href}};
+    }
     case "APPLY_FILTER":
     case "CLEAR_FILTER": {
       if (!settings) throw new Error("Aguarde a extensão carregar.");
-      filter = normalizeCardFilter(
+      const candidate = normalizeCardFilter(
         message.type === "CLEAR_FILTER" ? {} : message.filter,
       );
+      if(candidate.surface!==undefined&&candidate.surface!==researchSurface(location.href))throw new Error('O filtro foi preparado para outro contexto de página. Confira a aba e prepare-o novamente.');
       filterError = "";
+      setFilter(candidate);
       syncFilterForm();
       apply();
       const cards = loadedCards();
@@ -497,17 +554,15 @@ async function dispatch(message: Message): Promise<unknown> {
         throw new Error(
           "A página está suspensa. Ative a aba e tente novamente.",
         );
-      const selector =
-        message.kind === "analytics"
-          ? "ytcp-analytics-section,ytcp-channel-analytics,#analytics-content"
-          : message.kind === "latest-performance"
-            ? "ytcp-video-performance-card,ytcp-latest-video-card,ytcd-video-snapshot"
-            : undefined;
-      const element = selector
-        ? document.querySelector<HTMLElement>(selector)
+      if(message.targetVideoId!==undefined&&(typeof message.targetVideoId!=='string'||!/^[\w-]{11}$/.test(message.targetVideoId)))throw new Error('ID do card solicitado inválido.');
+      if(message.targetVideoId!==undefined&&message.kind!==undefined&&message.kind!=='video')throw new Error('Um ID de vídeo só pode selecionar um card de vídeo.');
+      const studioKind=message.kind==='analytics'||message.kind==='latest-performance'?message.kind:undefined;
+      const element = studioKind
+        ? getStudioScreenshotTargets(studioKind,document)[0]
         : readVideoCards(document).find((c) => {
             const r = c.element.getBoundingClientRect();
             return (
+              (message.targetVideoId===undefined||c.video.id===message.targetVideoId)&&
               r.width > 0 &&
               r.height > 0 &&
               r.top >= 0 &&
@@ -532,8 +587,9 @@ async function dispatch(message: Message): Promise<unknown> {
         throw new Error(
           "O card precisa estar inteiro visível na janela para capturar. Ajuste a rolagem ou o zoom.",
         );
-      const redactionNodes = message.redact
-        ? getStudioRedactionTargets(document)
+      const redactionDetails=message.redact?getStudioRedactionDetails(document):undefined;
+      const redactionNodes = redactionDetails
+        ? redactionDetails.elements
             .map((el) => {
               const box = el.getBoundingClientRect();
               return {
@@ -570,8 +626,10 @@ async function dispatch(message: Message): Promise<unknown> {
           "Nenhum campo sensível visível foi reconhecido neste card. A captura foi interrompida para evitar uma imagem sem ocultação. Confira o layout do Studio ou desative a ocultação conscientemente.",
         );
       if (observer?.takeRecords().length) pageRevision++;
+      const captureVideo = studioKind ? undefined : readVideoCards(document).find(card=>card.element===element)?.video;
       const captureStamp = JSON.stringify({
         url: location.href,
+        video: captureVideo ? {id:captureVideo.id,url:captureVideo.url,title:captureVideo.title} : undefined,
         revision: pageRevision,
         element: elementIdentity(element),
         content: element.textContent,
@@ -603,6 +661,8 @@ async function dispatch(message: Message): Promise<unknown> {
         viewportWidth: innerWidth,
         redactions,
         captureStamp,
+        coarse:redactionDetails?.coarse??false,
+        coarseSelectors:redactionDetails?.coarseSelectors??[],
       };
     }
     case "GET_MONETIZATION":
@@ -627,7 +687,7 @@ async function dispatch(message: Message): Promise<unknown> {
           : "not_found",
       };
     case "STUDIO_PERIOD":
-      return setStudioPeriod(message.start ?? "", message.end ?? "", document);
+      return setStudioPeriodVerified(message.start ?? "", message.end ?? "", document);
     default:
       return { status: "unsupported", error: "Ação desconhecida." };
   }
@@ -653,6 +713,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   const value = changes.settings?.newValue;
   if (areaName === "local" && settings && value && typeof value === "object") {
     settings = { ...settings, ...(value as Partial<Settings>) };
+    filter={...filter,...shortsPreferences()};
     schedule();
   }
 });
@@ -660,6 +721,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 void getSettings()
   .then((value) => {
     settings = value;
+    filter={...filter,...shortsPreferences()};
     observer = new MutationObserver((records) => {
       if (records.length) {
         pageRevision++;
@@ -674,3 +736,5 @@ void getSettings()
   .catch(() => {
     /* The extension may have been reloaded while this tab remained open. */
   });
+
+}

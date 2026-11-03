@@ -10,12 +10,9 @@ import {
   parsePublishedAt,
   videoIdFromUrl,
 } from "../core/parse";
-import {
-  filterVideos,
-  sortVideos,
-  validateVideoFilter,
-  type VideoFilter,
-} from "../core/metrics";
+import { selectResearchVideos, validateResearchFilter, type ResearchFilter } from "../core/research";
+import { normalizeCommentText, stableCommentFingerprint } from "../core/comments";
+import { parseTranscript } from "../core/transcript";
 
 export const CARD_SELECTOR =
   "ytd-rich-item-renderer,ytd-video-renderer,ytd-grid-video-renderer,ytd-compact-video-renderer,yt-lockup-view-model,ytd-reel-item-renderer,ytm-shorts-lockup-view-model";
@@ -140,71 +137,57 @@ export function readVideoCards(
     });
 }
 
-export function readComments(document: Document): CommentRecord[] {
-  const containers = Array.from(
-    document.querySelectorAll<HTMLElement>(
-      "ytd-comment-thread-renderer,ytd-comment-view-model",
-    ),
-  );
-  return containers
-    .filter(
-      (el) =>
-        !el.parentElement?.closest(
-          "ytd-comment-thread-renderer,ytd-comment-view-model",
-        ),
-    )
-    .flatMap((el, index) => {
-      const body = firstText(el, [
-        "#content-text",
-        '.yt-core-attributed-string[role="text"]',
-        "[data-comment-text]",
-      ]);
-      if (!body) return [];
-      const heart = el.querySelector(
-        'ytd-creator-heart-renderer button[aria-pressed="true"],ytd-creator-heart-renderer #hearted,[data-hearted="true"]',
-      );
-      const likesText = firstText(el, ["#vote-count-middle", "[data-likes]"]);
-      const repliesText = firstText(el, [
-        "#more-replies",
-        "ytd-button-renderer #text",
-        "[data-replies]",
-      ]);
-      return [
-        {
-          id: el.dataset.commentId ?? `loaded-${index}`,
-          text: body,
-          author: firstText(el, ["#author-text", "[data-author]"]),
-          likes: parseCount(likesText) ?? 0,
-          replies: parseCount(repliesText) ?? 0,
-          hearted: !!heart,
-        },
-      ];
-    });
+export function readComments(root: Document | Element): CommentRecord[] {
+  const component = "ytd-comment-view-model,ytd-comment-renderer,ytcp-comment,[data-prevlev-comment]";
+  const selector = `${component},ytd-comment-thread-renderer`;
+  const containers = Array.from(root.querySelectorAll<HTMLElement>(selector));
+  if (root.nodeType === 1 && (root as Element).matches(selector)) containers.unshift(root as HTMLElement);
+  const document = root.nodeType === 9 ? root as Document : root.ownerDocument!;
+  const comments = new Map<string, CommentRecord>();
+  for (const owner of containers) {
+    const ownNodes = (query: string): Element[] => {
+      const nodes = Array.from(owner.querySelectorAll(query));
+      if (owner.matches(query)) nodes.unshift(owner);
+      return nodes.filter(node => node.closest(selector) === owner);
+    };
+    const ownValue = (queries: readonly string[], attribute?: string): string => {
+      for (const query of queries) for (const node of ownNodes(query)) {
+        const value = normalizeCommentText(attribute ? node.getAttribute(attribute) ?? node.textContent ?? "" : node.textContent ?? "");
+        if (value) return value;
+      }
+      return "";
+    };
+    const bodyNode = ownNodes("#content-text,[data-comment-text]")[0] ?? ownNodes('.yt-core-attributed-string[role="text"]').find(node => !node.closest("#author-text,[data-author],#published-time-text,#vote-count-middle"));
+    const body = normalizeCommentText(bodyNode?.textContent ?? "");
+    if (!body) continue;
+    const author = ownValue(["#author-text", "[data-author]"], "data-author");
+    const likesText = ownValue(["[data-likes]"], "data-likes") || ownValue(["#vote-count-middle", "#vote-count-left", '[aria-label*=" likes"]', '[aria-label*=" curtidas"]'], "aria-label");
+    const repliesText = ownValue(["[data-replies]"], "data-replies") || ownValue(["#more-replies", "ytd-comment-replies-renderer #text", '[aria-label*=" replies"]', '[aria-label*=" respostas"]'], "aria-label");
+    const trueHeart = ownNodes('[data-hearted="true"],ytd-creator-heart-renderer button[aria-pressed="true"],ytd-creator-heart-renderer #hearted').length > 0;
+    const falseHeart = ownNodes('[data-hearted="false"],ytd-creator-heart-renderer button[aria-pressed="false"]').length > 0;
+    let id = owner.getAttribute("data-comment-id") ?? owner.getAttribute("comment-id") ?? ownNodes("[data-comment-id],[comment-id]").map(node => node.getAttribute("data-comment-id") ?? node.getAttribute("comment-id")).find(Boolean);
+    const thread = owner.closest("ytd-comment-thread-renderer");
+    if (!id && thread && (thread === owner || thread.querySelector(component) === owner)) id = thread.getAttribute("data-comment-id") ?? thread.getAttribute("comment-id");
+    if (id && !/^[A-Za-z0-9_.:-]{1,256}$/.test(id)) id = undefined;
+    if (!id) {
+      const anchors = ownNodes('a[href*="lc="]') as HTMLAnchorElement[];
+      for (const anchor of anchors) {
+        if (bodyNode?.contains(anchor)) continue;
+        try {
+          const url = new URL(anchor.getAttribute("href") ?? "", document.location?.href.startsWith("https://") ? document.location.href : "https://www.youtube.com");
+          const commentId = url.searchParams.get("lc");
+          if (url.protocol === "https:" && ["www.youtube.com", "youtube.com", "m.youtube.com"].includes(url.hostname) && !url.username && !url.password && commentId && /^[A-Za-z0-9_.-]{1,256}$/.test(commentId)) { id = commentId; break; }
+        } catch { /* An invalid/non-YouTube link cannot identify this comment. */ }
+      }
+    }
+    id ??= stableCommentFingerprint(author, body);
+    if (!comments.has(id)) comments.set(id, { id, text: body, author, likes: parseCount(likesText), replies: parseCount(repliesText), hearted: trueHeart ? true : falseHeart ? false : undefined });
+  }
+  return [...comments.values()];
 }
 
 export function readVisibleTranscript(document: Document): TranscriptSegment[] {
-  const segments = Array.from(
-    document.querySelectorAll(
-      "ytd-transcript-segment-renderer,[data-prevlev-transcript-segment]",
-    ),
-  );
-  return segments
-    .flatMap((element) => {
-      const start = parseDuration(
-        firstText(element, [".segment-timestamp", "[data-start]"]),
-      );
-      const body = firstText(element, [".segment-text", "[data-text]"]);
-      return start === undefined || !body
-        ? []
-        : [{ start, duration: 0, text: body }];
-    })
-    .map((segment, index, all) => ({
-      ...segment,
-      duration: Math.max(
-        0,
-        (all[index + 1]?.start ?? segment.start) - segment.start,
-      ),
-    }));
+  return parseTranscript(document);
 }
 
 export function readYouTubeSnapshot(
@@ -289,8 +272,9 @@ export type CardSort =
   | "recent"
   | "duration"
   | "subscribers"
+  | "viewsPerSubscriber"
   | "title";
-export interface CardFilter extends VideoFilter {
+export interface CardFilter extends ResearchFilter {
   minimumViews?: number;
   sort: CardSort;
 }
@@ -302,6 +286,7 @@ export const cardSorts: readonly CardSort[] = [
   "recent",
   "duration",
   "subscribers",
+  "viewsPerSubscriber",
   "title",
 ];
 export const cardNumericFields = [
@@ -315,6 +300,7 @@ export const cardNumericFields = [
   "maxVph",
   "minOutlier",
   "maxOutlier",
+  "subscribersBelow",
 ] as const;
 /** Validate both UI input and messages before changing the page. Legacy minimumViews remains accepted. */
 export function normalizeCardFilter(input: unknown): CardFilter {
@@ -342,6 +328,7 @@ export function normalizeCardFilter(input: unknown): CardFilter {
     "channel",
     "publishedAfter",
     "publishedBefore",
+    "publishedBeforeExclusive",
   ] as const)
     if (raw[key] !== undefined && raw[key] !== "") {
       if (typeof raw[key] !== "string")
@@ -359,7 +346,23 @@ export function normalizeCardFilter(input: unknown): CardFilter {
       throw new Error("O mínimo de views deve ser numérico.");
     result.minViews = raw.minimumViews;
   }
-  validateVideoFilter(result);
+  for (const key of ["surface", "priority", "comparisonMode"] as const) if (raw[key] !== undefined) {
+    if (typeof raw[key] !== "string") throw new Error("Opção de pesquisa inválida.");
+    Object.assign(result, { [key]: raw[key] });
+  }
+  if (raw.criteria !== undefined) {
+    if (!Array.isArray(raw.criteria)) throw new Error("Ordenação múltipla inválida.");
+    result.criteria = raw.criteria.map(value => {
+      if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Critério de ordenação inválido.");
+      const criterion = value as Record<string, unknown>;
+      return { key: criterion.key, direction: criterion.direction } as NonNullable<ResearchFilter["criteria"]>[number];
+    });
+  }
+  for (const key of ["hideShortsOnFeed", "hideShortsOnSearch"] as const) if (raw[key] !== undefined) {
+    if (typeof raw[key] !== "boolean") throw new Error("Preferência de Shorts inválida.");
+    result[key] = raw[key];
+  }
+  validateResearchFilter(result);
   return result;
 }
 export function filterAndSortCards(
@@ -370,13 +373,8 @@ export function filterAndSortCards(
 ): VideoCard[] {
   const normalized = normalizeCardFilter(filter),
     baseline = cards.map((card) => card.video);
-  const selected = new Set(filterVideos(baseline, normalized, now));
-  const sorted =
-    normalized.sort === "default"
-      ? baseline
-      : sortVideos(baseline, normalized.sort, now, baseline);
+  const sorted = selectResearchVideos(baseline, normalized, now);
   const byVideo = new Map(cards.map((card) => [card.video, card]));
   return sorted
-    .filter((video) => selected.has(video))
     .map((video) => byVideo.get(video)!);
 }

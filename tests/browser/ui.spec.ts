@@ -140,9 +140,10 @@ test("UI with browser-API fixture scans, filters, saves, exports and reports IA 
     "Uma transcrição de teste.",
   );
   await page.locator('[data-ai="transcript-summary"]').click();
-  await expect(page.locator("#transcript-result")).toContainText(
-    "not_configured",
+  await expect(page.locator("#transcript-ai-state")).toContainText(
+    "Configure um backend próprio",
   );
+  await expect(page.locator("#transcript-result")).toBeEmpty();
   await page.locator('[data-page="comments"]').click();
   await expect(page.locator("#comment-list")).toContainText("Como montar");
   await page.locator("#comment-likes").fill("10");

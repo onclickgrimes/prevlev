@@ -1,14 +1,16 @@
 import type { VideoRecord } from "../shared/types";
-import { filterVideos, lifetimeVph, median as coreMedian, outlierScore, validateVideoFilter, type VideoFilter } from "./metrics";
+import { groupChannelIdentities as channelGroups } from "./observations";
+import { lifetimeVph, median as coreMedian, validateVideoFilter } from "./metrics";
+import { selectResearchVideos, researchComparison, validateResearchFilter, type ResearchFilter } from "./research";
 
 export type VideoSource = "youtube-dom" | "public-page" | "user-provided" | "youtube-data-api";
 type LocalVideo = VideoRecord & { source?: VideoSource; observedAt?: string };
-export interface AnalyticsOptions { now?: number; publishedAfter?: string; publishedBefore?: string; filter?: VideoFilter }
+export interface AnalyticsOptions { now?: number; publishedAfter?: string; publishedBefore?: string; filter?: ResearchFilter }
 export interface CoverageCount { known: number; missing: number }
 export interface AnalyticsVideo {
   id: string; title: string; url: string; channel?: string; views?: number;
   publishedAt?: string; durationSeconds?: number; format: "short" | "long" | "unknown";
-  lifetimeVph?: number; outlierScore?: number; source?: VideoSource;
+  lifetimeVph?: number; outlierScore?: number; outlierReferenceCount?: number; outlierMethod?: string; source?: VideoSource;
 }
 export interface ChannelAnalytics {
   key: string; label: string; videoCount: number; knownViews: number; missingViews: number;
@@ -22,7 +24,7 @@ export interface MonthAnalytics {
 }
 export interface AnalyticsReport {
   generatedAt: string;
-  scope: { inputCount: number; includedCount: number; excludedApiCount: number; excludedDuplicateCount: number; excludedByDateCount: number; excludedByFilterCount: number; publishedAfter?: string; publishedBefore?: string; filter?: VideoFilter };
+  scope: { inputCount: number; includedCount: number; excludedApiCount: number; excludedDuplicateCount: number; excludedByDateCount: number; excludedByFilterCount: number; publishedAfter?: string; publishedBefore?: string; publishedBeforeExclusive?: string; filter?: ResearchFilter };
   coverage: { views: CoverageCount; publicationDate: CoverageCount; duration: CoverageCount; channel: CoverageCount };
   totals: { knownViews?: number; meanViews?: number; medianViews?: number; meanLifetimeVph?: number; medianLifetimeVph?: number; knownDurationSeconds?: number };
   formats: { short: number; long: number; unknown: number };
@@ -36,16 +38,16 @@ export interface AnalyticsReport {
 export function buildAnalyticsReport(videos: readonly LocalVideo[], options: AnalyticsOptions = {}): AnalyticsReport {
   const now = options.now ?? Date.now();
   validateNow(now);
-  const filter: VideoFilter = { ...options.filter };
+  const filter: ResearchFilter = { ...options.filter };
   if (options.publishedAfter !== undefined) filter.publishedAfter = options.publishedAfter;
   if (options.publishedBefore !== undefined) filter.publishedBefore = options.publishedBefore;
-  validateVideoFilter(filter);
-  const dates = { publishedAfter: filter.publishedAfter, publishedBefore: filter.publishedBefore };
+  validateResearchFilter(filter);
+  const dates = { publishedAfter: filter.publishedAfter, publishedBefore: filter.publishedBefore, publishedBeforeExclusive: filter.publishedBeforeExclusive };
   const eligible = videos.filter(video => video.source !== "youtube-data-api");
   const unique = deduplicateVideos(eligible, now);
   const baseline = unique.videos.map(video => ({ ...video, views: knownCount(video.views), subscribers: knownCount(video.subscribers), durationSeconds: knownCount(video.durationSeconds), publishedAt: validDate(video.publishedAt, now)?.iso }));
-  const included = filterVideos(baseline, filter, now);
-  const dateIncludedCount = filterVideos(baseline, dates, now).length;
+  const included = selectResearchVideos(baseline, filter, now);
+  const dateIncludedCount = selectResearchVideos(baseline, dates, now).length;
   const views = numbers(included.map(video => video.views));
   const durations = numbers(included.map(video => video.durationSeconds));
   const rates = numbers(included.map(video => lifetimeVph(video, now)));
@@ -69,7 +71,8 @@ export function buildAnalyticsReport(videos: readonly LocalVideo[], options: Ana
     if (source && Object.hasOwn(provenance, source)) provenance[source]++; else provenance.unspecified++;
     const format = video.isShort === true ? "short" : video.isShort === false ? "long" : "unknown";
     formats[format]++;
-    rows.push({ id: video.id, title: video.title, url: video.url, channel: video.channel, views: video.views, publishedAt: video.publishedAt, durationSeconds: video.durationSeconds, format, lifetimeVph: lifetimeVph(video, now), outlierScore: knownCount(outlierScore(video, baseline)), source });
+    const comparison = researchComparison(video, baseline, filter.comparisonMode);
+    rows.push({ id: video.id, title: video.title, url: video.url, channel: video.channel, views: video.views, publishedAt: video.publishedAt, durationSeconds: video.durationSeconds, format, lifetimeVph: lifetimeVph(video, now), outlierScore: comparison.score, outlierReferenceCount: comparison.referenceCount, outlierMethod: comparison.method, source });
   }
   const knownDates = included.filter(video => video.publishedAt !== undefined).length;
   const channels: ChannelAnalytics[] = [...channelBuckets].map(([key, group]) => {
@@ -87,7 +90,7 @@ export function buildAnalyticsReport(videos: readonly LocalVideo[], options: Ana
     "A amostra contém somente vídeos carregados ou fornecidos; não representa o catálogo completo de um canal nem tráfego oficial.",
     "Visualizações são contadores observados, não visualizações recebidas no período selecionado; as datas filtram a publicação dos vídeos.",
     "VPH é a média de visualizações desde a publicação, não a contagem dos últimos 60 minutos. Datas relativas coletadas podem ser aproximadas.",
-    "Outlier usa a amostra completa anterior ao filtro de datas, com pelo menos três referências do mesmo formato e identidade de canal conhecida; alvo sem identidade usa a amostra geral.",
+    filter.comparisonMode === "sample-channel-reference" ? "Outlier alternativo usa a média da amostra completa do canal conhecido anterior aos filtros, mínimo de 3 referências. Shorts usam mediana dos positivos com pelo menos 10 referências positivas; abaixo disso usam média. Não equivale à referência do canal completo nem ao índice proprietário." : "Outlier padrão usa mediana da amostra completa anterior aos filtros, com pelo menos três referências do mesmo formato; alvo sem identidade usa a amostra geral. Não equivale ao índice proprietário.",
     "Meses de publicação usam UTC. Intervalos são lacunas entre datas distintas da amostra combinada, sem interpolar publicações ausentes nem prever frequência futura de um canal.",
     "Receita, RPM, lucro, geografia e monetização não são conhecidos por estes dados e não são estimados neste relatório.",
   ];
@@ -95,7 +98,7 @@ export function buildAnalyticsReport(videos: readonly LocalVideo[], options: Ana
   if (unique.excluded) limitations.push(`${unique.excluded} registros repetidos por ID foram excluídos antes dos filtros e cálculos. Foi preservado o registro inteiro com observedAt completo válido mais recente; sem esse timestamp, ou em empate, vale a primeira entrada. Contadores de registros diferentes não foram combinados.`);
   if (unique.conflicts) limitations.push(`${unique.conflicts} duplicatas tinham contadores ou metadados conflitantes; a regra explícita de seleção acima foi aplicada, sem somar versões do mesmo vídeo.`);
   if (provenance.unspecified) limitations.push(`${provenance.unspecified} registros incluídos não declaram origem. Ausência de origem não foi interpretada como API oficial.`);
-  if (dates.publishedAfter !== undefined || dates.publishedBefore !== undefined) limitations.push("O filtro de publicação exclui vídeos com datas ausentes, inválidas ou futuras. Cobertura e totais descrevem somente os vídeos incluídos.");
+  if (dates.publishedAfter !== undefined || dates.publishedBefore !== undefined || dates.publishedBeforeExclusive !== undefined) limitations.push("O filtro de publicação exclui vídeos com datas ausentes, inválidas ou futuras. Cobertura e totais descrevem somente os vídeos incluídos.");
   if (included.length < baseline.length) limitations.push("Filtros locais restringem a amostra exibida. Os totais e a cobertura descrevem somente os vídeos incluídos; a referência de outlier preserva a amostra completa elegível.");
   if (rows.some(video => !video.publishedAt)) limitations.push("Datas ausentes, inválidas ou futuras permanecem desconhecidas e ficam fora dos agrupamentos mensais e do cálculo de VPH.");
   if (views.length && total(views) === undefined || durations.length && total(durations) === undefined) limitations.push("Somas fora do intervalo numérico disponível permanecem desconhecidas; não foram convertidas em infinito nem zero.");
@@ -166,7 +169,7 @@ export function deriveHistoryTrend(records: readonly HistoryObservation[], now =
 
 /** One row per included video; undefined fields stay empty when passed to toCsv. */
 export function reportRows(report: AnalyticsReport): Record<string, unknown>[] {
-  return report.videos.map(video => ({ video_id: video.id, title: video.title, url: video.url, channel: video.channel, source: video.source, format: video.format, observed_views: video.views, published_at: video.publishedAt, duration_seconds: video.durationSeconds, lifetime_average_vph: video.lifetimeVph, sample_outlier: video.outlierScore }));
+  return report.videos.map(video => ({ video_id: video.id, title: video.title, url: video.url, channel: video.channel, source: video.source, format: video.format, observed_views: video.views, published_at: video.publishedAt, duration_seconds: video.durationSeconds, lifetime_average_vph: video.lifetimeVph, sample_outlier: video.outlierScore, outlier_reference_count: video.outlierReferenceCount, outlier_method: video.outlierMethod }));
 }
 
 export function reportMarkdown(report: AnalyticsReport): string {
@@ -209,39 +212,5 @@ function validDate(value: string | undefined, now: number): { iso: string; time:
   try { validateVideoFilter({ publishedAfter: value }); } catch { return undefined; }
   const time = Date.parse(value);
   return Number.isFinite(time) && time <= now ? { iso: new Date(time).toISOString(), time } : undefined;
-}
-interface Identity { id?: string; handle?: string; name?: string; ambiguous?: boolean }
-function identity(video: VideoRecord): Identity {
-  const rawId = video.channelId?.trim();
-  let id = rawId && /^[A-Za-z0-9_-]{1,128}$/.test(rawId) ? rawId : undefined, handle: string | undefined;
-  try {
-    if (video.channelUrl) {
-      const url = new URL(video.channelUrl);
-      if (url.protocol === "https:" && ["youtube.com", "www.youtube.com", "m.youtube.com"].includes(url.hostname) && !url.username && !url.password && !url.port) {
-        const path = decodeURIComponent(url.pathname).replace(/\/$/, "");
-        const linkedId = /^\/channel\/([A-Za-z0-9_-]{1,128})$/.exec(path)?.[1];
-        if (id && linkedId && id !== linkedId) return { ambiguous: true };
-        id ??= linkedId;
-        handle = /^\/@([\p{L}\p{N}_.\-·]{1,100})$/u.exec(path)?.[1].normalize("NFC").toLocaleLowerCase();
-      }
-    }
-  } catch { /* Unrecognized URL does not establish identity. */ }
-  const name = video.channel?.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase().trim().replace(/\s+/g, " ") || undefined;
-  return { id, handle, name };
-}
-function channelGroups(videos: readonly LocalVideo[]): Map<VideoRecord, { key: string; label: string }> {
-  const identities = videos.map(video => identity(video));
-  const aliases = new Map<string, Set<string>>();
-  for (const item of identities) if (!item.ambiguous && item.id && item.handle) { const ids = aliases.get(item.handle) ?? new Set<string>(); ids.add(item.id); aliases.set(item.handle, ids); }
-  const groups = new Map<VideoRecord, { key: string; label: string }>();
-  videos.forEach((video, index) => {
-    const item = identities[index];
-    if (item.ambiguous) return;
-    const linkedIds = item.handle ? aliases.get(item.handle) : undefined;
-    const id = item.id ?? (linkedIds?.size === 1 ? [...linkedIds][0] : undefined);
-    const key = id ? `id:${id}` : item.handle ? `handle:${item.handle}` : item.name ? `name:${item.name}` : undefined;
-    if (key) groups.set(video, { key, label: video.channel?.trim() || (id ? id : item.handle ? `@${item.handle}` : item.name!) });
-  });
-  return groups;
 }
 function markdown(text: string): string { return text.replace(/[\\`*_{}[\]<>#|]/g, "\\$&").replace(/\r?\n/g, " "); }

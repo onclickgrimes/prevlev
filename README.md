@@ -1,12 +1,22 @@
-# Prevlev · v0.4.0
+# Prevlev · v0.5.0
 
 Extensão Chrome Manifest V3 independente para pesquisar vídeos, preparar imagens e operar ferramentas assistidas no YouTube/Studio. O núcleo funciona no navegador; análises de amostra e IA usam um backend próprio opcional.
 
 Esta versão **não declara paridade completa com Nexlev 3.12.6**. Entrega funções locais reais e adaptadores independentes, mantendo explícitos os dados ausentes, os serviços não configurados e as diferenças de cobertura. Consulte a [matriz dos 40 recursos](docs/FEATURES.md) e sua [versão JSON](docs/feature-status.json).
 
+## Novidades desta etapa
+
+A pesquisa ganhou presets contextuais, dois critérios de ordenação e controles separados para Shorts. A coleta assistida percorre itens carregáveis com limite, progresso e cancelamento. Menus nos cards e uma prévia de canal trabalham sobre a amostra visível, com consulta pública apenas quando solicitada.
+
+Comentários têm filtros por autor, texto, perguntas, curtidas, respostas e coração. O Swipe File oferece tags, pastas, busca, edição e importação/exportação; a sincronização com o backend pessoal é manual e verifica a revisão antes de substituir dados. A análise local de patrocínio apresenta trechos, marcas e cupons identificados como evidências, sem estimar receita.
+
+A transcrição reconhece layouts adicionais, preserva trechos observados durante virtualização e aceita VTT/SRT. A prévia de thumbnails permite combinações cíclicas de arquivos e títulos, layouts e metadados editáveis; a compressão por tamanho informa o resultado medido. Os controles modernos de Studio continuam sujeitos à revisão do usuário e aos layouts reconhecidos.
+
+A [auditoria dos 40 recursos](docs/GAP_AUDIT.md) e o [ledger das 33 diferenças](docs/ORIGINAL_GAP_LEDGER.md) documentam a comparação estática relatada pelo coordenador, o que foi implementado e o que ainda falta. A referência original não foi executada neste ambiente.
+
 ## Instalar no Chrome
 
-Requisitos: Node.js 24 e npm. Em um checkout deste repositório:
+Para instalar o ZIP pronto ou gerar o pacote em Windows, Linux ou macOS, veja [DISTRIBUTION.md](docs/DISTRIBUTION.md). Para trabalhar a partir do código, use Node.js 24 e npm:
 
 ```bash
 npm ci

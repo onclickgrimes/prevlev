@@ -127,6 +127,22 @@ afterEach(() => {
 });
 
 describe("service worker e autorização de mensagens", () => {
+  it("obtém thumbnail somente por ação confiável em CDN fixo, sem cookies ou redirecionamentos", async () => {
+    fetcher.mockImplementation(async()=>new Response(new Uint8Array([1,2,3]),{headers:{"Content-Type":"image/png"}}));
+    const listener=await importBackground();
+    expect(await send(listener,{type:"FETCH_THUMBNAIL",videoId:"abcdefghijk"},contentSender)).toMatchObject({status:"ok",dataUrl:"data:image/png;base64,AQID"});
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher.mock.calls[0][0]).toBe("https://i.ytimg.com/vi/abcdefghijk/maxresdefault.jpg");
+    expect(fetcher.mock.calls[0][1]).toMatchObject({credentials:"omit",redirect:"error"});
+  });
+  it("recusa URL de thumbnail arbitrária e alvo de captura de outra aba antes de acessar dados",async()=>{
+    const listener=await importBackground();
+    expect(await send(listener,{type:"FETCH_THUMBNAIL",videoId:"https://secret.invalid"})).toMatchObject({status:"error"});
+    expect(await send(listener,{type:"CAPTURE_SCREENSHOT",tabId:2},contentSender)).toMatchObject({status:"error"});
+    expect(await send(listener,{type:"CAPTURE_SCREENSHOT",targetVideoId:"bad"})).toMatchObject({status:"error"});
+    expect(fetcher).not.toHaveBeenCalled();expect(browser.get).not.toHaveBeenCalled();
+  });
+
   it("apenas registra o listener ao importar: não consulta abas, armazenamento ou rede", async () => {
     await importBackground();
     expect(browser.addListener).toHaveBeenCalledTimes(1);

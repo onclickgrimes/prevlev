@@ -1,4 +1,5 @@
 import type { CommentRecord, VideoRecord } from "../shared/types";
+import { observedLifetimeVph, isoBoundary, knownPublication, channelIdentity, comparableChannel } from "./observations";
 
 export function median(values: readonly number[]): number | undefined {
   const sorted = values.filter(Number.isFinite).sort((a, b) => a - b);
@@ -6,7 +7,7 @@ export function median(values: readonly number[]): number | undefined {
   return sorted.length
     ? sorted.length % 2
       ? sorted[middle]
-      : (sorted[middle - 1] + sorted[middle]) / 2
+      : sorted[middle - 1] / 2 + sorted[middle] / 2
     : undefined;
 }
 
@@ -15,18 +16,7 @@ export function lifetimeVph(
   video: Pick<VideoRecord, "views" | "publishedAt">,
   now = Date.now(),
 ): number | undefined {
-  if (
-    video.views === undefined ||
-    !Number.isFinite(video.views) ||
-    video.views < 0 ||
-    !video.publishedAt
-  )
-    return undefined;
-  const published = knownPublication(video.publishedAt, now);
-  if (published === undefined) return undefined;
-  const age = (now - published) / 3_600_000;
-  const rate = age > 0 ? video.views / age : undefined;
-  return rate !== undefined && Number.isFinite(rate) ? rate : undefined;
+  return observedLifetimeVph(video, now);
 }
 
 /**
@@ -319,9 +309,9 @@ export function filterComments(
       (!filter.author ||
         normalize(comment.author).includes(normalize(filter.author))) &&
       (!filter.questionsOnly || /[?？]/.test(comment.text)) &&
-      (filter.minLikes === undefined || comment.likes >= filter.minLikes) &&
+      (filter.minLikes === undefined || comment.likes !== undefined && comment.likes >= filter.minLikes) &&
       (filter.minReplies === undefined ||
-        comment.replies >= filter.minReplies) &&
+        comment.replies !== undefined && comment.replies >= filter.minReplies) &&
       (filter.hearted === undefined || comment.hearted === filter.hearted),
   );
 }
@@ -357,114 +347,4 @@ function normalize(value: string): string {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLocaleLowerCase();
-}
-
-/** Accept unambiguous ISO dates only, rejecting Date.parse's invalid-day rollover. */
-function isoBoundary(value: string, endOfDay: boolean): number {
-  if (typeof value !== "string")
-    throw new Error(
-      "Informe uma data ISO válida: AAAA-MM-DD ou timestamp com fuso horário.",
-    );
-  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value);
-  const timestamp =
-    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?(Z|[+-]\d{2}:\d{2})$/.exec(
-      value,
-    );
-  if (!dateOnly && !timestamp)
-    throw new Error(
-      "Informe uma data ISO válida: AAAA-MM-DD ou timestamp com fuso horário.",
-    );
-  const [year, month, day] = value.slice(0, 10).split("-").map(Number);
-  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
-  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-  if (month < 1 || month > 12 || day < 1 || day > days[month - 1])
-    throw new Error("A data de publicação contém um dia ou mês inválido.");
-  if (timestamp) {
-    const zone = timestamp[8];
-    if (
-      Number(timestamp[4]) > 23 ||
-      Number(timestamp[5]) > 59 ||
-      Number(timestamp[6] ?? 0) > 59 ||
-      (zone !== "Z" &&
-        (Number(zone.slice(1, 3)) > 23 || Number(zone.slice(4)) > 59))
-    )
-      throw new Error("O horário ou fuso da data de publicação é inválido.");
-  }
-  const parsed = Date.parse(
-    dateOnly
-      ? `${value}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}Z`
-      : value,
-  );
-  if (!Number.isFinite(parsed))
-    throw new Error("A data de publicação é inválida.");
-  return parsed;
-}
-
-function knownPublication(value: string, now: number): number | undefined {
-  if (!Number.isFinite(now)) return undefined;
-  try {
-    const timestamp = isoBoundary(value, false);
-    return timestamp <= now ? timestamp : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-interface ChannelIdentity {
-  id?: string;
-  handle?: string;
-  name?: string;
-  ambiguous?: boolean;
-}
-
-function channelIdentity(video: VideoRecord): ChannelIdentity {
-  const explicitId = video.channelId?.trim();
-  let id =
-    explicitId && /^[A-Za-z0-9_-]{1,128}$/.test(explicitId)
-      ? explicitId
-      : undefined;
-  let handle: string | undefined;
-  if (video.channelUrl) {
-    try {
-      const url = new URL(video.channelUrl);
-      if (
-        url.protocol === "https:" &&
-        ["www.youtube.com", "youtube.com", "m.youtube.com"].includes(
-          url.hostname,
-        ) &&
-        !url.username &&
-        !url.password &&
-        !url.port
-      ) {
-        const path = decodeURIComponent(url.pathname).replace(/\/$/, "");
-        const linkedId = /^\/channel\/([A-Za-z0-9_-]{1,128})$/.exec(path)?.[1];
-        if (id && linkedId && id !== linkedId) return { ambiguous: true };
-        id ??= linkedId;
-        handle = /^\/@([\p{L}\p{N}_.\-·]{1,100})$/u
-          .exec(path)?.[1]
-          .normalize("NFC")
-          .toLocaleLowerCase();
-      }
-    } catch {
-      /* Invalid URLs cannot establish a channel alias. */
-    }
-  }
-  const name = video.channel
-    ? normalize(video.channel).trim().replace(/\s+/g, " ") || undefined
-    : undefined;
-  return { id, handle, name };
-}
-
-function comparableChannel(
-  target: ChannelIdentity,
-  peer: ChannelIdentity,
-): boolean {
-  if (target.ambiguous || peer.ambiguous) return false;
-  if (!target.id && !target.handle && !target.name) return true;
-  // A definitive shared ID also handles channel URL aliases and handle renames.
-  if (target.id && peer.id) return target.id === peer.id;
-  if (target.handle && peer.handle) return target.handle === peer.handle;
-  // Names can collide, so use them only when neither side has a stronger identity.
-  if (target.id || target.handle || peer.id || peer.handle) return false;
-  return !!target.name && target.name === peer.name;
 }

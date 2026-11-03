@@ -1,0 +1,17 @@
+// @vitest-environment jsdom
+import {afterEach,beforeEach,describe,it,expect,vi} from 'vitest';
+import {initCollectionTools} from '../src/ui/collection';
+import type {PageSnapshot} from '../src/shared/types';
+const old:PageSnapshot={url:'https://www.youtube.com/results?search_query=x',title:'x',videos:[],comments:[{id:'old',author:'old',text:'keep'}],transcript:[],warnings:[]};
+const snapshot:PageSnapshot={...old,videos:[{id:'abcdefghijk',title:'collected',url:'https://www.youtube.com/watch?v=abcdefghijk'}],comments:[]};
+const running={jobId:'fixture-job',kind:'videos',phase:'running',collectedCount:1,steps:0,maxItems:100,maxSteps:10,url:old.url,limitations:[]};
+let send:ReturnType<typeof vi.fn<(m:{type:string})=>Promise<unknown>>>,adopt:ReturnType<typeof vi.fn<(s:PageSnapshot)=>Promise<void>>>,notice:ReturnType<typeof vi.fn<(message:string,error?:boolean)=>void>>;
+const click=(id:string)=>document.getElementById(id)!.click();
+beforeEach(()=>{vi.useFakeTimers();document.body.innerHTML='<section id="research"></section><select id="tab-select"><option>1</option><option>2</option></select>';send=vi.fn().mockImplementation(async(m: {type:string})=>m.type==='START_COLLECTION'?{status:'ok',collection:running}:m.type==='CANCEL_COLLECTION'?{status:'ok',collection:{...running,phase:'cancelled'}}:{status:'ok',collection:{...running,phase:'completed'},snapshot});adopt=vi.fn().mockResolvedValue(undefined);notice=vi.fn();vi.stubGlobal('chrome',{tabs:{sendMessage:async(_id:number,m:unknown)=>send(m as {type:string})}});initCollectionTools({targetTab:()=>1,snapshot:()=>old,adopt,notice});});
+afterEach(()=>{window.dispatchEvent(new Event('pagehide'));vi.useRealTimers();vi.unstubAllGlobals();});
+describe('workspace collection integration',()=>{
+ it('keeps progress separate from storage, then merges only an explicitly accepted same-context result',async()=>{expect(send).not.toHaveBeenCalled();click('collection-start');await vi.advanceTimersByTimeAsync(500);expect(adopt).not.toHaveBeenCalled();expect((document.getElementById('collection-use') as HTMLButtonElement).disabled).toBe(false);click('collection-use');await vi.advanceTimersByTimeAsync(0);expect(adopt.mock.calls[0][0]).toMatchObject({videos:snapshot.videos,comments:old.comments});});
+ it('retrieves a partial result after cancellation and never repeats start',async()=>{click('collection-start');await vi.advanceTimersByTimeAsync(0);click('collection-cancel');await vi.advanceTimersByTimeAsync(0);expect(send.mock.calls.map(x=>x[0].type)).toEqual(['START_COLLECTION','CANCEL_COLLECTION','COLLECTION_STATUS']);expect((document.getElementById('collection-use') as HTMLButtonElement).disabled).toBe(false);});
+ it('cancels the old tab and discards its pending result when selection changes',async()=>{click('collection-start');await vi.advanceTimersByTimeAsync(0);document.getElementById('tab-select')!.dispatchEvent(new Event('change'));await vi.advanceTimersByTimeAsync(0);expect(send.mock.calls.some(x=>x[0].type==='CANCEL_COLLECTION')).toBe(true);expect((document.getElementById('collection-use') as HTMLButtonElement).disabled).toBe(true);expect(adopt).not.toHaveBeenCalled();});
+ it('validates bounds before any tab message',async()=>{(document.getElementById('collection-max') as HTMLInputElement).value='501';click('collection-start');await vi.advanceTimersByTimeAsync(0);expect(send).not.toHaveBeenCalled();expect(notice).toHaveBeenCalledWith(expect.stringContaining('limites válidos'),true);});
+});

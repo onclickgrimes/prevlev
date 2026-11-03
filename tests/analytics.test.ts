@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildAnalyticsReport, deriveHistoryTrend, reportMarkdown, reportRows, type VideoSource } from "../src/core/analytics";
 import { toCsv } from "../src/core/export";
 import type { VideoRecord } from "../src/shared/types";
+import { selectResearchVideos, type ResearchFilter } from "../src/core/research";
 
 const now = Date.parse("2026-11-03T00:00:00Z");
 const video = (id: string, extra: Partial<VideoRecord> & { source?: VideoSource; observedAt?: string } = {}): VideoRecord & { source?: VideoSource; observedAt?: string } => ({ id, title: id, url: `https://www.youtube.com/watch?v=${id}`, ...extra });
@@ -162,6 +163,20 @@ describe("local observation analytics", () => {
     expect(report.limitations.join(" ")).toContain("intervalo numérico");
     const ratio = buildAnalyticsReport([video("large", { views: 1e308, channelId: "same", isShort: false }), ...[1, 2, 3].map(index => video(`tiny-${index}`, { views: 1e-308, channelId: "same", isShort: false }))], { now });
     expect(ratio.topVideos[0].outlierScore).toBeUndefined();
+  });
+  it("uses exactly the advanced research selection and explicit comparison mode after API exclusion and deduplication", () => {
+    const target = video("target", { title: "keep", views: 1000, subscribers: 9999, channelId: "same", isShort: false, publishedAt: "2025-01-01", source: "youtube-dom" });
+    const peers = [100, 100, 1000].map((views, index) => video(`peer-${index}`, { views, subscribers: 100, channelId: "same", isShort: false, publishedAt: "2024-01-01" }));
+    const rows = [target, ...peers, video("excluded-subs", { title: "keep", views: 1000, subscribers: 10000, isShort: false, publishedAt: "2025-01-01" }), video("excluded-short", { title: "keep", views: 1000, subscribers: 100, isShort: true, publishedAt: "2025-01-01" }), video("api", { source: "youtube-data-api", views: 1, channelId: "same", isShort: false })];
+    const filter: ResearchFilter = { query: "keep", surface: "search", subscribersBelow: 10000, publishedBeforeExclusive: "2025-02-01", hideShortsOnSearch: true, comparisonMode: "sample-channel-reference", minOutlier: 2, maxOutlier: 3, criteria: [{ key: "views", direction: "asc" }], priority: "views-per-subscriber" };
+    const expected = selectResearchVideos(rows, filter, now);
+    const report = buildAnalyticsReport(rows, { now, filter });
+    expect(report.videos.map(row => row.id)).toEqual(expected.map(row => row.id));
+    expect(report.videos).toHaveLength(1);
+    expect(report.videos[0]).toMatchObject({ id: "target", outlierScore: 2.5, outlierReferenceCount: 3, outlierMethod: "sample-channel-mean" });
+    expect(report.scope.excludedApiCount).toBe(1);
+    expect(report.limitations.join(" ")).toContain("Outlier alternativo");
+    expect(buildAnalyticsReport(rows, { now, filter: { ...filter, comparisonMode: "sample-median" } }).videos).toHaveLength(0);
   });
 });
 

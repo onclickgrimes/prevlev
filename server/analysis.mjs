@@ -1,4 +1,6 @@
 import {legacyHistory} from './history.mjs';
+import {analyzeSponsorships} from './sponsorships.mjs';
+import { observedLifetimeVph, knownPublication, groupChannelIdentities } from '../src/core/observations.ts';
 
 const number = (value) =>
   typeof value === "number" && Number.isFinite(value) && value >= 0
@@ -35,9 +37,8 @@ const jaccard = (left, right) => {
 const median = (values) => {
   const sorted = [...values].sort((a, b) => a - b);
   return sorted.length
-    ? (sorted[Math.floor((sorted.length - 1) / 2)] +
-        sorted[Math.ceil((sorted.length - 1) / 2)]) /
-        2
+    ? sorted[Math.floor((sorted.length - 1) / 2)] / 2 +
+        sorted[Math.ceil((sorted.length - 1) / 2)] / 2
     : null;
 };
 const datasetLimits = [
@@ -63,16 +64,14 @@ function videosFrom(payload) {
         throw new Error(`Vídeo ${index + 1} inválido.`);
       const id = text(video.id, 100);
       if (!id) throw new Error(`Vídeo ${index + 1} sem ID.`);
-      const publishedAt =
-        typeof video.publishedAt === "string" &&
-        Number.isFinite(Date.parse(video.publishedAt))
-          ? new Date(video.publishedAt).toISOString()
-          : undefined;
+      const publication = typeof video.publishedAt === "string" ? knownPublication(video.publishedAt, 8.64e15) : undefined;
+      const publishedAt = publication === undefined ? undefined : new Date(publication).toISOString();
       return {
         id,
         title: text(video.title, 500),
         channel: text(video.channel, 200),
         channelId: text(video.channelId, 100),
+        channelUrl: text(video.channelUrl, 2000),
         views: number(video.views),
         durationSeconds: number(video.durationSeconds),
         isShort: typeof video.isShort === "boolean" ? video.isShort : undefined,
@@ -92,21 +91,16 @@ function aggregate(videos, now) {
   const dated = videos.flatMap((video) =>
     video.publishedAt && Date.parse(video.publishedAt) <= now ? [video] : [],
   );
-  const vph = dated.flatMap((video) =>
-    video.views === undefined
-      ? []
-      : [
-          video.views /
-            Math.max((now - Date.parse(video.publishedAt)) / 3600000, 1),
-        ],
-  );
+  const vph = videos.flatMap(video => {
+    const rate=observedLifetimeVph(video,now);return rate===undefined?[]:[rate];
+  });
   const shorts = videos.filter((video) => video.isShort === true).length;
   return {
     videoCount: videos.length,
     knownViewCount: views.length,
-    totalObservedViews: views.length ? views.reduce((a, b) => a + b, 0) : null,
+    totalObservedViews: views.length && Number.isFinite(views.reduce((a, b) => a + b, 0)) ? views.reduce((a, b) => a + b, 0) : null,
     meanViews: views.length
-      ? views.reduce((a, b) => a + b, 0) / views.length
+      ? views.reduce((a, b) => a + b / views.length, 0)
       : null,
     medianViews: median(views),
     medianLifetimeVph: median(vph),
@@ -118,18 +112,11 @@ function aggregate(videos, now) {
   };
 }
 function groups(videos, now) {
-  const map = new Map();
-  for (const video of videos) {
-    const id = video.channelId || video.channel;
-    if (!id) continue;
-    if (!map.has(id)) map.set(id, []);
-    map.get(id).push(video);
-  }
-  return [...map].map(([id, list]) => ({
-    id,
-    name: list[0].channel || id,
-    corpus: list.map((v) => v.title).join(" "),
-    ...aggregate(list, now),
+  const identities=groupChannelIdentities(videos), map=new Map();
+  for(const video of videos){const identity=identities.get(video);if(!identity)continue;const group=map.get(identity.key)??{identity,videos:[]};group.videos.push(video);map.set(identity.key,group);}
+  return [...map].map(([key,{identity,videos:list}])=>({
+    id:key.startsWith('id:')?key.slice(3):key,key,name:identity.label,
+    corpus:list.map(video=>video.title).join(' '),...aggregate(list,now),
   }));
 }
 export async function analyzeDataset(
@@ -144,32 +131,7 @@ export async function analyzeDataset(
     throw new Error("Dados com origem youtube-data-api pertencem somente à pesquisa oficial e não podem alimentar análises derivadas locais. A amostra inteira foi recusada.");
   if (feature === "view-history") return legacyHistory(payload, dataDir, now);
   if (feature === "sponsorships") {
-    const source = text(payload.text, 100000);
-    if (!source)
-      throw new Error(
-        "Envie payload.text com a descrição ou transcrição a examinar.",
-      );
-    const lines = source
-      .split(/\n|(?<=[.!?])\s+/)
-      .filter((line) =>
-        /(patrocinad[oa]|parceria paga|paid partnership|sponsored by|sponsor(?:ed|ship)?|cupom|c[oó]digo de desconto|affiliate|afiliad[oa]|#ad\b)/i.test(
-          line,
-        ),
-      );
-    return ok(
-      {
-        mentions: lines.slice(0, 200).map((excerpt) => ({
-          excerpt: excerpt.slice(0, 1000),
-          classification: "possível divulgação comercial",
-          confidence: "regra textual; requer revisão",
-        })),
-        estimatedRevenue: null,
-      },
-      [
-        "Busca por marcadores de publicidade apenas no texto enviado; não identifica todos os patrocínios nem comprova relação comercial.",
-        "Não estima valores de contratos.",
-      ],
-    );
+    return analyzeSponsorships(payload);
   }
   if (
     ![

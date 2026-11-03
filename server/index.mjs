@@ -6,6 +6,7 @@ import { analyzeDataset } from "./analysis.mjs";
 import { analyzeAi, isAiFeature, validateProvider } from "./ai.mjs";
 import { discoverOmni, validateOmniBase } from "./omni.mjs";
 import { searchYouTube } from "./youtube.mjs";
+import { handleLibrary } from "./library.mjs";
 import { handleHistory } from "./history.mjs";
 
 const loopback = (bind) => ["127.0.0.1", "localhost", "::1"].includes(bind);
@@ -114,7 +115,7 @@ export function createPrevlevServer(options = {}, dependencies = {}) {
         status: "ok",
         source,
         data: {
-          version: "0.4.0",
+          version: "0.5.0",
           youtubeEnabled: config.youtubeEnabled,
           youtubeConfigured: config.youtubeEnabled && Boolean(config.youtubeApiKey),
           youtubeSource: "youtube-data-api",
@@ -146,7 +147,8 @@ export function createPrevlevServer(options = {}, dependencies = {}) {
     const analysisRequest = req.url === "/v1/analyze" && req.method === "POST";
     const youtubeRequest = req.url === "/v1/youtube/search" && req.method === "POST";
     const historyRequest = req.url === "/v1/history" && req.method === "POST";
-    if (!catalogRequest && !analysisRequest && !youtubeRequest && !historyRequest)
+    const libraryRequest = req.url === "/v1/library" && req.method === "POST";
+    if (!catalogRequest && !analysisRequest && !youtubeRequest && !historyRequest && !libraryRequest)
       return respond(404, {
         status: "error",
         source,
@@ -217,11 +219,11 @@ export function createPrevlevServer(options = {}, dependencies = {}) {
       let bytes = 0;
       for await (const chunk of req) {
         bytes += chunk.length;
-        if (bytes > 1024 * 1024) {
+        if (bytes > (libraryRequest ? 4 * 1024 * 1024 + 2048 : 1024 * 1024)) {
           respond(413, {
             status: "error",
             source,
-            error: "Corpo excede 1 MiB.",
+            error: libraryRequest ? "Biblioteca excede o limite de 4 MiB." : "Corpo excede 1 MiB.",
           });
           return;
         }
@@ -250,6 +252,10 @@ export function createPrevlevServer(options = {}, dependencies = {}) {
       if (youtubeRequest) {
         const result = await searchYouTube(input, config, dependencies.fetcher, requestAbortController.signal);
         return respond(result.status === "unsupported" ? 422 : 200, result);
+      }
+      if (libraryRequest) {
+        const result=await handleLibrary(input,{dataDir:config.dataDir});
+        return respond(result.data?.conflict?409:result.status==='error'?400:200,result);
       }
       if (historyRequest) {
         const result = await handleHistory(input, {dataDir:config.dataDir, historyMaxRecords:config.historyMaxRecords});

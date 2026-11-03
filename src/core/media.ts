@@ -231,22 +231,17 @@ export async function fetchThumbnail(
   videoId: string,
   signal?: AbortSignal,
 ): Promise<Blob> {
+  const deadline=AbortSignal.timeout(12000), combined=signal?AbortSignal.any([signal,deadline]):deadline;
   for (const url of thumbnailUrls(videoId)) {
     let response: Response;
-    try {
-      response = await fetch(url, { credentials: "omit", signal });
-    } catch (error) {
-      if (signal?.aborted) throw error;
-      continue;
-    }
-    if (!response.ok) continue;
-    const blob = await response.blob();
-    if (
-      blob.type.startsWith("image/") &&
-      blob.size > 0 &&
-      blob.size <= MAX_BYTES
-    )
-      return blob;
+    try {response=await fetch(url,{credentials:"omit",redirect:"error",signal:combined});}
+    catch(error){if(combined.aborted)throw error;continue;}
+    if(!response.ok)continue;
+    const type=(response.headers.get("content-type")??"").split(";")[0].toLowerCase();
+    if(!["image/jpeg","image/png","image/webp","image/gif","image/avif"].includes(type)||Number(response.headers.get("content-length"))>5*1024*1024){await response.body?.cancel();continue;}
+    const reader=response.body?.getReader();if(!reader)continue;const chunks:Uint8Array<ArrayBuffer>[]= [];let bytes=0,tooLarge=false;
+    try{for(;;){const next=await reader.read();if(next.done)break;bytes+=next.value.byteLength;if(bytes>5*1024*1024){tooLarge=true;await reader.cancel();break;}chunks.push(new Uint8Array(next.value));}}finally{reader.releaseLock();}
+    combined.throwIfAborted();if(!tooLarge&&bytes>0)return new Blob(chunks,{type});
   }
   throw new Error("Nenhuma thumbnail pública pôde ser obtida do YouTube.");
 }

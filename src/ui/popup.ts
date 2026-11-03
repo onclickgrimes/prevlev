@@ -25,8 +25,11 @@ document.querySelector("#scan")!.addEventListener("click", () => {
 });
 void getSettings().then((settings) => {
   const input = document.querySelector<HTMLInputElement>("#shorts")!;
-  input.checked = settings.hideShorts;
+  const feed=settings.hideShortsOnFeed??settings.hideShorts,search=settings.hideShortsOnSearch??settings.hideShorts;
+  input.checked=feed&&search;
+  input.indeterminate=feed!==search;
   input.addEventListener("change", () => {
-    void saveSettings({ ...settings, hideShorts: input.checked });
+    const checked=input.checked;
+    void getSettings().then(current=>saveSettings({...current,hideShorts:checked,hideShortsOnFeed:checked,hideShortsOnSearch:checked})).catch(()=>{status.textContent="Não foi possível salvar as preferências de Shorts.";});
   });
 });

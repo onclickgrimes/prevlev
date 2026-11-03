@@ -1,4 +1,12 @@
-# Validação da versão 0.4.0
+# Validação da versão 0.5.0
+
+Executado em 3 de novembro de 2026 com Node.js 24 e Chromium 154: typecheck, lint e build aprovados; **426 testes automatizados em 35 arquivos e 70 testes de navegador aprovados**. Dois testes de extensão instalada foram ignorados pela política gerenciada do Chromium; não contam como aprovados. A sincronização da biblioteca e o histórico usam backend próprio temporário via relay controlado nos testes. Nenhuma conta, serviço Omni, geração paga ou API YouTube real foi acessada.
+
+O ZIP foi validado com leitura independente, CRC e hashes dos arquivos internos. SHA-256: `aa4e28caecd122fd8bb4851be447a5d446ba798ee3a8917f535b837fec29ec88`. A análise REA e os 33 pontos da referência foram reportados pelo coordenador por inspeção estática, sem executar a extensão original neste executor. Os detalhes de escopo e pendências estão no [ledger](ORIGINAL_GAP_LEDGER.md) e na [auditoria](GAP_AUDIT.md).
+
+A validação da versão anterior aparece abaixo para distinguir as evidências.
+
+# Validação: histórico da versão 0.4.0
 
 Execução neste executor em 3 de novembro de 2026, Node.js 24.19.0 e Chromium 154.0.8037.57.
 

@@ -1,0 +1,1752 @@
+{
+  "auditStage": 5,
+  "baselineCommit": "e22c7bf0c7d1ccf964390ab4db159bd8d70b0b46",
+  "baselineVersion": "0.4.0",
+  "date": "2026-11-03",
+  "method": "Inspeção do código próprio, UI e testes; reprodução local de AF02;33 diferenças de referência transmitidas pelo coordenador a partir de análise estática. Nenhuma execução local da extensão original ou chamada a serviço/conta/credencial.",
+  "referenceLimits": "O recibo/ZIP integral de especificação não foi lido neste executor; módulos/behaviors da referência são evidência estática relatada pelo parent, não runtime ou backend verificados.",
+  "classificationDefinitions": {
+    "implementable_now": "Código/fixtures/integração independentes podem avançar agora, sem contas, quotas, APIs privadas ou mudança de políticas.",
+    "real_runtime_blocked": "Código pode ser testado em fixtures; prova no runtime real exige ambiente/ação especificamente indisponíveis ou vedados neste executor.",
+    "external_credential_or_decision": "Uma decisão ou credencial existente específica do operador é necessária; não pedir ou expor segredos no chat.",
+    "unavailable_legitimately": "Resultado não existe nas entradas/fontes permitidas ou o caminho é proibido; manter desconhecido/limite explícito, não fabricar."
+  },
+  "scopeChoicesNotGaps": [
+    "Não automatizar Save/Continuar final no Studio por esta auditoria.",
+    "Não inventar seletor de idioma: não há evidência de que a referência ofereça isso.",
+    "Não declarar AI batching ausente: não integra a lista de diferenças comprovadas.",
+    "Não usar o número de release/commit como critério de conclusão: tarefas implementáveis abertas continuam trabalho."
+  ],
+  "differences": [
+    {
+      "id": "D01",
+      "priority": "P0",
+      "featureIds": [
+        10,
+        29
+      ],
+      "reference": {
+        "moduleIds": [
+          "6buNu"
+        ],
+        "originalBehavior": "Transcrição moderna por transcript-segment-view-model e classes .ytwTranscriptSegmentViewModel*.",
+        "evidenceType": "parent_reported_static_analysis",
+        "originalExecutedInThisExecutor": false
+      },
+      "prevlevAtAudit": "Leitores atuais reconhecem ytd-transcript-segment-renderer e seletores legados/data-attributes.",
+      "difference": "Adicionar os seletores modernos com extração de texto/start/duração sem executar scripts.",
+      "category": "implementable_now",
+      "state": "open_or_assigned_in_current_phase",
+      "sources": [
+        {
+          "path": "src/core/transcript.ts"
+        },
+        {
+          "path": "src/content/youtube.ts"
+        },
+        {
+          "path": "src/content/timeline.ts"
+        }
+      ],
+      "acceptance": [
+        "Fixture moderna produz os mesmos segmentos que a equivalente legada.",
+        "Textos de marcação são tratados como dados; timestamps inválidos continuam ausentes."
+      ],
+      "runtimeGate": "RT01",
+      "implementationProofIsRuntimeProof": false,
+      "workRemainingAtBaseline": true,
+      "checkpointV05": {
+        "status": "implemented_scope_fixture_tested",
+        "tests": [
+          "tests/transcript-modern.test.ts",
+          "tests/browser/transcript-modern.spec.ts"
+        ],
+        "runtime": "pending_installed_extension_and_live_service_validation",
+        "note": "Escopo independente em amostras/controles reconhecidos; não declara equivalência completa à referência."
+      }
+    },
+    {
+      "id": "D02",
+      "priority": "P0",
+      "featureIds": [
+        10,
+        29
+      ],
+      "reference": {
+        "moduleIds": [
+          "jaobz",
+          "6buNu"
+        ],
+        "originalBehavior": "Mapa por vídeo acumula segmentos virtualizados A/B → B/C como A/B/C, preserva seleção e reseta na troca de vídeo.",
+        "evidenceType": "parent_reported_static_analysis",
+        "originalExecutedInThisExecutor": false
+      },
+      "prevlevAtAudit": "Timeline substitui segmentos pelo DOM atual e limpa a seleção quando a assinatura muda.",
+      "difference": "Acumular por identidade de vídeo e chave de segmento estável, com limite e política de conflitos; preservar seleção válida.",
+      "category": "implementable_now",
+      "state": "open_or_assigned_in_current_phase",
+      "sources": [
+        {
+          "path": "src/content/timeline.ts"
+        },
+        {
+          "path": "src/core/transcript.ts"
+        }
+      ],
+      "acceptance": [
+        "A/B depois B/C preserva A/B/C e a seleção de A.",
+        "Troca de vídeo, cleanup e limite removem os dados corretos, sem misturar vídeos."
+      ],
+      "runtimeGate": "RT01",
+      "implementationProofIsRuntimeProof": false,
+      "workRemainingAtBaseline": true,
+      "checkpointV05": {
+        "status": "implemented_scope_fixture_tested",
+        "tests": [
+          "tests/transcript-modern.test.ts",
+          "tests/browser/contextual.spec.ts"
+        ],
+        "runtime": "pending_installed_extension_and_live_service_validation",
+        "note": "Escopo independente em amostras/controles reconhecidos; não declara equivalência completa à referência."
+      }
+    },
+    {
+      "id": "D03",
+      "priority": "P0",
+      "featureIds": [
+        17
+      ],
+      "reference": {
+        "moduleIds": [
+          "iwULB",
+          "7YhuM"
+        ],
+        "originalBehavior": "Editor reconhece ytve-ad-breaks-editor-options-panel, ytve-toolbar, ytcp-media-timestamp-input, #add-ad-break e H:MM:SS:FF com FPS declarado.",
+        "evidenceType": "parent_reported_static_analysis",
+        "originalExecutedInThisExecutor": false
+      },
+      "prevlevAtAudit": "Adapter usa seletores anteriores e campos nativos text/time; formato de horário em HH:MM:SS.",
+      "difference": "Suportar os controles comprovados e formato com frame apenas com FPS explícito e validado; manter prévia/cancelamento/Salvar manual.",
+      "category": "implementable_now",
+      "state": "working_tree_changes_observed_acceptance_pending",
+      "sources": [
+        {
+          "path": "src/content/studio.ts"
+        },
+        {
+          "path": "src/core/midroll.ts"
+        }
+      ],
+      "acceptance": [
+        "Fixture com os quatro controles comprovados gera prévia e altera apenas alvos confirmados.",
+        "FPS ausente/inválido, frame>=FPS, contexto reciclado ou controle ambíguo interrompe a operação sem Save."
+      ],
+      "runtimeGate": "RT03",
+      "implementationProofIsRuntimeProof": false,
+      "workRemainingAtBaseline": true,
+      "currentWorktreeObservation": {
+        "files": [
+          "src/content/studio.ts"
+        ],
+        "meaning": "Há código novo em andamento; isso não comprova todos os critérios nem runtime real. Revalidar antes de encerrar o item."
+      },
+      "checkpointV05": {
+        "status": "partial_scope_fixture_tested",
+        "tests": [
+          "tests/studio-modern.test.ts",
+          "tests/browser/studio-modern.spec.ts"
+        ],
+        "runtime": "pending_installed_extension_and_live_service_validation",
+        "note": "Escopo independente em amostras/controles reconhecidos; não declara equivalência completa à referência."
+      }
+    },
+    {
+      "id": "D04",
+      "priority": "P0",
+      "featureIds": [
+        15,
+        16
+      ],
+      "reference": {
+        "moduleIds": [
+          "7WkIn",
+          "dEE9i"
+        ],
+        "originalBehavior": "Capturas Studio encontram .main #video-snapshot #entity-snapshot-title, #top-section, #right-side-bar e #key-metric-header.",
+        "evidenceType": "parent_reported_static_analysis",
+        "originalExecutedInThisExecutor": false
+      },
+      "prevlevAtAudit": "CAPTURE_CARD procura grupos de seletores antigos; não inclui esses anchors.",
+      "difference": "Adicionar anchors do snapshot/analytics comprovados sem enfraquecer a transação de medição antes/depois e ocultação.",
+      "category": "implementable_now",
+      "state": "working_tree_changes_observed_acceptance_pending",
+      "sources": [
+        {
+          "path": "src/content/index.ts"
+        },
+        {
+          "path": "src/content/studio.ts"
+        },
+        {
+          "path": "src/background.ts"
+        }
+      ],
+      "acceptance": [
+        "Fixture com os anchors comprovados é capturada e recortada corretamente.",
+        "Mudança de contexto/scroll/campos entre medições descarta a imagem; ocultação sem alvo reconhecido falha de modo explícito."
+      ],
+      "runtimeGate": "RT03",
+      "implementationProofIsRuntimeProof": false,
+      "workRemainingAtBaseline": true,
+      "currentWorktreeObservation": {
+        "files": [
+          "src/content/studio.ts",
+          "src/content/index.ts"
+        ],
+        "meaning": "Há código novo em andamento; isso não comprova todos os critérios nem runtime real. Revalidar antes de encerrar o item."
+      },
+      "checkpointV05": {
+        "status": "partial_scope_fixture_tested",
+        "tests": [
+          "tests/studio-modern.test.ts",
+          "tests/content-capture.test.ts"
+        ],
+        "runtime": "pending_installed_extension_and_live_service_validation",
+        "note": "Escopo independente em amostras/controles reconhecidos; não declara equivalência completa à referência."
+      }
+    },
+    {
+      "id": "D05",
+      "priority": "P0",
+      "featureIds": [
+        5
+      ],
+      "reference": {
+        "moduleIds": [
+          "ao1R2"
+        ],
+        "originalBehavior": "Lucro lê #TOTAL_ESTIMATED_EARNINGS-tab #metric-total, moeda, período e fonte da quantidade; default1 não é contagem derivada.",
+        "evidenceType": "parent_reported_static_analysis",
+        "originalExecutedInThisExecutor": false
+      },
+      "prevlevAtAudit": "readStudioMetrics lê cards genéricos de receita/videoCount; calculadora usa quantidade manual/default1 ou videoCount sem contrato de período.",
+      "difference": "Ler o anchor comprovado e apresentar moeda/período/fonte. Não ligar uma contagem geral do canal ao custo do período; exigir quantidade manual quando não houver fonte compatível.",
+      "category": "implementable_now",
+      "state": "working_tree_changes_observed_acceptance_pending",
+      "sources": [
+        {
+          "path": "src/content/studio.ts"
+        },
+        {
+          "path": "src/ui/workspace.ts"
+        },
+        {
+          "path": "src/core/metrics.ts"
+        }
+      ],
+      "acceptance": [
+        "Receita R$/US$/decimal e período da fixture são preservados.",
+        "Quantidade de outro período não é usada silenciosamente; default1 é identificado como valor manual/inicial, sem alegar derivação."
+      ],
+      "runtimeGate": "RT03",
+      "implementationProofIsRuntimeProof": false,
+      "workRemainingAtBaseline": true,
+      "currentWorktreeObservation": {
+        "files": [
+          "src/content/studio.ts",
+          "src/shared/types.ts"
+        ],
+        "meaning": "Há código novo em andamento; isso não comprova todos os critérios nem runtime real. Revalidar antes de encerrar o item."
+      },
+      "checkpointV05": {
+        "status": "partial_scope_fixture_tested",
+        "tests": [
+          "tests/studio-modern.test.ts"
+        ],
+        "runtime": "pending_installed_extension_and_live_service_validation",
+        "note": "Escopo independente em amostras/controles reconhecidos; não declara equivalência completa à referência."
+      }
+    },
+    {
+      "id": "D06",
+      "priority": "P1",
+      "featureIds": [
+        12
+      ],
+      "reference": {
+        "moduleIds": [
+          "ap8jT"
+        ],
+        "originalBehavior": "Tester combina N imagens/N títulos ciclicamente por max(Nimage,Ntitle), não produto cartesiano.",
+        "evidenceType": "parent_reported_static_analysis",
+        "originalExecutedInThisExecutor": false
+      },
+      "prevlevAtAudit": "Prévia atual aceita uma imagem e um título.",
+      "difference": "Adicionar múltiplas imagens/títulos e ciclo comprovado em uma simulação local.",
+      "category": "implementable_now",
+      "state": "working_tree_changes_observed_acceptance_pending",
+      "sources": [
+        {
+          "path": "src/core/media.ts"
+        },
+        {
+          "path": "src/ui/workspace.ts"
+        }
+      ],
+      "acceptance": [
+        "2 imagens/3 títulos produzem3 pares na ordem cíclica, não6.",
+        "Não há teste de audiência ou chamada de IA/rede automática."
+      ],
+      "runtimeGate": "RT01",
+      "implementationProofIsRuntimeProof": false,
+      "workRemainingAtBaseline": true,
+      "currentWorktreeObservation": {
+        "files": [
+          "src/core/image-workflows.ts",
+          "src/ui/images.ts"
+        ],
+        "meaning": "Há código novo em andamento; isso não comprova todos os critérios nem runtime real. Revalidar antes de encerrar o item."
+      },
+      "checkpointV05": {
+        "status": "implemented_scope_fixture_tested",
+        "tests": [
+          "tests/image-workflows.test.ts",
+          "tests/browser/image-workflows.spec.ts"
+        ],
+        "runtime": "pending_installed_extension_and_live_service_validation",
+        "note": "Escopo independente em amostras/controles reconhecidos; não declara equivalência completa à referência."
+      }
+    },
+    {
+      "id": "D07",
+      "priority": "P1",
+      "featureIds": [
+        12
+      ],
+      "reference": {
+        "moduleIds": [
+          "hbKHA"
+        ],
+        "originalBehavior": "Posicionamento primeiro/aleatório e ação reshuffle no tester.",
+        "evidenceType": "parent_reported_static_analysis",
+        "originalExecutedInThisExecutor": false
+      },
+      "prevlevAtAudit": "Prévia estática sem posicionamento ou reembaralhar.",
+      "difference": "Oferecer os modos e reordenar somente a simulação local.",
+      "category": "implementable_now",
+      "state": "working_tree_changes_observed_acceptance_pending",
+      "sources": [
+        {
+          "path": "src/core/media.ts"
+        },
+        {
+          "path": "src/ui/workspace.ts"
+        }
+      ],
+      "acceptance": [
+        "Modo primeiro é determinístico; aleatório/reshuffle altera apenas a ordem da simulação.",
+        "Imagens, títulos e escolha do usuário são preservados após editar/voltar."
+      ],
+      "runtimeGate": "RT01",
+      "implementationProofIsRuntimeProof": false,
+      "workRemainingAtBaseline": true,
+      "currentWorktreeObservation": {
+        "files": [
+          "src/core/image-workflows.ts",
+          "src/ui/images.ts"
+        ],
+        "meaning": "Há código novo em andamento; isso não comprova todos os critérios nem runtime real. Revalidar antes de encerrar o item."
+      },
+      "checkpointV05": {
+        "status": "implemented_scope_fixture_tested",
+        "tests": [
+          "tests/browser/image-workflows.spec.ts"
+        ],
+        "runtime": "pending_installed_extension_and_live_service_validation",
+        "note": "Escopo independente em amostras/controles reconhecidos; não declara equivalência completa à referência."
+      }
+    },
+    {
+      "id": "D08",
+      "priority": "P1",
+      "featureIds": [
+        12
+      ],
+      "reference": {
+        "moduleIds": [
+          "cJ3pQ",
+          "fUnDH"
+        ],
+        "originalBehavior": "Tester oferece desktop/mobile/lista e tema claro/escuro.",
+        "evidenceType": "parent_reported_static_analysis",
+        "originalExecutedInThisExecutor": false
+      },
+      "prevlevAtAudit": "Canvas de prévia tem um layout e fundo escuro fixo.",
+      "difference": "Adicionar os layouts e temas comprovados com estilos e assets próprios.",
+      "category": "implementable_now",
+      "state": "working_tree_changes_observed_acceptance_pending",
+      "sources": [
+        {
+          "path": "src/core/media.ts"
+        },
+        {
+          "path": "src/ui/workspace.ts"
+        }
+      ],
+      "acceptance": [
+        "Todos os layouts exportam proporções/recortes corretos sem distorcer a imagem.",
+        "Tema altera apenas a composição e mantém contraste e título legíveis."
+      ],
+      "runtimeGate": "RT01",
+      "implementationProofIsRuntimeProof": false,
+      "workRemainingAtBaseline": true,
+      "currentWorktreeObservation": {
+        "files": [
+          "src/core/image-workflows.ts",
+          "src/ui/images.ts"
+        ],
+        "meaning": "Há código novo em andamento; isso não comprova todos os critérios nem runtime real. Revalidar antes de encerrar o item."
+      },
+      "checkpointV05": {
+        "status": "implemented_scope_fixture_tested",
+        "tests": [
+          "tests/browser/image-workflows.spec.ts"
+        ],
+        "runtime": "pending_installed_extension_and_live_service_validation",
+        "note": "Escopo independente em amostras/controles reconhecidos; não declara equivalência completa à referência."
+      }
+    },
+    {
+      "id": "D09",
+      "priority": "P1",
+      "featureIds": [
+        12
+      ],
+      "reference": {
+        "moduleIds": [
+          "6p8QF",
+          "9BZO6"
+        ],
+        "originalBehavior": "Tester permite editar avatar/nome/views/data/duração, Reset/Done e identifica a simulação.",
+        "evidenceType": "parent_reported_static_analysis",
+        "originalExecutedInThisExecutor": false
+      },
+      "prevlevAtAudit": "Somente título/canal são campos editáveis.",
+      "difference": "Adicionar esses campos de simulação, reset e confirmação sem apresentar números de exemplo como analytics reais.",
+      "category": "implementable_now",
+      "state": "working_tree_changes_observed_acceptance_pending",
+      "sources": [
+        {
+          "path": "src/core/media.ts"
+        },
+        {
+          "path": "src/ui/workspace.ts"
+        }
+      ],
+      "acceptance": [
+        "Reset restaura o estado anterior; Done confirma somente a prévia.",
+        "Views/data/duração simulados permanecem marcados e não entram na coleção/histórico/relatório."
+      ],
+      "runtimeGate": "RT01",
+      "implementationProofIsRuntimeProof": false,
+      "workRemainingAtBaseline": true,
+      "currentWorktreeObservation": {
+        "files": [
+          "src/core/image-workflows.ts",
+          "src/ui/images.ts"
+        ],
+        "meaning": "Há código novo em andamento; isso não comprova todos os critérios nem runtime real. Revalidar antes de encerrar o item."
+      },
+      "checkpointV05": {
+        "status": "implemented_scope_fixture_tested",
+        "tests": [
+          "tests/browser/image-workflows.spec.ts"
+        ],
+        "runtime": "pending_installed_extension_and_live_service_validation",
+        "note": "Escopo independente em amostras/controles reconhecidos; não declara equivalência completa à referência."
+      }
+    },
+    {
+      "id": "D10",
+      "priority": "P1",
+      "featureIds": [
+        12
+      ],
+      "reference": {
+        "moduleIds": [
+          "gmsK1"
+        ],
+        "originalBehavior": "Tester usa amostras autorizadas Home/Trending/Subscriptions/canal/termo.",
+        "evidenceType": "parent_reported_static_analysis",
+        "originalExecutedInThisExecutor": false
+      },
+      "prevlevAtAudit": "Prévia não utiliza contexto de amostra; pesquisa coleta uma aba separadamente.",
+      "difference": "Permitir escolher apenas coleções/abas autorizadas e declarar a origem/limite da amostra usada na simulação.",
+      "category": "implementable_now",
+      "state": "working_tree_changes_observed_acceptance_pending",
+      "sources": [
+        {
+          "path": "src/ui/workspace.ts"
+        },
+        {
+          "path": "src/content/youtube.ts"
+        }
+      ],
+      "acceptance": [
+        "Escolher uma amostra não consulta endpoints privados nem envia dados a terceiros.",
+        "Ausência de amostra não é preenchida com cards fictícios apresentados como reais."
+      ],
+      "runtimeGate": "RT01",
+      "implementationProofIsRuntimeProof": false,
+      "workRemainingAtBaseline": true,
+      "currentWorktreeObservation": {
+        "files": [
+          "src/core/image-workflows.ts",
+          "src/ui/images.ts"
+        ],
+        "meaning": "Há código novo em andamento; isso não comprova todos os critérios nem runtime real. Revalidar antes de encerrar o item."
+      },
+      "checkpointV05": {
+        "status": "partial_scope_fixture_tested",
+        "tests": [
+          "tests/browser/image-workflows.spec.ts"
+        ],
+        "runtime": "pending_installed_extension_and_live_service_validation",
+        "note": "Escopo independente em amostras/controles reconhecidos; não declara equivalência completa à referência."
+      }
+    },
+    {
+      "id": "D11",
+      "priority": "P1",
+      "featureIds": [
+        3,
+        4,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26
+      ],
+      "reference": {
+        "moduleIds": [
+          "lduxO"
+        ],
+        "originalBehavior": "Onze presets comprovados: views24h, recentes7d, >=1M30d, >=50K views/<10K subs, >=10K/<5K90d, >=100K/10K–100K subs, maiorVPH, outlier>=5 fora de canal/<50Ksubs, >1anoVPH, ShortsVPHbusca, deep-dive longo ou >=20min no canal.",
+        "evidenceType": "parent_reported_static_analysis",
+        "originalExecutedInThisExecutor": false
+      },
+      "prevlevAtAudit": "Campos manuais existem; não há a coleção desses presets.",
+      "difference": "Implementar presets nomeados por contexto, com datas relativas a um instante fixado e sem alterar o modo de outlier silenciosamente.",
+      "category": "implementable_now",
+      "state": "working_tree_changes_observed_acceptance_pending",
+      "sources": [
+        {
+          "path": "src/core/metrics.ts"
+        },
+        {
+          "path": "src/content/youtube.ts"
+        },
+        {
+          "path": "src/content/index.ts"
+        },
+        {
+          "path": "src/ui/workspace.ts"
+        }
+      ],
+      "acceptance": [
+        "Testes de cada preset verificam limites, contexto e dados ausentes.",
+        "Preview/label mostra filtros efetivos; tempo e baseline são estáveis durante a aplicação."
+      ],
+      "runtimeGate": "RT01",
+      "implementationProofIsRuntimeProof": false,
+      "workRemainingAtBaseline": true,
+      "currentWorktreeObservation": {
+        "files": [
+          "src/core/research.ts",
+          "src/ui/research.ts"
+        ],
+        "meaning": "Há código novo em andamento; isso não comprova todos os critérios nem runtime real. Revalidar antes de encerrar o item."
+      },
+      "checkpointV05": {
+        "status": "implemented_scope_fixture_tested",
+        "tests": [
+          "tests/research.test.ts",
+          "tests/browser/advanced-research.spec.ts"
+        ],
+        "runtime": "pending_installed_extension_and_live_service_validation",
+        "note": "Escopo independente em amostras/controles reconhecidos; não declara equivalência completa à referência."
+      }
+    },
+    {
+      "id": "D12",
+      "priority": "P1",
+      "featureIds": [
+        3,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26
+      ],
+      "reference": {
+        "moduleIds": [
+          "cWDqB",
+          "6Geye"
+        ],
+        "originalBehavior": "Dois critérios de ordenação asc/desc/remover e razão views/inscritos fora da página de canal.",
+        "evidenceType": "parent_reported_static_analysis",
+        "originalExecutedInThisExecutor": false
+      },
+      "prevlevAtAudit": "Sort atual usa um único critério; não há razão views/subs exposta.",
+      "difference": "Adicionar no máximo dois critérios estáveis e razão somente em fonte local com denominador conhecido positivo e contexto permitido.",
+      "category": "implementable_now",
+      "state": "working_tree_changes_observed_acceptance_pending",
+      "sources": [
+        {
+          "path": "src/core/metrics.ts"
+        },
+        {
+          "path": "src/content/youtube.ts"
+        },
+        {
+          "path": "src/ui/workspace.ts"
+        }
+      ],
+      "acceptance": [
+        "Empates seguem o segundo critério e depois a ordem estável original.",
+        "Valores ausentes/denominador0 não viram0/Infinity; remover critério restaura a regra correta."
+      ],
+      "runtimeGate": "RT01",
+      "implementationProofIsRuntimeProof": false,
+      "workRemainingAtBaseline": true,
+      "currentWorktreeObservation": {
+        "files": [
+          "src/core/research.ts",
+          "src/ui/research.ts"
+        ],
+        "meaning": "Há código novo em andamento; isso não comprova todos os critérios nem runtime real. Revalidar antes de encerrar o item."
+      },
+      "checkpointV05": {
+        "status": "implemented_scope_fixture_tested",
+        "tests": [
+          "tests/research.test.ts",
+          "tests/browser/advanced-research.spec.ts"
+        ],
+        "runtime": "pending_installed_extension_and_live_service_validation",
+        "note": "Escopo independente em amostras/controles reconhecidos; não declara equivalência completa à referência."
+      }
+    },
+    {
+      "id": "D13",
+      "priority": "P1",
+      "featureIds": [
+        3,
+        4,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26
+      ],
+      "reference": {
+        "moduleIds": [
+          "12PlF",
+          "kdMVQ",
+          "6T1YU"
+        ],
+        "originalBehavior": "Grid/list/sidebar, badges, calendário/ranges rápidos, contagem/progresso/carregar mais e export CSV/JSON/MD.",
+        "evidenceType": "parent_reported_static_analysis",
+        "originalExecutedInThisExecutor": false
+      },
+      "prevlevAtAudit": "Há tabela, campos de datas, badges, contagem e CSV/JSON; coleta ainda é só DOM carregado e não há todos os layouts/ranges/export MD.",
+      "difference": "Completar UI e coletor limitado por ação explícita, progresso, cancelar, motivo de parada e exportação Markdown.",
+      "category": "implementable_now",
+      "state": "working_tree_changes_observed_acceptance_pending",
+      "sources": [
+        {
+          "path": "src/content/index.ts"
+        },
+        {
+          "path": "src/content/youtube.ts"
+        },
+        {
+          "path": "src/ui/workspace.ts"
+        }
+      ],
+      "acceptance": [
+        "Load-more limita itens/tempo/tentativas, não executa ao abrir e relata limite/pausa/falha.",
+        "Export/contagem/refiltros refletem o mesmo conjunto conhecido; layouts não duplicam IDs nem misturam fontes oficiais."
+      ],
+      "runtimeGate": "RT01",
+      "implementationProofIsRuntimeProof": false,
+      "workRemainingAtBaseline": true,
+      "currentWorktreeObservation": {
+        "files": [
+          "src/content/collection.ts",
+          "src/ui/collection.ts",
+          "src/ui/research.ts"
+        ],
+        "meaning": "Há código novo em andamento; isso não comprova todos os critérios nem runtime real. Revalidar antes de encerrar o item."
+      },
+      "checkpointV05": {
+        "status": "partial_scope_fixture_tested",
+        "tests": [
+          "tests/browser/advanced-research.spec.ts",
+          "tests/browser/collection.spec.ts"
+        ],
+        "runtime": "pending_installed_extension_and_live_service_validation",
+        "note": "Escopo independente em amostras/controles reconhecidos; não declara equivalência completa à referência."
+      }
+    },
+    {
+      "id": "D14",
+      "priority": "P1",
+      "featureIds": [
+        4,
+        25
+      ],
+      "reference": {
+        "moduleIds": [
+          "cZsGp"
+        ],
+        "originalBehavior": "Fluxos separados para Shorts de feed e de busca.",
+        "evidenceType": "parent_reported_static_analysis",
+        "originalExecutedInThisExecutor": false
+      },
+      "prevlevAtAudit": "Shorts são identificados/filtrados dentro da coleta geral.",
+      "difference": "Preservar contexto feed/busca na coleção e oferecer os dois fluxos/presets sem classificar somente pela duração.",
+      "category": "implementable_now",
+      "state": "working_tree_changes_observed_acceptance_pending",
+      "sources": [
+        {
+          "path": "src/content/youtube.ts"
+        },
+        {
+          "path": "src/content/index.ts"
+        },
+        {
+          "path": "src/ui/workspace.ts"
+        }
+      ],
+      "acceptance": [
+        "Fixtures de feed e busca têm formatos e escopo distintos corretos.",
+        "Vídeo com duração curta não é automaticamente declarado Short."
+      ],
+      "runtimeGate": "RT01",
+      "implementationProofIsRuntimeProof": false,
+      "workRemainingAtBaseline": true,
+      "currentWorktreeObservation": {
+        "files": [
+          "src/core/research.ts",
+          "src/ui/research.ts"
+        ],
+        "meaning": "Há código novo em andamento; isso não comprova todos os critérios nem runtime real. Revalidar antes de encerrar o item."
+      },
+      "checkpointV05": {
+        "status": "implemented_scope_fixture_tested",
+        "tests": [
+          "tests/browser/contextual.spec.ts"
+        ],
+        "runtime": "pending_installed_extension_and_live_service_validation",
+        "note": "Escopo independente em amostras/controles reconhecidos; não declara equivalência completa à referência."
+      }
+    },
+    {
+      "id": "D15",
+      "priority": "P1",
+      "featureIds": [
+        9,
+        13
+      ],
+      "reference": {
+        "moduleIds": [
+          "k2MTO"
+        ],
+        "originalBehavior": "Ações em cada card/Short: copiar título, ID, imagem, URL thumbnail, baixar e busca visual.",
+        "evidenceType": "parent_reported_static_analysis",
+        "originalExecutedInThisExecutor": false
+      },
+      "prevlevAtAudit": "Ações globais dependem do vídeo/snapshot atual; linhas da pesquisa têm só salvar referência.",
+      "difference": "Adicionar ações por item com identidade capturada, copy/download e abertura explícita da busca visual própria/permitida.",
+      "category": "implementable_now",
+      "state": "open_or_assigned_in_current_phase",
+      "sources": [
+        {
+          "path": "src/content/index.ts"
+        },
+        {
+          "path": "src/ui/workspace.ts"
+        },
+        {
+          "path": "src/core/media.ts"
+        }
+      ],
+      "acceptance": [
+        "Cada ação opera sobre o ID do card clicado, inclusive Shorts e linha reciclada.",
+        "Nenhum upload/visual search externo é iniciado ao carregar ou hover sem ação autorizada."
+      ],
+      "runtimeGate": "RT01",
+      "implementationProofIsRuntimeProof": false,
+      "workRemainingAtBaseline": true,
+      "checkpointV05": {
+        "status": "partial_scope_fixture_tested",
+        "tests": [
+          "tests/contextual.test.ts",
+          "tests/browser/contextual.spec.ts"
+        ],
+        "runtime": "pending_installed_extension_and_live_service_validation",
+        "note": "Escopo independente em amostras/controles reconhecidos; não declara equivalência completa à referência."
+      }
+    },
+    {
+      "id": "D16",
+      "priority": "P1",
+      "featureIds": [
+        27
+      ],
+      "reference": {
+        "moduleIds": [
+          "iARcq",
+          "jjldY"
+        ],
+        "originalBehavior": "Quickview por hover300ms: top4 recentes/populares, fechar, exports e cancelamento por identidade; populares globais dependem da base real.",
+        "evidenceType": "parent_reported_static_analysis",
+        "originalExecutedInThisExecutor": false
+      },
+      "prevlevAtAudit": "Há painel explícito de canal com até10 itens de amostra inicial; não há hover rápido.",
+      "difference": "Adicionar quickview limitado e cancelável, reutilizando amostra autorizada e rotulando ordenação da amostra. Não chamar o resultado de top global.",
+      "category": "implementable_now",
+      "state": "open_or_assigned_in_current_phase",
+      "sources": [
+        {
+          "path": "src/core/channel-research.ts"
+        },
+        {
+          "path": "src/ui/workspace.ts"
+        },
+        {
+          "path": "src/content/index.ts"
+        }
+      ],
+      "acceptance": [
+        "Hover<300ms não consulta; mudança/fechamento cancela e ignora resposta anterior.",
+        "Mostra até4 itens da fonte identificada e exporta somente essa amostra."
+      ],
+      "runtimeGate": "RT01",
+      "implementationProofIsRuntimeProof": false,
+      "workRemainingAtBaseline": true,
+      "categoryParts": [
+        {
+          "part": "quickview/abort/exports para a amostra disponível",
+          "category": "implementable_now"
+        },
+        {
+          "part": "populares globais fora da amostra",
+          "category": "external_credential_or_decision"
+        }
+      ],
+      "checkpointV05": {
+        "status": "partial_scope_fixture_tested",
+        "tests": [
+          "tests/contextual.test.ts",
+          "tests/browser/contextual.spec.ts"
+        ],
+        "runtime": "pending_installed_extension_and_live_service_validation",
+        "note": "Escopo independente em amostras/controles reconhecidos; não declara equivalência completa à referência."
+      }
+    },
+    {
+      "id": "D17",
+      "priority": "P1",
+      "featureIds": [
+        14
+      ],
+      "reference": {
+        "moduleIds": [
+          "40qQy"
+        ],
+        "originalBehavior": "Screenshot recomposto de card/Short com tema/fundo/alpha e escala2.",
+        "evidenceType": "parent_reported_static_analysis",
+        "originalExecutedInThisExecutor": false
+      },
+      "prevlevAtAudit": "Captura atual recorta pixels da aba, sem recomposição/tema/export alpha.",
+      "difference": "Adicionar composição própria a partir de metadados/imagem fornecidos, separada do recorte de pixels, sem copiar assets da referência.",
+      "category": "implementable_now",
+      "state": "open_or_assigned_in_current_phase",
+      "sources": [
+        {
+          "path": "src/core/media.ts"
+        },
+        {
+          "path": "src/ui/workspace.ts"
+        }
+      ],
+      "acceptance": [
+        "Export PNG transparente e tema/fundo corretos; escala2 dobra dimensões sem trocar fonte/ID.",
+        "Card/Short é identificado como composição e não certificação de analytics."
+      ],
+      "runtimeGate": "RT01",
+      "implementationProofIsRuntimeProof": false,
+      "workRemainingAtBaseline": true,
+      "checkpointV05": {
+        "status": "remaining",
+        "note": "Ver diferença e aceite descritos na base; trabalho continua após este checkpoint."
+      }
+    },
+    {
+      "id": "D18",
+      "priority": "P1",
+      "featureIds": [
+        11
+      ],
+      "reference": {
+        "moduleIds": [
+          "frwIp"
+        ],
+        "originalBehavior": "Compressor limita saída a2097152 bytes, com qualidade/resolução limitadas e preserva arquivo menor; impossibilidade é explícita.",
+        "evidenceType": "parent_reported_static_analysis",
+        "originalExecutedInThisExecutor": false
+      },
+      "prevlevAtAudit": "compressImage recebe qualidade/dimensões, mas não tem meta de bytes e pode retornar maior que original.",
+      "difference": "Implementar busca finita por qualidade/resolução e comparar com o original elegível, sem loop ou sucesso acima do teto.",
+      "category": "implementable_now",
+      "state": "working_tree_changes_observed_acceptance_pending",
+      "sources": [
+        {
+          "path": "src/core/media.ts"
+        },
+        {
+          "path": "src/ui/workspace.ts"
+        }
+      ],
+      "acceptance": [
+        "Saída cumpre2MiB e dimensões, ou informa impossibilidade de maneira explícita.",
+        "Arquivo já elegível menor é preservado; número de iterações e memória são limitados."
+      ],
+      "runtimeGate": "RT01",
+      "implementationProofIsRuntimeProof": false,
+      "workRemainingAtBaseline": true,
+      "currentWorktreeObservation": {
+        "files": [
+          "src/core/image-workflows.ts",
+          "src/core/media.ts"
+        ],
+        "meaning": "Há código novo em andamento; isso não comprova todos os critérios nem runtime real. Revalidar antes de encerrar o item."
+      },
+      "checkpointV05": {
+        "status": "implemented_scope_fixture_tested",
+        "tests": [
+          "tests/image-workflows.test.ts",
+          "tests/browser/image-workflows.spec.ts"
+        ],
+        "runtime": "pending_installed_extension_and_live_service_validation",
+        "note": "Escopo independente em amostras/controles reconhecidos; não declara equivalência completa à referência."
+      }
+    },
+    {
+      "id": "D19",
+      "priority": "P1",
+      "featureIds": [
+        10,
+        29
+      ],
+      "reference": {
+        "moduleIds": [
+          "3ztoH"
+        ],
+        "originalBehavior": "Transcrição exporta CSV/JSON/MD com URL/data/timestamps/resumo/tópicos/roteiro, além TXT/VTT.",
+        "evidenceType": "parent_reported_static_analysis",
+        "originalExecutedInThisExecutor": false
+      },
+      "prevlevAtAudit": "TXT/VTT/MD existem; CSV/JSON e metadados/resultados associados não estão completos.",
+      "difference": "Completar exportadores com o material realmente disponível e resolver importação VTT sem perda de tempos e fim desconhecido sem estimativa oculta.",
+      "category": "implementable_now",
+      "state": "open_or_assigned_in_current_phase",
+      "sources": [
+        {
+          "path": "src/core/transcript.ts"
+        },
+        {
+          "path": "src/ui/workspace.ts"
+        }
+      ],
+      "acceptance": [
+        "Export preserva URL/data/tempos/origem sem inventar resultado de IA.",
+        "VTT aceito como import gera segmentos; fim desconhecido é informado ou definido explicitamente, não +2s silencioso."
+      ],
+      "runtimeGate": "RT01",
+      "implementationProofIsRuntimeProof": false,
+      "workRemainingAtBaseline": true,
+      "checkpointV05": {
+        "status": "partial_scope_fixture_tested",
+        "tests": [
+          "tests/transcript-modern.test.ts",
+          "tests/browser/transcript-modern.spec.ts"
+        ],
+        "runtime": "pending_installed_extension_and_live_service_validation",
+        "note": "Escopo independente em amostras/controles reconhecidos; não declara equivalência completa à referência."
+      }
+    },
+    {
+      "id": "D20",
+      "priority": "P1",
+      "featureIds": [
+        10,
+        29,
+        39
+      ],
+      "reference": {
+        "moduleIds": [
+          "lEQz3",
+          "jaobz"
+        ],
+        "originalBehavior": "Cópias separadas de timestamps/transcrição/roteiro/resumo/tópicos; cache, loading, voltar e invalidação por entrada.",
+        "evidenceType": "parent_reported_static_analysis",
+        "originalExecutedInThisExecutor": false
+      },
+      "prevlevAtAudit": "Há cópia de texto e saídas JSON genéricas; não há todas as cópias, cache e histórico de telas por entrada.",
+      "difference": "Adicionar ações/resultados por tipo e cache limitado por vídeo+texto+modelo+origem, sem geração oculta ao voltar ou invalidar.",
+      "category": "implementable_now",
+      "state": "open_or_assigned_in_current_phase",
+      "sources": [
+        {
+          "path": "src/ui/workspace.ts"
+        },
+        {
+          "path": "src/content/timeline.ts"
+        },
+        {
+          "path": "src/shared/backend.ts"
+        }
+      ],
+      "acceptance": [
+        "Cada cópia contém apenas a saída escolhida, sem envelope/token.",
+        "Mudança de vídeo/entrada/modelo/origem invalida cache; falha/incomplete não é sucesso nem dispara retry."
+      ],
+      "runtimeGate": "RT01",
+      "implementationProofIsRuntimeProof": false,
+      "workRemainingAtBaseline": true,
+      "checkpointV05": {
+        "status": "implemented_scope_fixture_tested",
+        "tests": [
+          "tests/browser/transcript-modern.spec.ts"
+        ],
+        "runtime": "pending_installed_extension_and_live_service_validation",
+        "note": "Escopo independente em amostras/controles reconhecidos; não declara equivalência completa à referência."
+      }
+    },
+    {
+      "id": "D21",
+      "priority": "P2",
+      "featureIds": [
+        17
+      ],
+      "reference": {
+        "moduleIds": [
+          "cKMqy",
+          "FRpud",
+          "fVSNj",
+          "5ZJMg"
+        ],
+        "originalBehavior": "Mid-roll Auto/quantidade/Custom/Smart, presets10/20/30s e1/2/3/4/5/10/15/20m, início customizado, endpoints e playhead preview.",
+        "evidenceType": "parent_reported_static_analysis",
+        "originalExecutedInThisExecutor": false
+      },
+      "prevlevAtAudit": "Planejador de intervalo mínimo60s, bordas e snap de silêncio; UI expõe duração/intervalo, sem todos os modos.",
+      "difference": "Completar modos de planejamento comprovados, respeitando duração, limite de50 alvos, validação FPS/contexto e revisão manual.",
+      "category": "implementable_now",
+      "state": "open_or_assigned_in_current_phase",
+      "sources": [
+        {
+          "path": "src/core/midroll.ts"
+        },
+        {
+          "path": "src/content/studio.ts"
+        },
+        {
+          "path": "src/ui/workspace.ts"
+        }
+      ],
+      "acceptance": [
+        "Cada modo produz somente posições válidas/limitadas; excesso é explícito, nunca silenciosamente truncado.",
+        "Prévia mostra modo, origem/duração, posições e alvos antes de clicar; não inclui Save automático."
+      ],
+      "runtimeGate": "RT03",
+      "implementationProofIsRuntimeProof": false,
+      "workRemainingAtBaseline": true,
+      "checkpointV05": {
+        "status": "remaining",
+        "note": "Ver diferença e aceite descritos na base; trabalho continua após este checkpoint."
+      }
+    },
+    {
+      "id": "D22",
+      "priority": "P2",
+      "featureIds": [
+        17
+      ],
+      "reference": {
+        "moduleIds": [
+          "hUc7g",
+          "by3oQ"
+        ],
+        "originalBehavior": "Smart lê waveform canvas com volume%, silêncio mínimo ms, FPS e estados Scanning/PlaceN/ScanAgain.",
+        "evidenceType": "parent_reported_static_analysis",
+        "originalExecutedInThisExecutor": false
+      },
+      "prevlevAtAudit": "PCM local é alternativa real já disponível; parâmetros da detecção não são todos expostos e canvas Studio não é lido.",
+      "difference": "Oferecer parâmetros explícitos e adapter de waveform comprovado, distinguindo estimativa visual de PCM e falhando em canvas protegido.",
+      "category": "implementable_now",
+      "state": "open_or_assigned_in_current_phase",
+      "sources": [
+        {
+          "path": "src/core/midroll.ts"
+        },
+        {
+          "path": "src/content/studio.ts"
+        },
+        {
+          "path": "src/ui/workspace.ts"
+        }
+      ],
+      "acceptance": [
+        "Dados conhecidos de PCM/canvas produzem os intervalos esperados conforme o método indicado.",
+        "Canvas protegido/ausente/FPS não declarado não produz silêncio ou posição inventados; nenhum bypass."
+      ],
+      "runtimeGate": "RT03",
+      "implementationProofIsRuntimeProof": false,
+      "workRemainingAtBaseline": true,
+      "checkpointV05": {
+        "status": "remaining",
+        "note": "Ver diferença e aceite descritos na base; trabalho continua após este checkpoint."
+      }
+    },
+    {
+      "id": "D23",
+      "priority": "P2",
+      "featureIds": [
+        17
+      ],
+      "reference": {
+        "moduleIds": [
+          "gZGRb"
+        ],
+        "originalBehavior": "Limpar interruptivos/todos/faixa de horário com RemoveN e prévia/confirmação específicas.",
+        "evidenceType": "parent_reported_static_analysis",
+        "originalExecutedInThisExecutor": false
+      },
+      "prevlevAtAudit": "Não há rotina de remoção de rascunhos.",
+      "difference": "Adicionar plano de remoção somente para slots reconhecidos e critério explícito; status interruptivo exige sinal visível comprovado, não inferência.",
+      "category": "implementable_now",
+      "state": "open_or_assigned_in_current_phase",
+      "sources": [
+        {
+          "path": "src/content/studio.ts"
+        },
+        {
+          "path": "src/ui/workspace.ts"
+        }
+      ],
+      "acceptance": [
+        "Prévia lista cada posição/critério e total; contexto reciclado/cancelamento impede próximos cliques.",
+        "Não remove fora da faixa nem salva automaticamente; critério desconhecido fica indisponível."
+      ],
+      "runtimeGate": "RT03",
+      "implementationProofIsRuntimeProof": false,
+      "workRemainingAtBaseline": true,
+      "checkpointV05": {
+        "status": "remaining",
+        "note": "Ver diferença e aceite descritos na base; trabalho continua após este checkpoint."
+      }
+    },
+    {
+      "id": "D24",
+      "priority": "P2",
+      "featureIds": [
+        15,
+        16
+      ],
+      "reference": {
+        "moduleIds": [
+          "biJpk",
+          "dvytv",
+          "hyROA",
+          "jknba"
+        ],
+        "originalBehavior": "Studio screenshots recompõem tema/fundo/alpha e ocultações individuais canal/receita/inscritos/views; AnalyticsOnly/VideoInfo.",
+        "evidenceType": "parent_reported_static_analysis",
+        "originalExecutedInThisExecutor": false
+      },
+      "prevlevAtAudit": "Há crop com transação forte e máscaras por seletores gerais; sem todos os modos de composição/máscaras individuais.",
+      "difference": "Adicionar composição e controles individuais comprovados, preservando descarte por mudança e deixando limite de anonimização visível.",
+      "category": "implementable_now",
+      "state": "open_or_assigned_in_current_phase",
+      "sources": [
+        {
+          "path": "src/core/media.ts"
+        },
+        {
+          "path": "src/content/studio.ts"
+        },
+        {
+          "path": "src/content/index.ts"
+        },
+        {
+          "path": "src/ui/workspace.ts"
+        }
+      ],
+      "acceptance": [
+        "Cada máscara cobre apenas a região escolhida na composição e os modos têm fixtures próprias.",
+        "Nenhum alvo sensível conhecido é deixado visível por fallback; contexto alterado descarta captura."
+      ],
+      "runtimeGate": "RT03",
+      "implementationProofIsRuntimeProof": false,
+      "workRemainingAtBaseline": true,
+      "checkpointV05": {
+        "status": "remaining",
+        "note": "Ver diferença e aceite descritos na base; trabalho continua após este checkpoint."
+      }
+    },
+    {
+      "id": "D25",
+      "priority": "P2",
+      "featureIds": [
+        5
+      ],
+      "reference": {
+        "moduleIds": [
+          "8KsTl",
+          "bqJdm"
+        ],
+        "originalBehavior": "Lucro usa receita/quantidade do mesmo período, alterna receita-lucro/BackToRevenue e recalcula ao mudar período com erros de origem.",
+        "evidenceType": "parent_reported_static_analysis",
+        "originalExecutedInThisExecutor": false
+      },
+      "prevlevAtAudit": "Calculadora separada oferece resultado, sem toggle no card e sem vínculo de período completo.",
+      "difference": "Vincular observações de mesmo período e oferecer alternância restaurável, sem confundir valor inferido/manual com receita real.",
+      "category": "implementable_now",
+      "state": "open_or_assigned_in_current_phase",
+      "sources": [
+        {
+          "path": "src/content/studio.ts"
+        },
+        {
+          "path": "src/ui/workspace.ts"
+        },
+        {
+          "path": "src/core/metrics.ts"
+        }
+      ],
+      "acceptance": [
+        "Mudança de período invalida o resultado antigo até obter valores compatíveis.",
+        "Voltar restaura receita original sem perder moeda; não calcula com quantidade de outro período."
+      ],
+      "runtimeGate": "RT03",
+      "implementationProofIsRuntimeProof": false,
+      "workRemainingAtBaseline": true,
+      "checkpointV05": {
+        "status": "remaining",
+        "note": "Ver diferença e aceite descritos na base; trabalho continua após este checkpoint."
+      }
+    },
+    {
+      "id": "D26",
+      "priority": "P2",
+      "featureIds": [
+        7
+      ],
+      "reference": {
+        "moduleIds": [
+          "1TrBd",
+          "anT9e",
+          "7UyM1"
+        ],
+        "originalBehavior": "Primeiros7/14/28/60/90/180/365dias com elegibilidade por idade, label/rota e datas manuais.",
+        "evidenceType": "parent_reported_static_analysis",
+        "originalExecutedInThisExecutor": false
+      },
+      "prevlevAtAudit": "Adapter só preenche dois inputs date já abertos; sem presets por idade.",
+      "difference": "Adicionar cálculo de presets e adapters comprovados; respeitar readOnly, contexto e rerender após cada evento.",
+      "category": "implementable_now",
+      "state": "working_tree_changes_observed_acceptance_pending",
+      "sources": [
+        {
+          "path": "src/content/studio.ts"
+        },
+        {
+          "path": "src/ui/workspace.ts"
+        }
+      ],
+      "acceptance": [
+        "Data de publicação desconhecida ou idade insuficiente não produz preset inválido.",
+        "Troca de URL/controle ou segundo campo desconectado recusa ready; datas preenchidas têm fonte/label e Aplicar continua manual."
+      ],
+      "runtimeGate": "RT03",
+      "implementationProofIsRuntimeProof": false,
+      "workRemainingAtBaseline": true,
+      "currentWorktreeObservation": {
+        "files": [
+          "src/content/studio.ts"
+        ],
+        "meaning": "Há código novo em andamento; isso não comprova todos os critérios nem runtime real. Revalidar antes de encerrar o item."
+      },
+      "checkpointV05": {
+        "status": "remaining",
+        "note": "Ver diferença e aceite descritos na base; trabalho continua após este checkpoint."
+      }
+    },
+    {
+      "id": "D27",
+      "priority": "P2",
+      "featureIds": [
+        6,
+        34,
+        38
+      ],
+      "reference": {
+        "moduleIds": [
+          "84isq",
+          "4HLbg",
+          "jV9hy",
+          "5hecq"
+        ],
+        "originalBehavior": "ViewsToday/ponto de hoje/top vídeos diários unem dados autorizados do Studio.",
+        "evidenceType": "parent_reported_static_analysis",
+        "originalExecutedInThisExecutor": false
+      },
+      "prevlevAtAudit": "Somente receita/videoCount visíveis são lidos; analytics local usa contadores acumulados, sem série diária privada.",
+      "difference": "Implementar leitura de dados já visíveis/autorizados ou entrada explícita com semântica diária. Não interceptar headers/cookies nem derivar today de contadores totais.",
+      "category": "implementable_now",
+      "state": "open_or_assigned_in_current_phase",
+      "sources": [
+        {
+          "path": "src/content/studio.ts"
+        },
+        {
+          "path": "src/ui/analytics.ts"
+        },
+        {
+          "path": "src/core/analytics.ts"
+        }
+      ],
+      "acceptance": [
+        "Hoje só aparece com valor e período de fonte autorizada; ausência permanece desconhecida.",
+        "Contadores acumulados não são chamados views de hoje; fonte/período cobrem qualquer join."
+      ],
+      "runtimeGate": "RT03",
+      "implementationProofIsRuntimeProof": false,
+      "workRemainingAtBaseline": true,
+      "categoryParts": [
+        {
+          "part": "adapter/render/join com fonte/período explícitos e estado de ausência",
+          "category": "implementable_now"
+        },
+        {
+          "part": "séries diárias privadas reais de um canal autorizado",
+          "category": "external_credential_or_decision"
+        },
+        {
+          "part": "today inferido de contador acumulado sem série",
+          "category": "unavailable_legitimately"
+        }
+      ],
+      "checkpointV05": {
+        "status": "remaining",
+        "note": "Ver diferença e aceite descritos na base; trabalho continua após este checkpoint."
+      }
+    },
+    {
+      "id": "D28",
+      "priority": "P2",
+      "featureIds": [
+        40
+      ],
+      "reference": {
+        "moduleIds": [
+          "e7p0u",
+          "gfX0t"
+        ],
+        "originalBehavior": "ThumbnailLab: referências arquivo/URL, título/novo título/roteiro/instruções, modelo/aspect/resolução, jobs/histórico/docs/uso.",
+        "evidenceType": "parent_reported_static_analysis",
+        "originalExecutedInThisExecutor": false
+      },
+      "prevlevAtAudit": "Há briefing e seleção de modelo/capacidade; imagem usa caminho de geração atual, sem laboratório completo.",
+      "difference": "Completar organização local de referências/briefings/jobs/resultados e controles somente quando contrato real do provedor suporta; nunca simular uso de referência ou quota.",
+      "category": "implementable_now",
+      "state": "open_or_assigned_in_current_phase",
+      "sources": [
+        {
+          "path": "src/ui/workspace.ts"
+        },
+        {
+          "path": "src/core/media.ts"
+        },
+        {
+          "path": "server/omni.mjs"
+        },
+        {
+          "path": "server/ai.mjs"
+        }
+      ],
+      "acceptance": [
+        "Histórico identifica tarefa/modelo/origem/estado real e respeita cancelamento/resultado incerto.",
+        "Parâmetro ou referência sem contrato anunciado não é enviado nem descrito como aplicado; nenhum job/geração inicia ao abrir."
+      ],
+      "runtimeGate": "RT01",
+      "implementationProofIsRuntimeProof": false,
+      "workRemainingAtBaseline": true,
+      "categoryParts": [
+        {
+          "part": "referências/briefing e estado/histórico próprios sem geração automática",
+          "category": "implementable_now"
+        },
+        {
+          "part": "imagem/referências/parâmetros que o contrato do modelo realmente suporta",
+          "category": "external_credential_or_decision"
+        },
+        {
+          "part": "saldo/cota sem fonte autorizada",
+          "category": "unavailable_legitimately"
+        }
+      ],
+      "checkpointV05": {
+        "status": "remaining",
+        "note": "Ver diferença e aceite descritos na base; trabalho continua após este checkpoint."
+      }
+    },
+    {
+      "id": "D29",
+      "priority": "P3",
+      "featureIds": [
+        28,
+        34,
+        35,
+        38,
+        39
+      ],
+      "reference": {
+        "moduleIds": [
+          "2PaDL"
+        ],
+        "originalBehavior": "Relatórios agrupam conteúdo/formato de títulos/nicho/estratégia/feedback/performance/tópicos/roteiro/etapas; WPM usa transcrição+duration.",
+        "evidenceType": "parent_reported_static_analysis",
+        "originalExecutedInThisExecutor": false
+      },
+      "prevlevAtAudit": "Há estatísticas de coleção e análises de texto separadas; sem todos os grupos/fases do relatório.",
+      "difference": "Construir relatórios próprios com grupos e evidências de entrada; WPM somente com texto/duração/cobertura explícitos e IA opcional por modelo escolhido.",
+      "category": "implementable_now",
+      "state": "open_or_assigned_in_current_phase",
+      "sources": [
+        {
+          "path": "src/core/analytics.ts"
+        },
+        {
+          "path": "src/ui/analytics.ts"
+        },
+        {
+          "path": "server/analysis.mjs"
+        },
+        {
+          "path": "server/omni.mjs"
+        }
+      ],
+      "acceptance": [
+        "Grupo sem dado fica desconhecido, não preenchido por inferência financeira.",
+        "WPM não surge sem transcrição/duração; seleção de IA é explícita e relatórios oficiais API não alimentam cálculos derivados."
+      ],
+      "runtimeGate": "RT01",
+      "implementationProofIsRuntimeProof": false,
+      "workRemainingAtBaseline": true,
+      "categoryParts": [
+        {
+          "part": "grupos locais/WPM e workflow opcional de IA com dados realmente presentes",
+          "category": "implementable_now"
+        },
+        {
+          "part": "geração real e entrada privada autorizada quando exigidas",
+          "category": "external_credential_or_decision"
+        }
+      ],
+      "checkpointV05": {
+        "status": "remaining",
+        "note": "Ver diferença e aceite descritos na base; trabalho continua após este checkpoint."
+      }
+    },
+    {
+      "id": "D30",
+      "priority": "P3",
+      "featureIds": [
+        4,
+        28,
+        33,
+        34,
+        35,
+        38
+      ],
+      "reference": {
+        "moduleIds": [
+          "28tCZ",
+          "2526y",
+          "iuEKC",
+          "cqQFE",
+          "ikngx",
+          "s5RjM"
+        ],
+        "originalBehavior": "Nicho:10presets, semana/mês/3m/ano/all,6durações, chips multicanal/reset/CSVJSONMD, distribuições outlier>=2x/>=5x e métricas views/subs/uploads30/90/12m com cobertura.",
+        "evidenceType": "parent_reported_static_analysis",
+        "originalExecutedInThisExecutor": false
+      },
+      "prevlevAtAudit": "Filtros genéricos e grupos locais existem; não há toda a análise/presets/distribuições descritas.",
+      "difference": "Completar o painel com métricas de amostra e presets comprovados, deixando cobertura/semântica de período claras e usando o modo de outlier identificado.",
+      "category": "implementable_now",
+      "state": "open_or_assigned_in_current_phase",
+      "sources": [
+        {
+          "path": "src/core/analytics.ts"
+        },
+        {
+          "path": "src/core/metrics.ts"
+        },
+        {
+          "path": "src/ui/analytics.ts"
+        },
+        {
+          "path": "server/analysis.mjs"
+        }
+      ],
+      "acceptance": [
+        "Cada preset/intervalo/faixa tem fixture com bordas, zero/ausências e contexto.",
+        "Uploads são observados na amostra; não se apresenta frequência global, tráfego mensal, saturação ou finanças como conhecidos."
+      ],
+      "runtimeGate": "RT01",
+      "implementationProofIsRuntimeProof": false,
+      "workRemainingAtBaseline": true,
+      "categoryParts": [
+        {
+          "part": "presets/distribuições/exports da amostra identificada",
+          "category": "implementable_now"
+        },
+        {
+          "part": "cobertura abrangente além das fontes já coletadas",
+          "category": "external_credential_or_decision"
+        }
+      ],
+      "checkpointV05": {
+        "status": "remaining",
+        "note": "Ver diferença e aceite descritos na base; trabalho continua após este checkpoint."
+      }
+    },
+    {
+      "id": "D31",
+      "priority": "P3",
+      "featureIds": [
+        13
+      ],
+      "reference": {
+        "moduleIds": [
+          "42Orp"
+        ],
+        "originalBehavior": "Busca visual de thumbnails; hash local é alternativa possível, global exige fonte legítima.",
+        "evidenceType": "parent_reported_static_analysis",
+        "originalExecutedInThisExecutor": false
+      },
+      "prevlevAtAudit": "Sem correspondência visual local; backend compara palavras dos títulos, não imagens.",
+      "difference": "Implementar comparação visual local explicável entre imagens fornecidas/solicitadas explicitamente, sem chamar o score de semântica ou CTR.",
+      "category": "implementable_now",
+      "state": "open_or_assigned_in_current_phase",
+      "sources": [
+        {
+          "path": "src/core/media.ts"
+        },
+        {
+          "path": "src/ui/workspace.ts"
+        },
+        {
+          "path": "server/analysis.mjs"
+        }
+      ],
+      "acceptance": [
+        "Imagens idênticas/proximas/diferentes têm distâncias esperadas em fixture real de canvas.",
+        "O conjunto comparado e o método estão identificados; não se fabrica resultado global nem faz upload automático."
+      ],
+      "runtimeGate": "RT01",
+      "implementationProofIsRuntimeProof": false,
+      "workRemainingAtBaseline": true,
+      "categoryParts": [
+        {
+          "part": "comparação visual local da biblioteca autorizada",
+          "category": "implementable_now"
+        },
+        {
+          "part": "matching global em biblioteca externa legítima",
+          "category": "external_credential_or_decision"
+        }
+      ],
+      "checkpointV05": {
+        "status": "remaining",
+        "note": "Ver diferença e aceite descritos na base; trabalho continua após este checkpoint."
+      }
+    },
+    {
+      "id": "D32",
+      "priority": "P3",
+      "featureIds": [],
+      "reference": {
+        "moduleIds": [
+          "6B2HM",
+          "fGOqw",
+          "4v9SI",
+          "282vx",
+          "dUxUK"
+        ],
+        "originalBehavior": "MCP connect/guias ChatGPT/Claude/detecção/compositor de prompts/uso e quota.",
+        "evidenceType": "parent_reported_static_analysis",
+        "originalExecutedInThisExecutor": false
+      },
+      "prevlevAtAudit": "Cinco tools stdio próprios estão prontos; faltam integração/guia visual/compositor e fonte autorizada de quota do serviço.",
+      "difference": "Preparar guia/compositor próprios e detecção por ação explícita em cliente autorizado, sem registrar configurações ou enviar prompts automaticamente. Uso só de tentativas próprias, não saldo fictício.",
+      "category": "implementable_now",
+      "state": "open_or_assigned_in_current_phase",
+      "sources": [
+        {
+          "path": "server/mcp.mjs"
+        },
+        {
+          "path": "docs/MCP.md"
+        },
+        {
+          "path": "src/ui/workspace.ts"
+        },
+        {
+          "path": "src/shared/backend.ts"
+        }
+      ],
+      "acceptance": [
+        "Guia identifica transporte/cliente e a configuração manual exata; nenhum arquivo de cliente é alterado.",
+        "Prompt é rascunho/cópia até ação explícita; capacidade não é prova de cota ou geração; ausência de contrato de quota permanece desconhecida."
+      ],
+      "runtimeGate": "RT01",
+      "implementationProofIsRuntimeProof": false,
+      "workRemainingAtBaseline": true,
+      "extraIds": [
+        "X01",
+        "X02",
+        "X03"
+      ],
+      "categoryParts": [
+        {
+          "part": "guia/detecção autorizada/compositor e contagem própria com semântica correta",
+          "category": "implementable_now"
+        },
+        {
+          "part": "cliente/ponte/transportes reais a conectar",
+          "category": "external_credential_or_decision"
+        },
+        {
+          "part": "saldo externo sem endpoint permitido",
+          "category": "unavailable_legitimately"
+        }
+      ],
+      "checkpointV05": {
+        "status": "remaining",
+        "note": "Ver diferença e aceite descritos na base; trabalho continua após este checkpoint."
+      }
+    },
+    {
+      "id": "D33",
+      "priority": "P3",
+      "featureIds": [
+        4,
+        21,
+        23,
+        24,
+        25,
+        26,
+        28,
+        33
+      ],
+      "reference": {
+        "moduleIds": [
+          "1g4SC",
+          "7mbxV"
+        ],
+        "originalBehavior": "Outlier geral = views/avgChannelViews; Shorts usa mediana com>=10positivos, senão média.",
+        "evidenceType": "parent_reported_static_analysis",
+        "originalExecutedInThisExecutor": false
+      },
+      "prevlevAtAudit": "Prevlev usa mediana de>=3 pares comparáveis e exclui o alvo. É outro indicador, embora documentado.",
+      "difference": "Expor modo/base/n/procedência e adicionar os modos comprovados somente quando sua baseline existir. Preservar o modo atual como modo próprio explícito; não trocar fórmulas silenciosamente.",
+      "category": "implementable_now",
+      "state": "working_tree_changes_observed_acceptance_pending",
+      "sources": [
+        {
+          "path": "src/core/metrics.ts"
+        },
+        {
+          "path": "src/core/analytics.ts"
+        },
+        {
+          "path": "src/content/index.ts"
+        },
+        {
+          "path": "src/ui/workspace.ts"
+        }
+      ],
+      "acceptance": [
+        "Teste separa média, mediana>=10positivos e fallback; alvo/exclusões e fonte da baseline são declarados.",
+        "Baseline geral desconhecida não vira média global fictícia; filtros/presets/exports preservam o modo selecionado e dados API continuam excluídos."
+      ],
+      "runtimeGate": "RT01",
+      "implementationProofIsRuntimeProof": false,
+      "workRemainingAtBaseline": true,
+      "categoryParts": [
+        {
+          "part": "fórmulas selecionáveis/base/n/procedência e testes",
+          "category": "implementable_now"
+        },
+        {
+          "part": "avgChannelViews real de uma base completa autorizada",
+          "category": "external_credential_or_decision"
+        }
+      ],
+      "currentWorktreeObservation": {
+        "files": [
+          "src/core/research.ts",
+          "src/ui/research.ts"
+        ],
+        "meaning": "Há código novo em andamento; isso não comprova todos os critérios nem runtime real. Revalidar antes de encerrar o item."
+      },
+      "checkpointV05": {
+        "status": "partial_scope_fixture_tested",
+        "tests": [
+          "tests/research.test.ts",
+          "tests/observation-consistency.test.ts"
+        ],
+        "runtime": "pending_installed_extension_and_live_service_validation",
+        "note": "Escopo independente em amostras/controles reconhecidos; não declara equivalência completa à referência."
+      }
+    }
+  ],
+  "coverageCheck": {
+    "expectedDifferences": 33,
+    "actualDifferences": 33,
+    "idsContiguous": true
+  },
+  "additionalOwnFindings": [
+    "AF01",
+    "AF02",
+    "AF03"
+  ],
+  "interpretation": "Cada diferença contém original reportado→Prevlev no commit-base→trabalho→aceite. Partes independentes, fonte externa e runtime são discriminados em categoryParts quando necessário. Mudanças observadas no working tree não são automaticamente critérios aprovados.",
+  "checkpoint": {
+    "version": "0.5.0",
+    "baselineForComparison": "e22c7bf0c7d1ccf964390ab4db159bd8d70b0b46",
+    "scope": "Mudanças independentes testadas em fixtures; não encerra o trabalho ou comprova o runtime original."
+  }
+}

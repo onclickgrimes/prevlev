@@ -2,9 +2,7 @@ import {
   getSettings,
   saveSettings,
   getSnapshot,
-  getSwipe,
   saveSwipe,
-  type SwipeItem,
 } from "../shared/storage";
 import type {
   PageSnapshot,
@@ -23,14 +21,11 @@ import {
 import {
   summarizeVideos,
   lifetimeVph,
-  outlierScore,
-  filterVideos,
   sortVideos,
-  filterComments,
   netProfit,
-  type VideoFilter,
 } from "../core/metrics";
-import { videoIdFromUrl } from "../core/parse";
+import { selectResearchVideos, researchComparison, type ResearchFilter } from "../core/research";
+import { initResearchTools } from "./research";
 import { toCsv } from "../core/export";
 import {
   parseTranscript,
@@ -39,19 +34,22 @@ import {
   transcriptMarkdown,
 } from "../core/transcript";
 import {
-  compressImage,
-  renderThumbnailPreview,
-  fetchThumbnail,
   downloadBlob,
   cropScreenshot,
   loadImage,
-  copyImage,
   type Rect,
 } from "../core/media";
 import { planMidrolls, detectSilences, type Silence } from "../core/midroll";
 import { initOfficialSearch } from "./official-search";
 import { initAnalyticsTools } from "./analytics";
 import { initHistoryTools } from "./history";
+import { initCommentTools } from "./comments";
+import { initSwipeTools } from "./swipe";
+import { initSwipeSync } from "./swipe-sync";
+import { initImageTools } from "./images";
+import { initSponsorshipTools } from "./sponsorships";
+import { initCollectionTools } from "./collection";
+import { initTranscriptExtras, type TranscriptAiFeature } from "./transcript-extra";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) =>
   document.getElementById(id) as T;
@@ -66,11 +64,11 @@ let snapshot: PageSnapshot = {
   warnings: [],
 };
 let segments: TranscriptSegment[] = [];
+let transcriptStamp = "";
+function invalidateTranscriptContext() {const stamp=JSON.stringify([segments,document.getElementById("transcript-text")?.textContent,($<HTMLTextAreaElement>("transcript-text")?.value),snapshot.url,snapshot.videoId]);if(stamp!==transcriptStamp){transcriptExtras?.invalidate();transcriptStamp=stamp;}}
 let planId: string | undefined;
 let planTab: number | undefined;
 let runningPlan: { id: string; tabId: number } | undefined;
-let image: File | undefined;
-let previewUrl: string | undefined;
 let silences: Silence[] = [];
 let silenceDuration: number | undefined;
 let channelVideos: VideoRecord[] = [];
@@ -90,6 +88,14 @@ let selectedAiOrigin = "http://127.0.0.1:7814";
 let selectedAiStreaming = false;
 let aiSelectionSaving = false;
 let aiRequestRunning = false;
+const transcriptExtras=initTranscriptExtras({segments:()=>segments,text:transcriptContent,metadata:()=>snapshot,aiContext:()=>JSON.stringify([selectedAiOrigin,selectedAiModel,selectedAiStreaming])});
+const commentTools = initCommentTools({snapshot: () => snapshot, onAi: async () => {showPage("remote"); await remote("comment-analysis");}});
+const swipeTools = initSwipeTools();
+const renderComments = () => commentTools.render();
+const currentComments = () => commentTools.currentComments();
+const renderSwipe = () => swipeTools.render();
+async function saveVideo(video: VideoRecord) {await swipeTools.saveVideo(video); notice("Referência salva na biblioteca local.");}
+
 const filterIds = [
   "video-filter",
   "channel-filter",
@@ -240,7 +246,7 @@ on("enrich", async () => {
     $<HTMLButtonElement>("enrich").disabled = false;
   }
 });
-function readVideoFilter(): VideoFilter {
+function readVideoFilter(): ResearchFilter {
   const optional = (id: string) => (value(id) === "" ? undefined : num(id));
   const mode = value("short-filter");
   return {
@@ -259,25 +265,14 @@ function readVideoFilter(): VideoFilter {
     publishedAfter: value("published-after") || undefined,
     publishedBefore: value("published-before") || undefined,
     shorts: mode === "shorts" ? "only" : mode === "long" ? "exclude" : "all",
+    ...researchTools?.readOptions(),
   };
 }
 function visibleVideos() {
-  return sortVideos(
-    filterVideos(snapshot.videos, readVideoFilter()),
-    value("sort") === "date"
-      ? "recent"
-      : (value("sort") as
-          | "views"
-          | "vph"
-          | "title"
-          | "outlier"
-          | "duration"
-          | "subscribers"),
-    Date.now(),
-    snapshot.videos,
-  );
+  return selectResearchVideos(snapshot.videos, { ...readVideoFilter(), sort: value("sort") });
 }
 function renderVideos() {
+  researchTools?.refresh();
   const videos = visibleVideos(),
     body = $("video-rows");
   renderMetrics(videos);
@@ -295,7 +290,7 @@ function renderVideos() {
     for (const val of [
       compact(video.views),
       compact(lifetimeVph(video)),
-      outlierScore(video, snapshot.videos)?.toFixed(1).concat("×") ?? "—",
+      (() => { const comparison = researchComparison(video, snapshot.videos, readVideoFilter().comparisonMode); return `${comparison.score?.toFixed(1).concat("×") ?? "—"} (${comparison.referenceCount} refs)`; })(),
       compact(video.subscribers),
       video.durationSeconds === undefined
         ? "—"
@@ -324,34 +319,6 @@ function renderVideos() {
     row.append(cell);
     body.append(row);
   }
-}
-function currentComments() {
-  return filterComments(snapshot.comments, {
-    query: value("comment-filter"),
-    minLikes: value("comment-likes") ? num("comment-likes") : undefined,
-    questionsOnly: $<HTMLInputElement>("comment-questions").checked,
-  });
-}
-function renderComments() {
-  const list = $("comment-list");
-  list.replaceChildren();
-  for (const comment of currentComments()) {
-    const card = element("article");
-    card.className = "comment";
-    card.append(
-      element("strong", comment.author),
-      element("p", comment.text),
-      element(
-        "small",
-        `${comment.likes} curtidas · ${comment.replies} respostas`,
-      ),
-    );
-    list.append(card);
-  }
-  if (!list.childNodes.length)
-    list.append(
-      element("p", "Nenhum comentário carregado corresponde ao filtro."),
-    );
 }
 function renderMetrics(videos: VideoRecord[]) {
   const summary = summarizeVideos(videos);
@@ -394,12 +361,9 @@ function render() {
   $("current-video").textContent =
     `${snapshot.title || "Nenhum vídeo selecionado"}${snapshot.videoId ? " · " + snapshot.videoId : ""}`;
   $<HTMLTextAreaElement>("transcript-text").value = transcriptText(segments);
+  invalidateTranscriptContext();
   if (snapshot.studio?.revenue !== undefined)
     $<HTMLInputElement>("revenue").value = String(snapshot.studio.revenue);
-  if (snapshot.studio?.videoCount !== undefined)
-    $<HTMLInputElement>("video-total").value = String(
-      snapshot.studio.videoCount,
-    );
   $<HTMLInputElement>("swipe-title").value = snapshot.title;
   $<HTMLInputElement>("swipe-url").value = snapshot.url;
   if (!value("channel-url"))
@@ -427,6 +391,7 @@ on("reset-filters", () => {
   for (const id of filterIds)
     $<HTMLInputElement>(id).value =
       id === "short-filter" ? "all" : id === "sort" ? "views" : "";
+  researchTools?.reset();
   renderVideos();
   notice("Filtros do painel limpos.");
 });
@@ -451,8 +416,6 @@ on("clear-page-filter", async () => {
     "Filtros da aba YouTube removidos. A preferência Ocultar Shorts continua ativa se selecionada.",
   );
 });
-for (const id of ["comment-filter", "comment-likes", "comment-questions"])
-  $(id).addEventListener("input", renderComments);
 on("export-json", () =>
   textFile(
     JSON.stringify(visibleVideos(), null, 2),
@@ -466,7 +429,9 @@ on("export-csv", () =>
       visibleVideos().map((v) => ({
         ...v,
         vph: lifetimeVph(v),
-        outlier: outlierScore(v, snapshot.videos),
+        outlier: researchComparison(v, snapshot.videos, readVideoFilter().comparisonMode).score,
+        outlier_reference_count: researchComparison(v, snapshot.videos, readVideoFilter().comparisonMode).referenceCount,
+        outlier_comparison_mode: readVideoFilter().comparisonMode,
       })),
     ),
     "prevlev-videos.csv",
@@ -474,9 +439,9 @@ on("export-csv", () =>
   ),
 );
 on("copy-title", async () => {
-  await navigator.clipboard.writeText(
-    `${snapshot.title}\n${snapshot.videoId ?? snapshot.url}`,
-  );
+  const result = await tabMessage<{metadata:{title:string;id?:string;url:string}}>("GET_CURRENT_METADATA");
+  if (!result.metadata) throw new Error("A aba selecionada não devolveu metadados atuais.");
+  await navigator.clipboard.writeText(`${result.metadata.title}\n${result.metadata.id ?? result.metadata.url}`);
   notice("Título e ID copiados.");
 });
 on("monetization", async () => {
@@ -720,51 +685,6 @@ on("timeline-capture", async () => {
   downloadBlob(await (await fetch(r.dataUrl)).blob(), "prevlev-frame.png");
   notice("Frame capturado localmente.");
 });
-$("image-file").addEventListener("change", () => {
-  image = $<HTMLInputElement>("image-file").files?.[0];
-  $("image-info").textContent = image
-    ? `${image.name} · ${(image.size / 1024).toFixed(0)} KB`
-    : "";
-});
-on("compress", async () => {
-  if (!image) throw new Error("Escolha uma imagem.");
-  const blob = await compressImage(image, {
-    maxWidth: num("image-width"),
-    maxHeight: 8192,
-    quality: num("image-quality") / 100,
-  });
-  downloadBlob(blob, "prevlev-thumbnail.jpg");
-  $("image-info").textContent =
-    `Original: ${(image.size / 1024).toFixed(0)} KB · Saída: ${(blob.size / 1024).toFixed(0)} KB`;
-});
-on("image-preview", async () => {
-  if (!image) throw new Error("Escolha uma imagem.");
-  const blob = await renderThumbnailPreview(
-    image,
-    value("preview-title"),
-    value("preview-channel"),
-  );
-  if (previewUrl) URL.revokeObjectURL(previewUrl);
-  previewUrl = URL.createObjectURL(blob);
-  $<HTMLImageElement>("image-output").src = previewUrl;
-  $("image-output").hidden = false;
-  $("image-preview-empty").hidden = true;
-});
-on("download-thumbnail", async () => {
-  const input = value("thumbnail-id").trim(),
-    id =
-      videoIdFromUrl(input) ?? (/^[\w-]{11}$/.test(input) ? input : undefined);
-  if (!id) throw new Error("Informe um ID ou URL YouTube válido.");
-  downloadBlob(await fetchThumbnail(id), `prevlev-${id}.jpg`);
-});
-on("copy-thumbnail", async () => {
-  const input = value("thumbnail-id").trim(),
-    id =
-      videoIdFromUrl(input) ?? (/^[\w-]{11}$/.test(input) ? input : undefined);
-  if (!id) throw new Error("Informe um ID ou URL YouTube válido.");
-  await copyImage(await fetchThumbnail(id));
-  notice("Thumbnail copiada como imagem.");
-});
 $("transcript-file").addEventListener("change", () => {
   void (async () => {
     const file = $<HTMLInputElement>("transcript-file").files?.[0];
@@ -776,6 +696,7 @@ $("transcript-file").addEventListener("change", () => {
     $<HTMLTextAreaElement>("transcript-text").value = parsed.length
       ? transcriptText(parsed)
       : text;
+    invalidateTranscriptContext();
     notice(
       parsed.length
         ? `${parsed.length} segmentos importados.`
@@ -814,21 +735,6 @@ on("transcript-md", () =>
       : transcriptContent(),
     "prevlev-transcricao.md",
     "text/markdown",
-  ),
-);
-on("comments-copy", async () => {
-  await navigator.clipboard.writeText(
-    currentComments()
-      .map((c) => `${c.author}: ${c.text}`)
-      .join("\n\n"),
-  );
-  notice("Comentários copiados.");
-});
-on("comments-export", () =>
-  textFile(
-    toCsv(currentComments().map((c) => ({ ...c }))),
-    "prevlev-comentarios.csv",
-    "text/csv",
   ),
 );
 on("profit", () => {
@@ -886,7 +792,7 @@ on("studio-preview", async () => {
   const plan = (await chrome.tabs.sendMessage(tabId, {
     type: "STUDIO_PREVIEW",
     action,
-    input: { limit: num("action-limit"), positions },
+    input: { limit: num("action-limit"), positions, ...(value("studio-fps")?{fps:num("studio-fps")}:{}) },
   })) as { id: string; status: string; error?: string };
   if (plan.status === "error") throw new Error(plan.error);
   planId = plan.status === "ready" ? plan.id : undefined;
@@ -933,6 +839,7 @@ on("studio-cancel", async () => {
 for (const id of [
   "studio-action",
   "action-limit",
+  "studio-fps",
   "duration",
   "interval",
   "tab-select",
@@ -941,108 +848,6 @@ for (const id of [
     planId = undefined;
     $<HTMLButtonElement>("studio-confirm").disabled = true;
   });
-async function saveVideo(video: VideoRecord) {
-  const items = await getSwipe();
-  items.push({
-    id: crypto.randomUUID(),
-    folder: value("swipe-folder") || "Références",
-    title: video.title,
-    url: video.url,
-    createdAt: new Date().toISOString(),
-  });
-  await saveSwipe(items);
-  await renderSwipe();
-  notice("Referência salva na biblioteca local.");
-}
-async function renderSwipe() {
-  const items = await getSwipe();
-  const list = $("swipe-list");
-  list.replaceChildren();
-  for (const item of items) {
-    const row = element("article");
-    row.className = "swipe-item";
-    const title = element("div"),
-      a = element("a", item.title);
-    a.href = safeLink(item.url);
-    a.target = "_blank";
-    a.rel = "noopener noreferrer";
-    title.append(
-      a,
-      element(
-        "small",
-        `${item.folder} · ${new Date(item.createdAt).toLocaleDateString("pt-BR")}`,
-      ),
-    );
-    const remove = element("button", "Excluir");
-    remove.addEventListener("click", () => {
-      void (async () => {
-        await saveSwipe((await getSwipe()).filter((x) => x.id !== item.id));
-        await renderSwipe();
-      })().catch(fail);
-    });
-    row.append(title, remove);
-    list.append(row);
-  }
-  if (!items.length)
-    list.append(
-      element("p", "Sua biblioteca está vazia. Salve um vídeo na pesquisa."),
-    );
-}
-on("swipe-add", async () => {
-  const url = safeLink(value("swipe-url"));
-  if (url === "#" || !value("swipe-title").trim())
-    throw new Error("Informe título e URL válidos.");
-  const items = await getSwipe();
-  items.push({
-    id: crypto.randomUUID(),
-    folder: value("swipe-folder").trim() || "Referências",
-    title: value("swipe-title").trim(),
-    url,
-    createdAt: new Date().toISOString(),
-  });
-  await saveSwipe(items);
-  await renderSwipe();
-  notice("Referência salva.");
-});
-on("swipe-export", async () =>
-  textFile(
-    JSON.stringify(await getSwipe(), null, 2),
-    "prevlev-swipe.json",
-    "application/json",
-  ),
-);
-$("swipe-import").addEventListener("change", () => {
-  void (async () => {
-    const file = $<HTMLInputElement>("swipe-import").files?.[0];
-    if (!file) return;
-    if (file.size > 5_000_000)
-      throw new Error("Arquivo grande demais (máximo 5 MB).");
-    const raw: unknown = JSON.parse(await file.text());
-    if (!Array.isArray(raw) || raw.length > 5000)
-      throw new Error("Formato de biblioteca inválido.");
-    const items: SwipeItem[] = raw.map((item: unknown) => {
-      if (!item || typeof item !== "object")
-        throw new Error("Referência inválida.");
-      const v = item as Record<string, unknown>;
-      if (
-        typeof v.title !== "string" ||
-        typeof v.url !== "string" ||
-        safeLink(v.url) === "#"
-      )
-        throw new Error("Título/URL inválidos na biblioteca.");
-      return {
-        id: crypto.randomUUID(),
-        folder: String(v.folder ?? "Importados").slice(0, 120),
-        title: v.title.slice(0, 1000),
-        url: v.url,
-        createdAt: new Date().toISOString(),
-      };
-    });
-    await saveSwipe([...(await getSwipe()), ...items]);
-    await renderSwipe();
-    notice(`${items.length} referências importadas.`);
-  })().catch(fail);
-});
 function displayRemote(response: RemoteResponse, output: string) {
   $("remote-images").replaceChildren();
   const data =
@@ -1093,7 +898,7 @@ function displayRemote(response: RemoteResponse, output: string) {
 }
 async function remote(
   feature: RemoteFeature,
-  output = "remote-result",
+  output: string | null = "remote-result",
   extra: Record<string, unknown> = {},
 ) {
   const ai = isAiFeature(feature);
@@ -1143,13 +948,14 @@ async function remote(
           }
         : {}),
     });
-    displayRemote(response, output);
+    if (output !== null) displayRemote(response, output);
     notice(
       response.status === "ok"
         ? `Análise concluída · ${response.source}`
         : (response.error ?? "Recurso não configurado."),
       response.status === "error",
     );
+    return response;
   } finally {
     if (ai) {
       aiRequestRunning = false;
@@ -1158,15 +964,15 @@ async function remote(
   }
 }
 on("remote-run", () => remote(value("remote-feature") as RemoteFeature));
-on("comments-ai", async () => {
-  showPage("remote");
-  await remote("comment-analysis");
-});
 for (const b of document.querySelectorAll<HTMLButtonElement>("[data-ai]"))
   b.addEventListener("click", () => {
-    void remote(b.dataset.ai as RemoteFeature, "transcript-result", {
-      text: transcriptContent(),
-    }).catch(fail);
+    void (async()=>{
+      const feature=b.dataset.ai as TranscriptAiFeature;
+      const request=transcriptExtras?.beginAi(feature);
+      if(!request||request.cached)return;
+      try {const response=await remote(feature,null,{text:transcriptContent()});transcriptExtras?.completeAi(feature,response,request.requestId);}
+      catch(error){transcriptExtras?.failAi(feature,error,request.requestId);throw error;}
+    })().catch(fail);
   });
 function updateAiButtons() {
   const model = aiCatalog?.models.find((m) => m.id === selectedAiModel);
@@ -1422,7 +1228,8 @@ on("clear-data", async () => {
     )
   )
     return;
-  await chrome.storage.local.remove(["snapshot", "swipe"]);
+  await chrome.storage.local.remove(["snapshot"]);
+  await saveSwipe([]);
   snapshot = {
     url: "",
     title: "",
@@ -1436,6 +1243,11 @@ on("clear-data", async () => {
   await renderSwipe();
   notice("Dados locais apagados.");
 });
+initImageTools({notice,contextVideos:()=>snapshot.videos});
+initCollectionTools({targetTab,snapshot:()=>snapshot,notice,adopt:async(next)=>{snapshot=next;segments=next.transcript;await chrome.storage.local.set({snapshot});render();}});
+initSponsorshipTools();
+const researchTools = initResearchTools({ getUrl: () => snapshot.url, getVisibleVideos: visibleVideos, getAllVideos: () => snapshot.videos, onChange: () => { try { renderVideos(); if ($("notice").classList.contains("error")) notice("Filtros de pesquisa atualizados."); } catch (error) { fail(error); } } });
+initSwipeSync(renderSwipe);
 initOfficialSearch();
 initAnalyticsTools({ snapshot: () => snapshot, filter: readVideoFilter });
 initHistoryTools({ snapshot: () => snapshot, filter: readVideoFilter });
