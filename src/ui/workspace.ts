@@ -39,7 +39,7 @@ import {
   loadImage,
   type Rect,
 } from "../core/media";
-import { planMidrolls, detectSilences, type Silence } from "../core/midroll";
+import { mountMidrollTools } from "./midroll-tools";
 import { initOfficialSearch } from "./official-search";
 import { initAnalyticsTools } from "./analytics";
 import { initHistoryTools } from "./history";
@@ -49,6 +49,10 @@ import { initSwipeSync } from "./swipe-sync";
 import { initImageTools } from "./images";
 import { initSponsorshipTools } from "./sponsorships";
 import { initCollectionTools } from "./collection";
+import { initNicheTools } from "./niche";
+import { initVisualSimilarityTools } from "./visual-similarity";
+import { initStudioOverview } from "./studio-overview";
+import { initCaptureOptions } from "./capture-options";
 import { initTranscriptExtras, type TranscriptAiFeature } from "./transcript-extra";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) =>
@@ -67,10 +71,9 @@ let segments: TranscriptSegment[] = [];
 let transcriptStamp = "";
 function invalidateTranscriptContext() {const stamp=JSON.stringify([segments,document.getElementById("transcript-text")?.textContent,($<HTMLTextAreaElement>("transcript-text")?.value),snapshot.url,snapshot.videoId]);if(stamp!==transcriptStamp){transcriptExtras?.invalidate();transcriptStamp=stamp;}}
 let planId: string | undefined;
+let studioPreviewGeneration = 0;
 let planTab: number | undefined;
 let runningPlan: { id: string; tabId: number } | undefined;
-let silences: Silence[] = [];
-let silenceDuration: number | undefined;
 let channelVideos: VideoRecord[] = [];
 interface TimelineView {
   available: boolean;
@@ -211,6 +214,7 @@ async function scan() {
       observedAt: video.observedAt ?? new Date().toISOString(),
     })),
   };
+  nicheTools.invalidate();
   segments = snapshot.transcript;
   await chrome.storage.local.set({ snapshot });
   render();
@@ -233,6 +237,7 @@ on("enrich", async () => {
     });
     if (result.status !== "ok") throw new Error(result.error);
     snapshot.videos = result.videos as VideoRecord[];
+    nicheTools.invalidate();
     await chrome.tabs.sendMessage(tabId, {
       type: "SET_ENRICHMENT",
       videos: snapshot.videos,
@@ -356,6 +361,7 @@ function renderMetrics(videos: VideoRecord[]) {
   }
 }
 function render() {
+  studioOverview.render();
   renderVideos();
   renderComments();
   $("current-video").textContent =
@@ -463,6 +469,7 @@ async function screenshot(kind: string) {
     tabId,
     kind,
     redact: $<HTMLInputElement>("redact").checked,
+    ...($<HTMLInputElement>("redact").checked && kind !== "video" ? {redactionCategories:getRedactionCategories()} : {}),
   });
   if (capture.status !== "ok") throw new Error(capture.error);
   const details = capture.capture as
@@ -471,6 +478,8 @@ async function screenshot(kind: string) {
         redactions: Rect[];
         viewportWidth: number;
         captureStamp: string;
+        coarse?: boolean;
+        coarseSelectors?: string[];
       }
     | undefined;
   if (!details?.captureStamp || !details.rect || !details.viewportWidth)
@@ -488,7 +497,7 @@ async function screenshot(kind: string) {
     `prevlev-${kind}.png`,
   );
   notice(
-    "Captura da área visível salva. Confira a ocultação antes de compartilhar.",
+    details.coarse ? `Captura salva com ocultação ampla (${(details.coarseSelectors??[]).join(", ")}). Confira a imagem antes de compartilhar.` : "Captura da área visível salva. Confira a ocultação antes de compartilhar.",
   );
 }
 on("card-shot", () => screenshot("video"));
@@ -572,6 +581,7 @@ on("channel-use", async () => {
   for (const video of channelVideos)
     videos.set(video.id, { ...videos.get(video.id), ...video });
   snapshot.videos = [...videos.values()];
+  nicheTools.invalidate();
   await chrome.storage.local.set({ snapshot });
   render();
   notice(
@@ -752,52 +762,37 @@ on("period", async () => {
     2,
   );
 });
-on("audio-analyze", async () => {
-  const file = $<HTMLInputElement>("midroll-audio").files?.[0];
-  if (!file) throw new Error("Escolha um arquivo de áudio local.");
-  if (file.size > 50 * 1024 * 1024) throw new Error("Use áudio de até 50 MB.");
-  const audio = new AudioContext();
-  try {
-    const buffer = await audio.decodeAudioData(await file.arrayBuffer());
-    if (buffer.duration > 7200) throw new Error("Use áudio de até 2 horas.");
-    const mono = new Float32Array(buffer.length);
-    for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
-      const samples = buffer.getChannelData(channel);
-      for (let i = 0; i < mono.length; i++)
-        mono[i] = Math.max(mono[i], Math.abs(samples[i]));
-    }
-    silences = detectSilences(mono, buffer.sampleRate);
-    silenceDuration = buffer.duration;
-    $<HTMLInputElement>("duration").value = String(Math.floor(buffer.duration));
-    $("audio-info").textContent =
-      `${silences.length} intervalos de silêncio detectados em ${buffer.duration.toFixed(1)} segundos. O arquivo não foi enviado.`;
-  } finally {
-    await audio.close();
-  }
-});
+function invalidateStudioPreview() {
+  studioPreviewGeneration++;
+  planId = undefined;
+  planTab = undefined;
+  $("studio-plan").textContent = "";
+  $<HTMLButtonElement>("studio-confirm").disabled = true;
+}
 on("studio-preview", async () => {
+  invalidateStudioPreview();
+  $("studio-plan").textContent = "Preparando prévia…";
+  const generation = studioPreviewGeneration;
   const tabId = targetTab();
   const action = value("studio-action");
-  const positions =
-    action === "midrolls"
-      ? planMidrolls({
-          durationSeconds: num("duration"),
-          intervalSeconds: num("interval"),
-          silences:
-            silenceDuration && Math.abs(silenceDuration - num("duration")) < 2
-              ? silences
-              : [],
-        })
-      : undefined;
-  const plan = (await chrome.tabs.sendMessage(tabId, {
-    type: "STUDIO_PREVIEW",
-    action,
-    input: { limit: num("action-limit"), positions, ...(value("studio-fps")?{fps:num("studio-fps")}:{}) },
-  })) as { id: string; status: string; error?: string };
+  const localPlan = action === "midrolls" ? midrollTools.getPlan() : undefined;
+  const positions = localPlan?.positions;
+  let plan: { id: string; status: string; error?: string };
+  try {
+    plan = (await chrome.tabs.sendMessage(tabId, {
+      type: "STUDIO_PREVIEW",
+      action,
+      input: { limit: num("action-limit"), positions, ...(value("studio-fps")?{fps:num("studio-fps")}:{}) },
+    })) as typeof plan;
+  } catch (error) {
+    if (generation !== studioPreviewGeneration) return;
+    throw error;
+  }
+  if (generation !== studioPreviewGeneration) return;
   if (plan.status === "error") throw new Error(plan.error);
   planId = plan.status === "ready" ? plan.id : undefined;
   planTab = tabId;
-  $("studio-plan").textContent = JSON.stringify(plan, null, 2);
+  $("studio-plan").textContent = JSON.stringify(localPlan ? { ...plan, planejamentoLocal: localPlan } : plan, null, 2);
   $<HTMLButtonElement>("studio-confirm").disabled = !planId;
 });
 on("studio-confirm", async () => {
@@ -827,13 +822,12 @@ on("studio-cancel", async () => {
   const active =
     runningPlan ??
     (planId && planTab ? { id: planId, tabId: planTab } : undefined);
+  invalidateStudioPreview();
   if (active)
     await chrome.tabs.sendMessage(active.tabId, {
       type: "STUDIO_CANCEL",
       planId: active.id,
     });
-  planId = undefined;
-  $<HTMLButtonElement>("studio-confirm").disabled = true;
   notice("Cancelamento solicitado. Ações já enviadas não são desfeitas.");
 });
 for (const id of [
@@ -843,11 +837,13 @@ for (const id of [
   "duration",
   "interval",
   "tab-select",
-])
-  $(id).addEventListener("change", () => {
-    planId = undefined;
-    $<HTMLButtonElement>("studio-confirm").disabled = true;
-  });
+]) {
+  $(id).addEventListener("input", invalidateStudioPreview);
+  $(id).addEventListener("change", invalidateStudioPreview);
+}
+$("studio").addEventListener("input", event => {
+  if (event.target instanceof Element && (event.target.closest("#midroll-tools") || event.target.id === "midroll-audio")) invalidateStudioPreview();
+});
 function displayRemote(response: RemoteResponse, output: string) {
   $("remote-images").replaceChildren();
   const data =
@@ -1238,13 +1234,19 @@ on("clear-data", async () => {
     transcript: [],
     warnings: [],
   };
+  nicheTools.invalidate();
   segments = [];
   render();
   await renderSwipe();
   notice("Dados locais apagados.");
 });
+const getRedactionCategories = initCaptureOptions();
+const midrollTools = mountMidrollTools(document, invalidateStudioPreview);
+const studioOverview = initStudioOverview({snapshot:()=>snapshot});
+const nicheTools = initNicheTools({snapshot:()=>snapshot});
+initVisualSimilarityTools();
 initImageTools({notice,contextVideos:()=>snapshot.videos});
-initCollectionTools({targetTab,snapshot:()=>snapshot,notice,adopt:async(next)=>{snapshot=next;segments=next.transcript;await chrome.storage.local.set({snapshot});render();}});
+initCollectionTools({targetTab,snapshot:()=>snapshot,notice,adopt:async(next)=>{snapshot=next;nicheTools.invalidate();segments=next.transcript;await chrome.storage.local.set({snapshot});render();}});
 initSponsorshipTools();
 const researchTools = initResearchTools({ getUrl: () => snapshot.url, getVisibleVideos: visibleVideos, getAllVideos: () => snapshot.videos, onChange: () => { try { renderVideos(); if ($("notice").classList.contains("error")) notice("Filtros de pesquisa atualizados."); } catch (error) { fail(error); } } });
 initSwipeSync(renderSwipe);
@@ -1256,6 +1258,7 @@ void (async () => {
   const saved = await getSnapshot();
   if (saved) {
     snapshot = saved;
+    nicheTools.invalidate();
     segments = saved.transcript;
   }
   const settings = await getSettings();

@@ -115,7 +115,7 @@ export function createPrevlevServer(options = {}, dependencies = {}) {
         status: "ok",
         source,
         data: {
-          version: "0.5.0",
+          version: "0.6.0",
           youtubeEnabled: config.youtubeEnabled,
           youtubeConfigured: config.youtubeEnabled && Boolean(config.youtubeApiKey),
           youtubeSource: "youtube-data-api",

@@ -27,6 +27,7 @@ import {createCollectionController,mountCollectionControls,type CollectionKind} 
 import {videoIdFromUrl} from '../core/parse';
 import {mountContextualTools,type ContextualController} from './contextual';
 import {mountResearchOverlay} from './research-overlay';
+import { validateCaptureCategories } from '../ui/capture-options';
 
 const contentScope=globalThis as typeof globalThis&{__prevlevContentInitialized?:boolean};
 if(!contentScope.__prevlevContentInitialized){
@@ -435,6 +436,7 @@ interface Message {
   type: string;
   kind?: string;
   redact?: boolean;
+  redactionCategories?: unknown;
   action?: Parameters<typeof previewStudioAction>[0];
   input?: Parameters<typeof previewStudioAction>[1];
   planId?: string;
@@ -556,6 +558,9 @@ async function dispatch(message: Message): Promise<unknown> {
         );
       if(message.targetVideoId!==undefined&&(typeof message.targetVideoId!=='string'||!/^[\w-]{11}$/.test(message.targetVideoId)))throw new Error('ID do card solicitado inválido.');
       if(message.targetVideoId!==undefined&&message.kind!==undefined&&message.kind!=='video')throw new Error('Um ID de vídeo só pode selecionar um card de vídeo.');
+      if (message.redact !== undefined && typeof message.redact !== 'boolean') throw new Error('Opção de ocultação inválida.');
+      const categories = message.redactionCategories === undefined ? undefined : validateCaptureCategories(message.redactionCategories);
+      if (categories && !message.redact) throw new Error('Ative a ocultação para selecionar categorias.');
       const studioKind=message.kind==='analytics'||message.kind==='latest-performance'?message.kind:undefined;
       const element = studioKind
         ? getStudioScreenshotTargets(studioKind,document)[0]
@@ -587,7 +592,18 @@ async function dispatch(message: Message): Promise<unknown> {
         throw new Error(
           "O card precisa estar inteiro visível na janela para capturar. Ajuste a rolagem ou o zoom.",
         );
-      const redactionDetails=message.redact?getStudioRedactionDetails(document):undefined;
+      const intersects = (el: HTMLElement) => {
+        const box = el.getBoundingClientRect();
+        return box.width > 0 && box.height > 0 && box.x < r.right && box.y < r.bottom && box.x + box.width > r.left && box.y + box.height > r.top;
+      };
+      if (categories) {
+        for (const category of categories) {
+          const categoryDetails = getStudioRedactionDetails(document, [category]);
+          if (categoryDetails.coarse || !categoryDetails.elements.some(intersects))
+            throw new Error(`A categoria ${category} não foi reconhecida dentro do card. Captura interrompida; revise a seleção e o layout.`);
+        }
+      }
+      const redactionDetails=message.redact?getStudioRedactionDetails(document,categories):undefined;
       const redactionNodes = redactionDetails
         ? redactionDetails.elements
             .map((el) => {
@@ -629,6 +645,7 @@ async function dispatch(message: Message): Promise<unknown> {
       const captureVideo = studioKind ? undefined : readVideoCards(document).find(card=>card.element===element)?.video;
       const captureStamp = JSON.stringify({
         url: location.href,
+        redactionCategories: categories ?? (message.redact ? 'legacy' : null),
         video: captureVideo ? {id:captureVideo.id,url:captureVideo.url,title:captureVideo.title} : undefined,
         revision: pageRevision,
         element: elementIdentity(element),

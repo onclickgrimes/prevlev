@@ -1,4 +1,4 @@
-# Prevlev · v0.5.0
+# Prevlev · v0.6.0
 
 Extensão Chrome Manifest V3 independente para pesquisar vídeos, preparar imagens e operar ferramentas assistidas no YouTube/Studio. O núcleo funciona no navegador; análises de amostra e IA usam um backend próprio opcional.
 
@@ -11,6 +11,10 @@ A pesquisa ganhou presets contextuais, dois critérios de ordenação e controle
 Comentários têm filtros por autor, texto, perguntas, curtidas, respostas e coração. O Swipe File oferece tags, pastas, busca, edição e importação/exportação; a sincronização com o backend pessoal é manual e verifica a revisão antes de substituir dados. A análise local de patrocínio apresenta trechos, marcas e cupons identificados como evidências, sem estimar receita.
 
 A transcrição reconhece layouts adicionais, preserva trechos observados durante virtualização e aceita VTT/SRT. A prévia de thumbnails permite combinações cíclicas de arquivos e títulos, layouts e metadados editáveis; a compressão por tamanho informa o resultado medido. Os controles modernos de Studio continuam sujeitos à revisão do usuário e aos layouts reconhecidos.
+
+As adições da v0.6.0 incluem um explorador de nicho da amostra local, com filtros, cobertura, distribuições e exportação. Os períodos de publicação e as contagens de uploads descrevem somente os vídeos observados. Registros da API oficial são excluídos dos cálculos derivados. A comparação visual aceita uma referência e até 20 imagens locais escolhidas: dHash de luminância mede padrões visuais, não significado ou CTR, e pode produzir colisões. Não pesquisa uma biblioteca global.
+
+O planejamento de mid-roll oferece modos Auto, quantidade, Custom e Smart. A análise Smart faz pré-validação de WAV PCM/IEEE float local antes da decodificação, com limites de 50 MiB, duas horas e 16 milhões de amostras; estima silêncio por RMS e não lê o waveform do Studio. Os resultados são planos para revisão, não salvamento na conta. A visão geral do Studio mostra os valores reconhecidos e suas fontes; presets para os primeiros 7/14/28/60/90/180/365 dias usam data informada e dias UTC completos. Preencher e aplicar o período no Studio continuam ações separadas.
 
 A [auditoria dos 40 recursos](docs/GAP_AUDIT.md) e o [ledger das 33 diferenças](docs/ORIGINAL_GAP_LEDGER.md) documentam a comparação estática relatada pelo coordenador, o que foi implementado e o que ainda falta. A referência original não foi executada neste ambiente.
 
@@ -50,7 +54,7 @@ A coleta considera o conteúdo carregado na página: não percorre automaticamen
 
 VPH é a média de views desde a publicação, e não as visualizações da última hora. Outlier usa pelo menos três outros vídeos comparáveis da amostra. Quando há identidade de canal conhecida, não mistura canais ou referências sem identidade; quando o alvo não tem identidade, a referência é a amostra informada. Marcadores de anúncios não confirmam que um criador recebe receita. Não são produzidos valores de RPM, geografia ou receita de canais a partir de dados ausentes.
 
-O enriquecimento de inscritos é manual: consulta páginas públicas do YouTube de até dez canais por ação, sem credenciais, preservando como desconhecidas as contagens ausentes. A análise de silêncios para mid-roll usa um arquivo de áudio local escolhido pelo usuário; o arquivo não é enviado ao backend.
+O enriquecimento de inscritos é manual: consulta páginas públicas do YouTube de até dez canais por ação, sem credenciais, preservando como desconhecidas as contagens ausentes. A análise de silêncios para mid-roll usa um arquivo WAV local escolhido pelo usuário; o arquivo não é enviado ao backend.
 
 O painel de canal não pagina a coleção e ordena apenas os vídeos reconhecidos no HTML inicial. “Mais populares” significa mais views dentro dessa amostra. A timeline usa a duração disponível no player e recusa comandos se a identidade do vídeo mudar. O passo de 1/30 s é estimado; a extensão não detecta o FPS real nem promete precisão de um frame.
 
@@ -111,7 +115,7 @@ Uma tentativa anônima de consultar `https://www.youtube.com/@YouTube/videos` re
 | `tests`             | Testes unitários e integração em fixtures/loopback                          |
 | `docs`              | Cobertura, backend e privacidade                                            |
 
-Capturas ativam a aba e medem o alvo antes e depois de capturar. Mudanças detectadas em URL, viewport, rolagem, revisão do DOM, geometria ou identidade dos campos sensíveis descartam a imagem. Isso reduz capturas inconsistentes; a ocultação cobre apenas os campos reconhecidos e não garante anonimização total.
+Capturas ativam a aba e medem o alvo antes e depois de capturar. Mudanças detectadas em URL, viewport, rolagem, revisão do DOM, geometria ou identidade dos campos sensíveis descartam a imagem. Para capturas do Studio com ocultação, selecione as categorias canal, receita, inscritos, visualizações e/ou informações do vídeo. Se uma categoria selecionada não for reconhecida dentro do card, a captura é interrompida. A ocultação cobre apenas os campos reconhecidos e não garante anonimização total; revise a imagem antes de compartilhar.
 
 ## Pendências além do runtime
 

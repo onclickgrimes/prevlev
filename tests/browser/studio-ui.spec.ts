@@ -271,3 +271,42 @@ test("Studio UI refuses a recycled comment that preserved its button and URL", a
     ),
   ).toBe(0);
 });
+
+test("ignores deferred Studio previews after edits, newer previews and cancellation", async () => {
+  await workspace.evaluate(() => {
+    const fixture = window as unknown as { pendingPreviews: Array<(value: unknown) => void> };
+    fixture.pendingPreviews = [];
+    const original = chrome.tabs.sendMessage;
+    chrome.tabs.sendMessage = ((tabId: number, message: { type?: string }) => {
+      if (message.type === "STUDIO_PREVIEW") return new Promise<unknown>(resolve => fixture.pendingPreviews.push(resolve));
+      return original(tabId, message);
+    }) as typeof chrome.tabs.sendMessage;
+  });
+  const resolvePreview = async (index: number, id: string) => workspace.evaluate(async ({ index, id }) => {
+    (window as unknown as { pendingPreviews: Array<(value: unknown) => void> }).pendingPreviews[index]({ id, status: "ready", targetCount: 1 });
+    await new Promise(resolve => setTimeout(resolve, 0));
+  }, { index, id });
+  const pendingCount = () => workspace.evaluate(() => (window as unknown as { pendingPreviews: unknown[] }).pendingPreviews.length);
+
+  await workspace.locator("#studio-preview").click();
+  await expect.poll(pendingCount).toBe(1);
+  await workspace.locator("#action-limit").fill("2");
+  await resolvePreview(0, "stale-edit");
+  await expect(workspace.locator("#studio-confirm")).toBeDisabled();
+  await workspace.locator("#studio-preview").click();
+  await expect.poll(pendingCount).toBe(2);
+  await workspace.locator("#studio-preview").click();
+  await expect.poll(pendingCount).toBe(3);
+  await resolvePreview(2, "newest");
+  await expect(workspace.locator("#studio-confirm")).toBeEnabled();
+  await expect(workspace.locator("#studio-plan")).toContainText("newest");
+  await resolvePreview(1, "stale-older");
+  await expect(workspace.locator("#studio-plan")).toContainText("newest");
+  await workspace.locator("#studio-preview").click();
+  await expect.poll(pendingCount).toBe(4);
+  await expect(workspace.locator("#studio-confirm")).toBeDisabled();
+  await workspace.locator("#studio-cancel").click();
+  await resolvePreview(3, "stale-cancel");
+  await expect(workspace.locator("#studio-confirm")).toBeDisabled();
+  await expect(workspace.locator("#studio-plan")).not.toContainText("stale-cancel");
+});

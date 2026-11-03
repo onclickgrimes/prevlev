@@ -10,6 +10,12 @@ A ordem é original → Prevlev → diferença → verificação/limite. [gap-au
 
 A base histórica abaixo continua identificada como v0.4. O código posterior amplia transcrição moderna e virtualizada, leitura de receita e seletores do Studio, presets e ordenação dupla, coleta limitada, comentários, Swipe File, patrocínios e prévias de imagem. O aceite por fixtures não prova paridade ou funcionamento em conta real. O JSON acrescenta `checkpointV05` para cada item e seus testes, preservando a descrição histórica original. As tarefas remanescentes continuam abertas no ledger; o marco não encerra o desenvolvimento.
 
+## Marco v0.6
+
+As entradas históricas e seus aceites abaixo permanecem abertos até revalidação. O marco adiciona: explorador de nicho sobre amostra local com cobertura e exportações (D30); comparação dHash entre imagens locais selecionadas (D31); planos de mid-roll e pré-validação de WAV local (D21–D22); visão geral observada do Studio e presets de dias UTC completos a partir de data informada (D25–D26); e categorias explícitas de ocultação com recusa quando uma categoria selecionada não é reconhecida no card (D24). O usuário continua responsável por revisar e salvar no Studio.
+
+Esses recursos não estabelecem paridade com a referência relatada, acesso à base global, analytics privado, anonimização completa ou funcionamento em conta real. Registros da API oficial permanecem excluídos das derivações. A validação por fixtures está documentada em VALIDATION.md; o bloqueio da extensão instalada pela política do Chromium e as limitações de runtime permanecem.
+
 ## D01 · P0
 
 Referência informada: módulos `6buNu`. Recursos: 10, 29.

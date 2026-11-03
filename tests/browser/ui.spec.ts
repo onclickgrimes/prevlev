@@ -201,3 +201,21 @@ test("UI uses actual canvas for compression and thumbnail-title composition", as
     fullPage: true,
   });
 });
+
+test("clearing the real workspace collection removes the niche report and disables exports", async () => {
+  const page = await context.newPage();
+  page.on("dialog", (dialog) => void dialog.accept());
+  await page.goto("http://localhost:9393/workspace.html");
+  await page.locator("#scan").click();
+  await page.locator('[data-page="niche"]').click();
+  await page.locator("#niche-refresh").click();
+  await expect(page.locator("#niche-videos")).toContainText("Estúdio criativo");
+  await expect(page.locator("#niche-export-json")).toBeEnabled();
+  await page.locator('[data-page="connection"]').click();
+  await page.locator("#clear-data").click();
+  await expect(page.locator("#notice")).toContainText("Dados locais apagados");
+  await page.locator('[data-page="niche"]').click();
+  await expect(page.locator("#niche-videos")).toBeEmpty();
+  await expect(page.locator("#niche-export-json")).toBeDisabled();
+  await page.close();
+});

@@ -54,7 +54,17 @@ export interface PageSnapshot {
   videos: VideoRecord[];
   comments: CommentRecord[];
   transcript: TranscriptSegment[];
-  studio?: { revenue?: number; currency?: string; videoCount?: number };
+  studio?: {
+    revenue?: number;
+    currency?: string;
+    currencyCode?: string;
+    videoCount?: number;
+    source?: "studio-dom";
+    observedAt?: string;
+    period?: { label: string; selector: string; start?: string; end?: string };
+    sources?: Record<string, { selector: string; label: string; raw: string } | undefined>;
+    warnings?: string[];
+  };
   warnings: string[];
 }
 export type RemoteFeature =

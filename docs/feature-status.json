@@ -1,5 +1,5 @@
 {
-  "version": "0.5.0",
+  "version": "0.6.0",
   "scope": "Implementação independente; não há declaração de paridade completa com Nexlev 3.12.6. As entradas descrevem a base v0.4; consulte GAP_AUDIT e ORIGINAL_GAP_LEDGER para diferenças posteriores e limites.",
   "statusDefinitions": {
     "implemented": "Disponível no escopo local descrito, com evidência em fixtures; não significa validação em extensão instalada ou paridade completa.",
@@ -127,7 +127,12 @@
       "runtimeVerificationStatus": "pending_installed_and_live_validation",
       "configurationRequirements": [
         "Insights de API privada do Studio não foram implementados; somente cards visíveis são lidos."
-      ]
+      ],
+      "checkpointV06": {
+        "status": "partial",
+        "boundary": "Visão geral de métricas reconhecidas com fontes e contexto; sem API privada.",
+        "runtime": "pending_installed_extension_and_live_validation"
+      }
     },
     {
       "id": 7,
@@ -144,7 +149,12 @@
       "verificationStatus": "fixture_coverage_only",
       "installedExtensionVerification": "blocked_by_environment_policy",
       "runtimeVerificationStatus": "pending_installed_and_live_validation",
-      "configurationRequirements": []
+      "configurationRequirements": [],
+      "checkpointV06": {
+        "status": "partial",
+        "boundary": "Presets de primeiros dias UTC completos a partir de data fornecida; aplicação manual no Studio.",
+        "runtime": "pending_installed_extension_and_live_validation"
+      }
     },
     {
       "id": 8,
@@ -651,7 +661,12 @@
       "configurationRequirements": [
         "Configurar o backend próprio para a análise já implementada sobre dados enviados.",
         "Cobertura integral do catálogo ou descoberta global por similaridade/nicho exige trabalho e fontes autorizadas adicionais; a pesquisa oficial bruta separada não entrega essa paridade."
-      ]
+      ],
+      "checkpointV06": {
+        "status": "partial",
+        "boundary": "Comparação visual local dHash sobre imagens escolhidas, sem busca global.",
+        "runtime": "pending_installed_extension_and_live_validation"
+      }
     },
     {
       "id": 32,
@@ -691,7 +706,12 @@
       "configurationRequirements": [
         "Configurar o backend próprio para a análise já implementada sobre dados enviados.",
         "Cobertura integral do catálogo ou descoberta global por similaridade/nicho exige trabalho e fontes autorizadas adicionais; a pesquisa oficial bruta separada não entrega essa paridade."
-      ]
+      ],
+      "checkpointV06": {
+        "status": "partial",
+        "boundary": "Explorador local da amostra com filtros, distribuições e exportação; sem índice global.",
+        "runtime": "pending_installed_extension_and_live_validation"
+      }
     },
     {
       "id": 34,

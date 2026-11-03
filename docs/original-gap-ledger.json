@@ -1083,6 +1083,16 @@
       "checkpointV05": {
         "status": "remaining",
         "note": "Ver diferença e aceite descritos na base; trabalho continua após este checkpoint."
+      },
+      "checkpointV06": {
+        "status": "partial_scope_fixture_tested",
+        "note": "Planejamento local Auto/quantidade/Custom/Smart, posições para revisão; sem salvar na conta.",
+        "tests": [
+          "tests/midroll-advanced.test.ts",
+          "tests/browser/midroll-advanced.spec.ts",
+          "tests/browser/studio-ui.spec.ts"
+        ],
+        "runtime": "pending_installed_extension_and_live_service_validation"
       }
     },
     {
@@ -1125,6 +1135,15 @@
       "checkpointV05": {
         "status": "remaining",
         "note": "Ver diferença e aceite descritos na base; trabalho continua após este checkpoint."
+      },
+      "checkpointV06": {
+        "status": "partial_scope_fixture_tested",
+        "note": "WAV local PCM/IEEE float validado antes da decodificação; RMS, não captura waveform do Studio.",
+        "tests": [
+          "tests/midroll-advanced.test.ts",
+          "tests/browser/midroll-advanced.spec.ts"
+        ],
+        "runtime": "pending_installed_extension_and_live_service_validation"
       }
     },
     {
@@ -1211,6 +1230,15 @@
       "checkpointV05": {
         "status": "remaining",
         "note": "Ver diferença e aceite descritos na base; trabalho continua após este checkpoint."
+      },
+      "checkpointV06": {
+        "status": "partial_scope_fixture_tested",
+        "note": "Categorias de ocultação explícitas e validação transacional; campos não reconhecidos continuam fora da garantia.",
+        "tests": [
+          "tests/capture-options.test.ts",
+          "tests/browser/capture-options.spec.ts"
+        ],
+        "runtime": "pending_installed_extension_and_live_service_validation"
       }
     },
     {
@@ -1253,6 +1281,15 @@
       "checkpointV05": {
         "status": "remaining",
         "note": "Ver diferença e aceite descritos na base; trabalho continua após este checkpoint."
+      },
+      "checkpointV06": {
+        "status": "partial_scope_fixture_tested",
+        "note": "Receita e contexto observados; quantidade para lucro continua informada pelo usuário.",
+        "tests": [
+          "tests/studio-overview.test.ts",
+          "tests/browser/studio-overview.spec.ts"
+        ],
+        "runtime": "pending_installed_extension_and_live_service_validation"
       }
     },
     {
@@ -1299,6 +1336,15 @@
       "checkpointV05": {
         "status": "remaining",
         "note": "Ver diferença e aceite descritos na base; trabalho continua após este checkpoint."
+      },
+      "checkpointV06": {
+        "status": "partial_scope_fixture_tested",
+        "note": "Presets de dias UTC completos com data de publicação informada, preenchimento separado da aplicação.",
+        "tests": [
+          "tests/studio-overview.test.ts",
+          "tests/browser/studio-overview.spec.ts"
+        ],
+        "runtime": "pending_installed_extension_and_live_service_validation"
       }
     },
     {
@@ -1540,6 +1586,16 @@
       "checkpointV05": {
         "status": "remaining",
         "note": "Ver diferença e aceite descritos na base; trabalho continua após este checkpoint."
+      },
+      "checkpointV06": {
+        "status": "partial_scope_fixture_tested",
+        "note": "Nicho parcial limitado à amostra local, com exclusão de registros oficiais de derivações.",
+        "tests": [
+          "tests/niche.test.ts",
+          "tests/browser/niche.spec.ts",
+          "tests/browser/ui.spec.ts"
+        ],
+        "runtime": "pending_installed_extension_and_live_service_validation"
       }
     },
     {
@@ -1591,6 +1647,15 @@
       "checkpointV05": {
         "status": "remaining",
         "note": "Ver diferença e aceite descritos na base; trabalho continua após este checkpoint."
+      },
+      "checkpointV06": {
+        "status": "partial_scope_fixture_tested",
+        "note": "Comparação dHash de imagens locais selecionadas, sem catálogo ou busca visual global.",
+        "tests": [
+          "tests/visual-similarity.test.ts",
+          "tests/browser/visual-similarity.spec.ts"
+        ],
+        "runtime": "pending_installed_extension_and_live_service_validation"
       }
     },
     {
@@ -1748,5 +1813,9 @@
     "version": "0.5.0",
     "baselineForComparison": "e22c7bf0c7d1ccf964390ab4db159bd8d70b0b46",
     "scope": "Mudanças independentes testadas em fixtures; não encerra o trabalho ou comprova o runtime original."
+  },
+  "checkpointV06": {
+    "version": "0.6.0",
+    "scope": "Ampliações independentes por fixtures; paridade e runtime real continuam pendentes."
   }
 }

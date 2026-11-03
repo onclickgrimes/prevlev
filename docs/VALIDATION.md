@@ -1,3 +1,11 @@
+# Validação da versão 0.6.0
+
+Executado em 3 de novembro de 2026 com Node.js 24 e Chromium 154: typecheck, lint e build aprovados; **448 testes automatizados em 40 arquivos e 83 testes de navegador aprovados**. Dois testes de extensão instalada foram ignorados pela política gerenciada do Chromium; não contam como aprovados. Uma rodada anterior teve dois erros de arquivos temporários por testes concorrentes; a repetição isolada passou. Nenhuma conta, serviço Omni, geração paga ou API YouTube real foi acessada.
+
+As fixtures incluem controles do Studio, prévias concorrentes, limites de WAV, filtros e invalidação de nicho no workspace, comparação visual com validação antes da decodificação e categorias de ocultação em capturas. Isso não comprova o funcionamento nos serviços ou na extensão instalada. O ZIP foi validado com CRC e SHA-256 de seus nove arquivos internos; SHA-256 do pacote: `a01827b61f5a75187cde4a0ff7d358ef22ad6cb6dccc87be3e4497f4bbe3878f`.
+
+A comparação com a referência parte de análise estática informada pelo coordenador; o ZIP de especificação original não foi lido neste executor. Consulte [ledger](ORIGINAL_GAP_LEDGER.md) e [auditoria](GAP_AUDIT.md) para diferenças e limites.
+
 # Validação da versão 0.5.0
 
 Executado em 3 de novembro de 2026 com Node.js 24 e Chromium 154: typecheck, lint e build aprovados; **426 testes automatizados em 35 arquivos e 70 testes de navegador aprovados**. Dois testes de extensão instalada foram ignorados pela política gerenciada do Chromium; não contam como aprovados. A sincronização da biblioteca e o histórico usam backend próprio temporário via relay controlado nos testes. Nenhuma conta, serviço Omni, geração paga ou API YouTube real foi acessada.

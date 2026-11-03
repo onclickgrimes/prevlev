@@ -4,6 +4,7 @@ import type { RemoteFeature, VideoRecord } from "./shared/types";
 import { fetchThumbnail } from "./core/media";
 import { enrichChannels } from "./core/enrichment";
 import { researchChannel, sampleMonetization } from "./core/channel-research";
+import { validateCaptureCategories } from "./ui/capture-options";
 const ownUi = (sender: chrome.runtime.MessageSender) =>
   sender.id === chrome.runtime.id &&
   sender.url?.startsWith(chrome.runtime.getURL(""));
@@ -130,6 +131,9 @@ chrome.runtime.onMessage.addListener(
           throw new Error("Origem não permitida.");
         if(!ownUi(sender)&&m.tabId!==undefined&&m.tabId!==sender.tab?.id)throw new Error("A captura contextual pertence somente à aba de origem.");
         if(m.targetVideoId!==undefined&&(typeof m.targetVideoId!=="string"||!/^[-\w]{11}$/.test(m.targetVideoId)))throw new Error("ID do card inválido.");
+        if (m.redact !== undefined && typeof m.redact !== 'boolean') throw new Error('Opção de ocultação inválida.');
+        const categories = m.redactionCategories === undefined ? undefined : validateCaptureCategories(m.redactionCategories);
+        if (categories && !m.redact) throw new Error('Ative a ocultação para selecionar categorias.');
         const tab = await chrome.tabs.get(Number(m.tabId ?? sender.tab?.id));
         if (!youtube(tab.url) || tab.id === undefined)
           throw new Error("Selecione uma aba YouTube/Studio.");
@@ -161,6 +165,7 @@ chrome.runtime.onMessage.addListener(
                 type: "CAPTURE_CARD",
                 kind,
                 redact: Boolean(m.redact),
+                ...(categories ? {redactionCategories: categories} : {}),
                 ...(m.targetVideoId ? {targetVideoId:m.targetVideoId} : {}),
               });
             } catch {
