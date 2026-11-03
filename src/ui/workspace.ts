@@ -51,6 +51,7 @@ import { initSponsorshipTools } from "./sponsorships";
 import { initCollectionTools } from "./collection";
 import { initNicheTools } from "./niche";
 import { mountDailyObservations } from "./daily-observations";
+import { mountChannelReport } from "./channel-report";
 import { initCardCompositionTools } from "./card-composition";
 import { initVisualSimilarityTools } from "./visual-similarity";
 import { initStudioOverview } from "./studio-overview";
@@ -216,7 +217,7 @@ async function scan() {
       observedAt: video.observedAt ?? new Date().toISOString(),
     })),
   };
-  nicheTools.invalidate(); cardComposer.invalidateSnapshot();
+  nicheTools.invalidate(); cardComposer.invalidateSnapshot(); channelReport.invalidate();
   segments = snapshot.transcript;
   await chrome.storage.local.set({ snapshot });
   render();
@@ -239,7 +240,7 @@ on("enrich", async () => {
     });
     if (result.status !== "ok") throw new Error(result.error);
     snapshot.videos = result.videos as VideoRecord[];
-    nicheTools.invalidate(); cardComposer.invalidateSnapshot();
+    nicheTools.invalidate(); cardComposer.invalidateSnapshot(); channelReport.invalidate();
     await chrome.tabs.sendMessage(tabId, {
       type: "SET_ENRICHMENT",
       videos: snapshot.videos,
@@ -607,7 +608,7 @@ on("channel-use", async () => {
   for (const video of channelVideos)
     videos.set(video.id, { ...videos.get(video.id), ...video });
   snapshot.videos = [...videos.values()];
-  nicheTools.invalidate(); cardComposer.invalidateSnapshot();
+  nicheTools.invalidate(); cardComposer.invalidateSnapshot(); channelReport.invalidate();
   await chrome.storage.local.set({ snapshot });
   render();
   notice(
@@ -1260,7 +1261,7 @@ on("clear-data", async () => {
     transcript: [],
     warnings: [],
   };
-  nicheTools.invalidate(); cardComposer.invalidateSnapshot();
+  nicheTools.invalidate(); cardComposer.invalidateSnapshot(); channelReport.clearInputs();
   segments = [];
   render();
   await renderSwipe();
@@ -1270,11 +1271,12 @@ const getRedactionCategories = initCaptureOptions();
 const midrollTools = mountMidrollTools(document, invalidateStudioPreview);
 const studioOverview = initStudioOverview({snapshot:()=>snapshot});
 mountDailyObservations($("daily-observations"));
+const channelReport = mountChannelReport($("channel-report"),()=>snapshot.videos);
 const nicheTools = initNicheTools({snapshot:()=>snapshot});
 const cardComposer = initCardCompositionTools({snapshot:()=>snapshot});
 initVisualSimilarityTools();
 initImageTools({notice,contextVideos:()=>snapshot.videos});
-initCollectionTools({targetTab,snapshot:()=>snapshot,notice,adopt:async(next)=>{snapshot=next;nicheTools.invalidate(); cardComposer.invalidateSnapshot();segments=next.transcript;await chrome.storage.local.set({snapshot});render();}});
+initCollectionTools({targetTab,snapshot:()=>snapshot,notice,adopt:async(next)=>{snapshot=next;nicheTools.invalidate(); cardComposer.invalidateSnapshot(); channelReport.invalidate();segments=next.transcript;await chrome.storage.local.set({snapshot});render();}});
 initSponsorshipTools();
 const researchTools = initResearchTools({ getUrl: () => snapshot.url, getVisibleVideos: visibleVideos, getAllVideos: () => snapshot.videos, onChange: () => { try { renderVideos(); if ($("notice").classList.contains("error")) notice("Filtros de pesquisa atualizados."); } catch (error) { fail(error); } } });
 initSwipeSync(renderSwipe);
@@ -1286,7 +1288,7 @@ void (async () => {
   const saved = await getSnapshot();
   if (saved) {
     snapshot = saved;
-    nicheTools.invalidate(); cardComposer.invalidateSnapshot();
+    nicheTools.invalidate(); cardComposer.invalidateSnapshot(); channelReport.invalidate();
     segments = saved.transcript;
   }
   const settings = await getSettings();

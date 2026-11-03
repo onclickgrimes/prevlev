@@ -28,6 +28,10 @@ A referência local de outlier informa modo, denominador, contagem, método, pro
 
 Em D27 há um relatório diário manual, em memória, de contagens declaradas pelo usuário para um canal e um período comum. Não integra Studio nem presume que a amostra inclua todos os vídeos; desconhecidos e conflitos são exibidos. Dias completos em fusos fora de UTC usam uma espera conservadora para alterações históricas de fuso.
 
+## Marco v0.6.5
+
+Em D29, o relatório local acrescenta contagens mecânicas de formato e título na amostra, e WPM mediante ID elegível, transcrição, duração e cobertura declarados pelo usuário. Não verifica essas declarações nem infere tópicos, estratégia ou receita. A diferença em relação ao relatório original permanece parcial.
+
 ## D01 · P0
 
 Referência informada: módulos `6buNu`. Recursos: 10, 29.

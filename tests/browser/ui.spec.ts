@@ -260,3 +260,29 @@ test("workspace shows a manual daily report without reading cumulative collectio
   await expect(page.locator("#daily-result")).toBeHidden();
   await page.close();
 });
+
+test("workspace sample report invalidates on collection change and clears transcript inputs on erase", async () => {
+  const page = await context.newPage();
+  page.on("dialog", (dialog) => void dialog.accept());
+  await page.goto("http://localhost:9393/workspace.html");
+  await page.locator("#scan").click();
+  await page.locator('[data-page="channel-report"]').click();
+  const form = page.locator("#channel-report form");
+  await form.locator('[name="videoId"]').fill("abcdefghijk");
+  await form.locator('[name="text"]').fill("uma frase com quatro palavras");
+  await form.locator('[name="duration"]').fill("60");
+  await form.locator('[name="coverage"]').selectOption("partial");
+  await form.locator('[type="submit"]').click();
+  await expect(page.locator("#channel-report .channel-report-result")).toContainText("5 palavras / 60 segundos ≈ 5");
+  await page.locator('[data-page="research"]').click();
+  await page.locator("#scan").click();
+  await page.locator('[data-page="channel-report"]').click();
+  await expect(page.locator("#channel-report .channel-report-result")).toBeHidden();
+  await expect(form.locator('[name="text"]')).toHaveValue("uma frase com quatro palavras");
+  await page.locator('[data-page="connection"]').click();
+  await page.locator("#clear-data").click();
+  await expect(page.locator("#notice")).toContainText("Dados locais apagados");
+  await page.locator('[data-page="channel-report"]').click();
+  await expect(form.locator('[name="text"]')).toHaveValue("");
+  await page.close();
+});

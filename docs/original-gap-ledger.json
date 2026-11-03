@@ -1542,6 +1542,16 @@
       "checkpointV05": {
         "status": "remaining",
         "note": "Ver diferença e aceite descritos na base; trabalho continua após este checkpoint."
+      },
+      "checkpointV065": {
+        "status": "partial_scope_fixture_tested",
+        "note": "Contagens mecânicas da amostra e WPM baseado em declarações explícitas; sem inferir estratégia, receita ou resultados de IA.",
+        "tests": [
+          "tests/channel-report.test.ts",
+          "tests/channel-report-ui.test.ts",
+          "tests/browser/ui.spec.ts"
+        ],
+        "runtime": "pending_installed_extension_and_live_service_validation"
       }
     },
     {

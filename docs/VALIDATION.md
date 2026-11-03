@@ -1,3 +1,9 @@
+# Validação da versão 0.6.5
+
+Em 3 de novembro de 2026, typecheck, lint e build passaram com **476 testes automatizados em 45 arquivos** (executados antes da alteração exclusiva do número da versão). A integração do relatório de conteúdo no workspace passou em **6 testes direcionados de navegador** no build final. A suíte integral anterior, da v0.6.2, teve 89 aprovados e dois ignorados pela política de extensões; não foi repetida integralmente nesta alteração localizada.
+
+O relatório faz contagens mecânicas na amostra e WPM a partir de declarações explícitas, sem verificar transcrição, duração ou cobertura. Os testes cobrem IDs, origem oficial excluída, duplicatas, cobertura parcial, limites, invalidação da coleta e limpeza da transcrição. Nenhum serviço, conta ou dado real foi acessado. ZIP verificado com CRC e hashes de nove arquivos internos; SHA-256: `5d107ebc25905a9e6c45812605123cce4fbb3db130542485d36e1e68f795d927`.
+
 # Validação da versão 0.6.4
 
 Em 3 de novembro de 2026, typecheck, lint e build passaram com **470 testes automatizados em 43 arquivos**. O relatório diário, suas exportações e a integração do workspace passaram em **6 testes direcionados de navegador**. A suíte integral anterior da v0.6.2 teve 89 aprovados e dois ignorados pela política de extensões; não foi repetida integralmente nesta alteração localizada.
