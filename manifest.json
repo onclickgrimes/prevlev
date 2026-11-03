@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "minimum_chrome_version": "120",
   "name": "Prevlev",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Pesquisa e ferramentas locais para YouTube e Studio, com backend próprio opcional.",
   "permissions": ["storage", "activeTab", "clipboardWrite"],
   "host_permissions": [

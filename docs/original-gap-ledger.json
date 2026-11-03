@@ -897,6 +897,16 @@
       "checkpointV05": {
         "status": "remaining",
         "note": "Ver diferença e aceite descritos na base; trabalho continua após este checkpoint."
+      },
+      "checkpointV061": {
+        "status": "partial_scope_fixture_tested",
+        "note": "Composição local de card/Short com imagem fornecida e metadados escolhidos; não recompõe automaticamente qualquer card da página.",
+        "tests": [
+          "tests/card-composition.test.ts",
+          "tests/browser/card-composition.spec.ts",
+          "tests/browser/ui.spec.ts"
+        ],
+        "runtime": "pending_installed_extension_and_live_service_validation"
       }
     },
     {

@@ -16,6 +16,10 @@ As entradas históricas e seus aceites abaixo permanecem abertos até revalidaç
 
 Esses recursos não estabelecem paridade com a referência relatada, acesso à base global, analytics privado, anonimização completa ou funcionamento em conta real. Registros da API oficial permanecem excluídos das derivações. A validação por fixtures está documentada em VALIDATION.md; o bloqueio da extensão instalada pela política do Chromium e as limitações de runtime permanecem.
 
+## Marco v0.6.1
+
+O compositor local de D17 gera uma ilustração de card ou Short a partir de imagem fornecida e metadados explícitos ou de vídeo da coleta. Oferece fundos claros, escuros, personalizados ou transparentes e PNG em 1×/2×. Não recompõe automaticamente cada card da página nem replica a captura do original; a diferença permanece parcial.
+
 ## D01 · P0
 
 Referência informada: módulos `6buNu`. Recursos: 10, 29.

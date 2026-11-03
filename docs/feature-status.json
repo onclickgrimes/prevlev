@@ -1,5 +1,5 @@
 {
-  "version": "0.6.0",
+  "version": "0.6.1",
   "scope": "Implementação independente; não há declaração de paridade completa com Nexlev 3.12.6. As entradas descrevem a base v0.4; consulte GAP_AUDIT e ORIGINAL_GAP_LEDGER para diferenças posteriores e limites.",
   "statusDefinitions": {
     "implemented": "Disponível no escopo local descrito, com evidência em fixtures; não significa validação em extensão instalada ou paridade completa.",

@@ -1,3 +1,9 @@
+# Validação da versão 0.6.1
+
+Em 3 de novembro de 2026, typecheck, lint e build passaram, com **451 testes automatizados em 41 arquivos**. O compositor e o workspace passaram em **8 testes direcionados de navegador**, cobrindo PNG real, formatos, transparência, escala, limpeza após alterar a coleta e limitação de decodificação concorrente. A rodada completa anterior da v0.6.0 teve 83 aprovados e dois testes de extensão instalada ignorados pela política gerenciada do Chromium; a v0.6.1 não repetiu essa rodada completa.
+
+A composição usa somente imagens locais escolhidas e metadados informados ou selecionados explicitamente; registros da API oficial são excluídos. O arquivo é validado antes de decodificar. ZIP testado com CRC e hashes dos nove arquivos internos; SHA-256: `8d893b5b34e81e351b6a0519c8d8c7b9f549506f49e4b5e90eb1b067b925405d`. Não houve acesso a conta, serviço Omni, geração paga ou API real.
+
 # Validação da versão 0.6.0
 
 Executado em 3 de novembro de 2026 com Node.js 24 e Chromium 154: typecheck, lint e build aprovados; **448 testes automatizados em 40 arquivos e 83 testes de navegador aprovados**. Dois testes de extensão instalada foram ignorados pela política gerenciada do Chromium; não contam como aprovados. Uma rodada anterior teve dois erros de arquivos temporários por testes concorrentes; a repetição isolada passou. Nenhuma conta, serviço Omni, geração paga ou API YouTube real foi acessada.
