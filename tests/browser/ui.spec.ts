@@ -307,7 +307,7 @@ test("workspace sample report invalidates on collection change and clears transc
   await page.goto("http://localhost:9393/workspace.html");
   await page.locator("#scan").click();
   await page.locator('[data-page="channel-report"]').click();
-  const form = page.locator("#channel-report form");
+  const form = page.locator("#channel-report .channel-report-mechanical-form");
   await form.locator('[name="videoId"]').fill("abcdefghijk");
   await form.locator('[name="text"]').fill("uma frase com quatro palavras");
   await form.locator('[name="duration"]').fill("60");

@@ -1,6 +1,7 @@
 /** Local observations only. These structural types accept the workspace's VideoRecord. */
 export interface ReportVideo {
   id: string; title: string; isShort?: boolean; durationSeconds?: number;
+  channelId?: string;
   source?: "youtube-dom" | "public-page" | "user-provided" | "youtube-data-api";
 }
 export interface ManualTranscript {
@@ -17,8 +18,8 @@ export interface ChannelReport {
 const words = (text: string): string[] => text.match(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*/gu) ?? [];
 const validDuration = (n: unknown): n is number => typeof n === "number" && Number.isFinite(n) && n > 0;
 
-/** The first eligible row per valid YouTube video ID wins; official API rows never enter any calculation. */
-export function buildChannelReport(input: readonly ReportVideo[], manual?: ManualTranscript): ChannelReport {
+/** Shared eligibility rules for mechanical statistics and explicitly provided annotations. */
+export function selectChannelReportVideos(input: readonly ReportVideo[]): { videos: ReportVideo[]; scope: ChannelReport["scope"] } {
   const seen = new Set<string>(), videos: ReportVideo[] = [];
   let excludedApi = 0, excludedDuplicate = 0, excludedInvalidId = 0;
   const sources: Record<string, number> = { "youtube-dom": 0, "public-page": 0, "user-provided": 0, unspecified: 0 };
@@ -31,6 +32,13 @@ export function buildChannelReport(input: readonly ReportVideo[], manual?: Manua
     const key = video.source && Object.hasOwn(sources, video.source) ? video.source : "unspecified";
     sources[key]++;
   }
+  return { videos, scope: { input: input.length, included: videos.length, excludedApi, excludedDuplicate, excludedInvalidId, sources } };
+}
+
+/** The first eligible row per valid YouTube video ID wins; official API rows never enter any calculation. */
+export function buildChannelReport(input: readonly ReportVideo[], manual?: ManualTranscript): ChannelReport {
+  const { videos, scope } = selectChannelReportVideos(input);
+  const seen = new Set(videos.map(video => video.id));
   const titles = videos.map(video => typeof video.title === "string" ? video.title.trim() : "").filter(Boolean);
   const frequencies = new Map<string, number>();
   for (const title of titles) for (const term of new Set(words(title.toLocaleLowerCase("und")))) frequencies.set(term, (frequencies.get(term) ?? 0) + 1);
@@ -51,7 +59,7 @@ export function buildChannelReport(input: readonly ReportVideo[], manual?: Manua
     }
   } else transcript.reason = "Transcrição e duração não foram informadas.";
   return {
-    scope: { input: input.length, included: videos.length, excludedApi, excludedDuplicate, excludedInvalidId, sources },
+    scope,
     content: { shorts: videos.filter(v => v.isShort === true).length, nonShorts: videos.filter(v => v.isShort === false).length, unknownFormats: videos.filter(v => v.isShort !== true && v.isShort !== false).length, knownDuration, unknownDuration: videos.length - knownDuration },
     titles: { known: titles.length, missing: videos.length - titles.length, meanCharacters: titles.length ? titles.reduce((sum, title) => sum + Array.from(title).length / titles.length, 0) : undefined, questionMarks: titles.filter(title => title.includes("?")).length, exclamationMarks: titles.filter(title => title.includes("!")).length, terms }, transcript,
     limitations: [
