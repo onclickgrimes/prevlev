@@ -283,16 +283,14 @@ describe("adaptador de IA configurável sem consumo externo nos testes", () => {
     );
   });
   it("envia contrato de chat ao provedor explícito e preserva resultado como gerado", async () => {
-    const fetcher = vi
-      .fn<typeof fetch>()
-      .mockResolvedValue(
-        new Response(
-          JSON.stringify({
-            choices: [{ message: { content: "Resumo de exemplo" } }],
-          }),
-          { headers: { "Content-Type": "application/json" } },
-        ),
-      );
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: "Resumo de exemplo" } }],
+        }),
+        { headers: { "Content-Type": "application/json" } },
+      ),
+    );
     const result = await analyzeAi(
       "transcript-summary",
       { transcript: [{ start: 0, text: "Conteúdo de teste" }] },

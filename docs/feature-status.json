@@ -1,9 +1,9 @@
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
   "scope": "Implementação independente; não há declaração de paridade completa com Nexlev 3.12.6.",
   "statusDefinitions": {
-    "implemented": "Disponível no escopo limitado descrito, sem afirmar cobertura global.",
-    "partial": "Parte funcional entregue, com diferença ou lacuna material explícita.",
+    "implemented": "Disponível no escopo local descrito, com evidência em fixtures; não significa validação em extensão instalada ou paridade completa.",
+    "partial": "Parte funcional entregue, com diferença de produto/dados explícita; teste real de runtime é registrado separadamente.",
     "configuration_required": "Adaptador entregue; depende de infraestrutura/provedor configurado pelo operador."
   },
   "features": [
@@ -12,11 +12,21 @@
       "name": "Verificar monetização",
       "status": "partial",
       "execution": "local",
-      "boundary": "Marcadores de anúncio/música do vídeo aberto; resultado de baixa confiança, sem confirmar YPP, receita ou canal inteiro.",
-      "source": ["src/core/metrics.ts", "src/content/index.ts"],
-      "tests": ["tests/core.test.ts"],
+      "boundary": "Examina marcadores de anúncio/música do vídeo aberto ou de até cinco páginas públicas de vídeos por ação explícita. Baixa confiança: presença ou ausência não confirma YPP, receita ou monetização do canal. Falhas públicas permanecem desconhecidas.",
+      "source": [
+        "src/core/metrics.ts",
+        "src/content/index.ts",
+        "src/core/channel-research.ts"
+      ],
+      "tests": [
+        "tests/core.test.ts",
+        "tests/channel-research.test.ts",
+        "tests/browser/research-ui.spec.ts"
+      ],
       "verificationStatus": "fixture_coverage_only",
-      "installedExtensionVerification": "blocked_by_environment_policy"
+      "installedExtensionVerification": "blocked_by_environment_policy",
+      "runtimeVerificationStatus": "pending_installed_and_live_validation",
+      "configurationRequirements": []
     },
     {
       "id": 2,
@@ -27,22 +37,31 @@
       "source": ["src/content/index.ts"],
       "tests": ["tests/content-runtime.test.ts"],
       "verificationStatus": "fixture_coverage_only",
-      "installedExtensionVerification": "blocked_by_environment_policy"
+      "installedExtensionVerification": "blocked_by_environment_policy",
+      "runtimeVerificationStatus": "pending_installed_and_live_validation",
+      "configurationRequirements": []
     },
     {
       "id": 3,
       "name": "Ordenar vídeos do canal por popularidade/VPH",
       "status": "implemented",
       "execution": "local",
-      "boundary": "Ordena somente os cards carregados; VPH médio desde a publicação, sem busca completa do canal.",
+      "boundary": "Ordena cards carregados por views, VPH médio, outlier, recentes, duração, inscritos ou título. Os filtros completos podem ser aplicados/restaurados na página; não obtém catálogo completo.",
       "source": [
         "src/content/youtube.ts",
         "src/content/index.ts",
         "src/core/metrics.ts"
       ],
-      "tests": ["tests/content-youtube.test.ts", "tests/core.test.ts"],
+      "tests": [
+        "tests/content-youtube.test.ts",
+        "tests/core.test.ts",
+        "tests/content-filters-runtime.test.ts",
+        "tests/browser/research-ui.spec.ts"
+      ],
       "verificationStatus": "fixture_coverage_only",
-      "installedExtensionVerification": "blocked_by_environment_policy"
+      "installedExtensionVerification": "blocked_by_environment_policy",
+      "runtimeVerificationStatus": "pending_installed_and_live_validation",
+      "configurationRequirements": []
     },
     {
       "id": 4,
@@ -53,7 +72,9 @@
       "source": ["src/core/metrics.ts", "src/ui/workspace.ts"],
       "tests": ["tests/core.test.ts", "tests/content-youtube.test.ts"],
       "verificationStatus": "fixture_coverage_only",
-      "installedExtensionVerification": "blocked_by_environment_policy"
+      "installedExtensionVerification": "blocked_by_environment_policy",
+      "runtimeVerificationStatus": "pending_installed_and_live_validation",
+      "configurationRequirements": []
     },
     {
       "id": 5,
@@ -68,7 +89,9 @@
       ],
       "tests": ["tests/core.test.ts", "tests/studio.test.ts"],
       "verificationStatus": "fixture_coverage_only",
-      "installedExtensionVerification": "blocked_by_environment_policy"
+      "installedExtensionVerification": "blocked_by_environment_policy",
+      "runtimeVerificationStatus": "pending_installed_and_live_validation",
+      "configurationRequirements": []
     },
     {
       "id": 6,
@@ -79,7 +102,11 @@
       "source": ["src/content/studio.ts"],
       "tests": ["tests/studio.test.ts"],
       "verificationStatus": "fixture_coverage_only",
-      "installedExtensionVerification": "blocked_by_environment_policy"
+      "installedExtensionVerification": "blocked_by_environment_policy",
+      "runtimeVerificationStatus": "pending_installed_and_live_validation",
+      "configurationRequirements": [
+        "Insights de API privada do Studio não foram implementados; somente cards visíveis são lidos."
+      ]
     },
     {
       "id": 7,
@@ -90,7 +117,9 @@
       "source": ["src/content/studio.ts"],
       "tests": ["tests/studio.test.ts"],
       "verificationStatus": "fixture_coverage_only",
-      "installedExtensionVerification": "blocked_by_environment_policy"
+      "installedExtensionVerification": "blocked_by_environment_policy",
+      "runtimeVerificationStatus": "pending_installed_and_live_validation",
+      "configurationRequirements": []
     },
     {
       "id": 8,
@@ -105,7 +134,9 @@
       ],
       "tests": ["tests/core.test.ts", "tests/content-youtube.test.ts"],
       "verificationStatus": "fixture_coverage_only",
-      "installedExtensionVerification": "blocked_by_environment_policy"
+      "installedExtensionVerification": "blocked_by_environment_policy",
+      "runtimeVerificationStatus": "pending_installed_and_live_validation",
+      "configurationRequirements": []
     },
     {
       "id": 9,
@@ -116,18 +147,30 @@
       "source": ["src/content/index.ts", "src/ui/workspace.ts"],
       "tests": ["tests/content-youtube.test.ts", "tests/core.test.ts"],
       "verificationStatus": "fixture_coverage_only",
-      "installedExtensionVerification": "blocked_by_environment_policy"
+      "installedExtensionVerification": "blocked_by_environment_policy",
+      "runtimeVerificationStatus": "pending_installed_and_live_validation",
+      "configurationRequirements": []
     },
     {
       "id": 10,
       "name": "Ferramentas da timeline",
-      "status": "partial",
+      "status": "implemented",
       "execution": "local",
-      "boundary": "Captura frame atual e permite trabalhar com transcrição aberta; sem reprodução completa de controles adicionais de timeline. Canvas pode ser bloqueado pela origem da mídia.",
-      "source": ["src/core/media.ts", "src/content/index.ts"],
-      "tests": ["tests/media.test.ts"],
+      "boundary": "Controla o player nativo carregado: posição, reproduzir/pausar, ±5 s, passo estimado de 1/30 s e captura de frame. Transcrição com timestamps permite busca, seleção, cópia e exportação. Não detecta FPS real nem promete precisão de frame; recusa identidade de vídeo alterada, duração indisponível e canvas protegido.",
+      "source": [
+        "src/core/media.ts",
+        "src/content/index.ts",
+        "src/content/timeline.ts"
+      ],
+      "tests": [
+        "tests/media.test.ts",
+        "tests/timeline.test.ts",
+        "tests/browser/research-ui.spec.ts"
+      ],
       "verificationStatus": "fixture_coverage_only",
-      "installedExtensionVerification": "blocked_by_environment_policy"
+      "installedExtensionVerification": "blocked_by_environment_policy",
+      "runtimeVerificationStatus": "pending_installed_and_live_validation",
+      "configurationRequirements": []
     },
     {
       "id": 11,
@@ -138,7 +181,9 @@
       "source": ["src/core/media.ts", "src/ui/workspace.ts"],
       "tests": ["tests/media.test.ts"],
       "verificationStatus": "fixture_coverage_only",
-      "installedExtensionVerification": "blocked_by_environment_policy"
+      "installedExtensionVerification": "blocked_by_environment_policy",
+      "runtimeVerificationStatus": "pending_installed_and_live_validation",
+      "configurationRequirements": []
     },
     {
       "id": 12,
@@ -149,7 +194,9 @@
       "source": ["src/core/media.ts", "src/ui/workspace.ts"],
       "tests": ["tests/media.test.ts"],
       "verificationStatus": "fixture_coverage_only",
-      "installedExtensionVerification": "blocked_by_environment_policy"
+      "installedExtensionVerification": "blocked_by_environment_policy",
+      "runtimeVerificationStatus": "pending_installed_and_live_validation",
+      "configurationRequirements": []
     },
     {
       "id": 13,
@@ -160,29 +207,37 @@
       "source": ["src/core/media.ts", "src/ui/workspace.ts"],
       "tests": ["tests/media.test.ts"],
       "verificationStatus": "fixture_coverage_only",
-      "installedExtensionVerification": "blocked_by_environment_policy"
+      "installedExtensionVerification": "blocked_by_environment_policy",
+      "runtimeVerificationStatus": "pending_installed_and_live_validation",
+      "configurationRequirements": []
     },
     {
       "id": 14,
       "name": "Screenshot de card de vídeo",
       "status": "implemented",
       "execution": "local",
-      "boundary": "Captura e recorta somente card inteiramente visível na aba selecionada.",
+      "boundary": "Ativa a aba, mede card inteiramente visível, captura e mede novamente. Descarta a imagem se URL, viewport, rolagem, revisão do DOM, geometria ou identidade dos campos sensíveis mudarem; cobertura limitada à área visível.",
       "source": [
         "src/background.ts",
         "src/content/index.ts",
         "src/core/media.ts"
       ],
-      "tests": ["tests/media.test.ts", "tests/background.test.ts"],
+      "tests": [
+        "tests/media.test.ts",
+        "tests/background.test.ts",
+        "tests/content-filters-runtime.test.ts"
+      ],
       "verificationStatus": "fixture_coverage_only",
-      "installedExtensionVerification": "blocked_by_environment_policy"
+      "installedExtensionVerification": "blocked_by_environment_policy",
+      "runtimeVerificationStatus": "pending_installed_and_live_validation",
+      "configurationRequirements": []
     },
     {
       "id": 15,
       "name": "Screenshot de analytics",
       "status": "partial",
       "execution": "local",
-      "boundary": "Recorta área visível reconhecida e oculta campos por seletores. É necessário conferir a imagem antes de compartilhar; não garante anonimização completa.",
+      "boundary": "Mesma transação de captura com medição antes/depois e recorte da área de analytics reconhecida. Oculta apenas campos reconhecidos; não garante anonimização total. Confira antes de compartilhar.",
       "source": [
         "src/content/studio.ts",
         "src/content/index.ts",
@@ -191,28 +246,37 @@
       "tests": [
         "tests/studio.test.ts",
         "tests/media.test.ts",
-        "tests/background.test.ts"
+        "tests/background.test.ts",
+        "tests/content-filters-runtime.test.ts"
       ],
       "verificationStatus": "fixture_coverage_only",
-      "installedExtensionVerification": "blocked_by_environment_policy"
+      "installedExtensionVerification": "blocked_by_environment_policy",
+      "runtimeVerificationStatus": "pending_installed_and_live_validation",
+      "configurationRequirements": []
     },
     {
       "id": 16,
       "name": "Screenshot de desempenho do último vídeo",
       "status": "partial",
       "execution": "local",
-      "boundary": "Captura card reconhecido inteiramente visível no Studio; mudanças de layout podem impedir a captura.",
+      "boundary": "Mesma transação de captura para card reconhecido do último vídeo, inteiramente visível. Descarta mudanças durante a captura; layouts desconhecidos podem impedir a operação.",
       "source": ["src/content/index.ts", "src/core/media.ts"],
-      "tests": ["tests/media.test.ts", "tests/background.test.ts"],
+      "tests": [
+        "tests/media.test.ts",
+        "tests/background.test.ts",
+        "tests/content-filters-runtime.test.ts"
+      ],
       "verificationStatus": "fixture_coverage_only",
-      "installedExtensionVerification": "blocked_by_environment_policy"
+      "installedExtensionVerification": "blocked_by_environment_policy",
+      "runtimeVerificationStatus": "pending_installed_and_live_validation",
+      "configurationRequirements": []
     },
     {
       "id": 17,
       "name": "Inserir anúncios mid-roll",
       "status": "partial",
       "execution": "local",
-      "boundary": "Planeja posições uniformes ou próximas a silêncios detectados de um arquivo de áudio local via AudioContext/PCM. O arquivo não é enviado. Adaptador preenche intervalos já abertos; não cria intervalos, extrai áudio do YouTube nem salva o vídeo.",
+      "boundary": "Planeja posições uniformes ou próximas a silêncios de áudio local via AudioContext/PCM. Prévia informa posições e rascunhos a criar. Após confirmação, pode criar rascunhos por um único botão Inserir reconhecido dentro do editor e preencher horários, aguardando até 1 segundo por novo campo. Tem cancelamento e valida contexto; não clica em Continuar/Salvar, extrai áudio do YouTube nem garante entrega de anúncios. Compatibilidade em Studio real ainda não verificada.",
       "source": [
         "src/core/midroll.ts",
         "src/content/studio.ts",
@@ -221,10 +285,14 @@
       "tests": [
         "tests/core.test.ts",
         "tests/studio.test.ts",
-        "tests/studio-flow.test.ts"
+        "tests/studio-flow.test.ts",
+        "tests/studio-midroll.test.ts",
+        "tests/browser/studio-ui.spec.ts"
       ],
       "verificationStatus": "fixture_coverage_only",
-      "installedExtensionVerification": "blocked_by_environment_policy"
+      "installedExtensionVerification": "blocked_by_environment_policy",
+      "runtimeVerificationStatus": "pending_installed_and_live_validation",
+      "configurationRequirements": []
     },
     {
       "id": 18,
@@ -235,14 +303,16 @@
       "source": ["src/content/studio.ts"],
       "tests": ["tests/studio.test.ts", "tests/studio-flow.test.ts"],
       "verificationStatus": "fixture_coverage_only",
-      "installedExtensionVerification": "blocked_by_environment_policy"
+      "installedExtensionVerification": "blocked_by_environment_policy",
+      "runtimeVerificationStatus": "pending_installed_and_live_validation",
+      "configurationRequirements": []
     },
     {
       "id": 19,
       "name": "Dar/remover corações em lote",
       "status": "implemented",
       "execution": "local",
-      "boundary": "Prévia explícita, confirmação, limite de 50, expiração e cancelamento para controles reconhecidos dos comentários visíveis. Cliques enviados precisam de conferência.",
+      "boundary": "Prévia explícita com alvo, confirmação, limite de 50, expiração e cancelamento para comentários visíveis reconhecidos. Revalida identidade, autor e texto antes de cada clique, inclusive se o DOM reciclar o mesmo botão. Cliques enviados precisam de conferência; aceitação do servidor não é confirmada.",
       "source": ["src/content/studio.ts", "src/ui/workspace.ts"],
       "tests": [
         "tests/studio.test.ts",
@@ -250,22 +320,31 @@
         "tests/browser/studio-ui.spec.ts"
       ],
       "verificationStatus": "fixture_coverage_only",
-      "installedExtensionVerification": "blocked_by_environment_policy"
+      "installedExtensionVerification": "blocked_by_environment_policy",
+      "runtimeVerificationStatus": "pending_installed_and_live_validation",
+      "configurationRequirements": []
     },
     {
       "id": 20,
       "name": "Mostrar inscritos",
       "status": "partial",
       "execution": "local",
-      "boundary": "Lê inscritos nos cards ou, por ação explícita, consulta páginas públicas de até 10 canais no YouTube, sem credenciais. Páginas sem contagem ou layouts não reconhecidos permanecem desconhecidos. Não usa cache Nexlev.",
+      "boundary": "Lê inscritos nos cards ou consulta páginas públicas de até dez canais sem credenciais por ação explícita. Repassa enriquecimento aos filtros e badges da aba. Contagens ausentes/layouts não reconhecidos continuam desconhecidos; consulta pública real não validada neste ambiente.",
       "source": [
         "src/content/youtube.ts",
         "src/content/index.ts",
         "src/core/enrichment.ts"
       ],
-      "tests": ["tests/content-youtube.test.ts", "tests/enrichment.test.ts"],
+      "tests": [
+        "tests/content-youtube.test.ts",
+        "tests/enrichment.test.ts",
+        "tests/content-filters-runtime.test.ts",
+        "tests/browser/research-ui.spec.ts"
+      ],
       "verificationStatus": "fixture_coverage_only",
-      "installedExtensionVerification": "blocked_by_environment_policy"
+      "installedExtensionVerification": "blocked_by_environment_policy",
+      "runtimeVerificationStatus": "pending_installed_and_live_validation",
+      "configurationRequirements": []
     },
     {
       "id": 21,
@@ -276,7 +355,9 @@
       "source": ["src/core/metrics.ts", "src/content/index.ts"],
       "tests": ["tests/core.test.ts"],
       "verificationStatus": "fixture_coverage_only",
-      "installedExtensionVerification": "blocked_by_environment_policy"
+      "installedExtensionVerification": "blocked_by_environment_policy",
+      "runtimeVerificationStatus": "pending_installed_and_live_validation",
+      "configurationRequirements": []
     },
     {
       "id": 22,
@@ -287,68 +368,106 @@
       "source": ["src/core/metrics.ts", "src/core/parse.ts"],
       "tests": ["tests/core.test.ts"],
       "verificationStatus": "fixture_coverage_only",
-      "installedExtensionVerification": "blocked_by_environment_policy"
+      "installedExtensionVerification": "blocked_by_environment_policy",
+      "runtimeVerificationStatus": "pending_installed_and_live_validation",
+      "configurationRequirements": []
     },
     {
       "id": 23,
       "name": "Filtro do feed de inscrições",
       "status": "implemented",
       "execution": "local",
-      "boundary": "Filtra e ordena somente cards já carregados por texto, formato e views; sem enriquecimento externo.",
+      "boundary": "Filtra cards carregados por título/canal, views, inscritos, duração, VPH, outlier, datas e formato, com limites inclusivos, ordenação, aplicar e restaurar. Métricas ausentes ficam fora de limites ativos e outlier preserva a referência completa da amostra. Atua no feed de inscrições, sem percorrer todo o catálogo.",
       "source": ["src/content/index.ts", "src/content/youtube.ts"],
       "tests": [
         "tests/content-youtube.test.ts",
-        "tests/content-runtime.test.ts"
+        "tests/content-runtime.test.ts",
+        "tests/content-filters-runtime.test.ts",
+        "tests/browser/research-ui.spec.ts"
       ],
       "verificationStatus": "fixture_coverage_only",
-      "installedExtensionVerification": "blocked_by_environment_policy"
+      "installedExtensionVerification": "blocked_by_environment_policy",
+      "runtimeVerificationStatus": "pending_installed_and_live_validation",
+      "configurationRequirements": []
     },
     {
       "id": 24,
       "name": "Filtro da página inicial",
       "status": "implemented",
       "execution": "local",
-      "boundary": "Mesma filtragem sobre cards carregados na Home, sem enviar observações ou canais a terceiros.",
+      "boundary": "Filtra cards carregados por título/canal, views, inscritos, duração, VPH, outlier, datas e formato, com limites inclusivos, ordenação, aplicar e restaurar. Métricas ausentes ficam fora de limites ativos e outlier preserva a referência completa da amostra. Atua na Home, sem envio automático dos dados a terceiros.",
       "source": ["src/content/index.ts", "src/content/youtube.ts"],
       "tests": [
         "tests/content-youtube.test.ts",
-        "tests/content-runtime.test.ts"
+        "tests/content-runtime.test.ts",
+        "tests/content-filters-runtime.test.ts",
+        "tests/browser/research-ui.spec.ts"
       ],
       "verificationStatus": "fixture_coverage_only",
-      "installedExtensionVerification": "blocked_by_environment_policy"
+      "installedExtensionVerification": "blocked_by_environment_policy",
+      "runtimeVerificationStatus": "pending_installed_and_live_validation",
+      "configurationRequirements": []
     },
     {
       "id": 25,
       "name": "Filtro da busca",
       "status": "partial",
       "execution": "local",
-      "boundary": "Filtra resultados já carregados; não cria pesquisa ampliada em servidor nem busca catálogo completo.",
+      "boundary": "Filtra cards carregados por título/canal, views, inscritos, duração, VPH, outlier, datas e formato, com limites inclusivos, ordenação, aplicar e restaurar. Métricas ausentes ficam fora de limites ativos e outlier preserva a referência completa da amostra. Não cria pesquisa ampliada em servidor nem busca catálogo completo.",
       "source": ["src/content/youtube.ts", "src/content/index.ts"],
-      "tests": ["tests/content-youtube.test.ts"],
+      "tests": [
+        "tests/content-youtube.test.ts",
+        "tests/content-filters-runtime.test.ts",
+        "tests/browser/research-ui.spec.ts"
+      ],
       "verificationStatus": "fixture_coverage_only",
-      "installedExtensionVerification": "blocked_by_environment_policy"
+      "installedExtensionVerification": "blocked_by_environment_policy",
+      "runtimeVerificationStatus": "pending_installed_and_live_validation",
+      "configurationRequirements": [
+        "Paridade de pesquisa/cobertura global requer uma fonte de dados autorizada e integração ainda não implementada."
+      ]
     },
     {
       "id": 26,
       "name": "Filtro da página de canal",
       "status": "partial",
       "execution": "local",
-      "boundary": "Filtra vídeos já carregados; sem obter coleção completa de vídeos por serviço remoto.",
+      "boundary": "Filtra cards carregados por título/canal, views, inscritos, duração, VPH, outlier, datas e formato, com limites inclusivos, ordenação, aplicar e restaurar. Métricas ausentes ficam fora de limites ativos e outlier preserva a referência completa da amostra. Consulta opcional do canal usa só o HTML público inicial; não pagina a coleção inteira.",
       "source": ["src/content/youtube.ts", "src/content/index.ts"],
-      "tests": ["tests/content-youtube.test.ts"],
+      "tests": [
+        "tests/content-youtube.test.ts",
+        "tests/content-filters-runtime.test.ts",
+        "tests/browser/research-ui.spec.ts"
+      ],
       "verificationStatus": "fixture_coverage_only",
-      "installedExtensionVerification": "blocked_by_environment_policy"
+      "installedExtensionVerification": "blocked_by_environment_policy",
+      "runtimeVerificationStatus": "pending_installed_and_live_validation",
+      "configurationRequirements": [
+        "Paridade de pesquisa/cobertura global requer uma fonte de dados autorizada e integração ainda não implementada."
+      ]
     },
     {
       "id": 27,
       "name": "Vídeos destacados do canal",
       "status": "partial",
       "execution": "local",
-      "boundary": "Ordenação por recentes ou views no espaço de trabalho sobre a amostra coletada; sem painel de descoberta completa.",
-      "source": ["src/core/metrics.ts", "src/ui/workspace.ts"],
-      "tests": ["tests/core.test.ts"],
+      "boundary": "Painel próprio consulta primeira resposta HTML pública de /videos sem credenciais, interpreta JSON literal e lista recentes/populares apenas entre os vídeos reconhecidos nessa amostra. Pode usar a coleta atual e mesclar sem duplicar IDs. Sem paginação, API privada ou alegação de mais populares globais do canal; consulta pública real ainda não validada.",
+      "source": [
+        "src/core/metrics.ts",
+        "src/ui/workspace.ts",
+        "src/core/channel-research.ts"
+      ],
+      "tests": [
+        "tests/core.test.ts",
+        "tests/channel-research.test.ts",
+        "tests/browser/research-ui.spec.ts"
+      ],
       "verificationStatus": "fixture_coverage_only",
-      "installedExtensionVerification": "blocked_by_environment_policy"
+      "installedExtensionVerification": "blocked_by_environment_policy",
+      "runtimeVerificationStatus": "pending_installed_and_live_validation",
+      "configurationRequirements": [
+        "Paridade de pesquisa/cobertura global requer uma fonte de dados autorizada e integração ainda não implementada."
+      ]
     },
     {
       "id": 28,
@@ -359,7 +478,12 @@
       "source": ["server/analysis.mjs", "src/ui/workspace.ts"],
       "tests": ["tests/backend.test.ts"],
       "verificationStatus": "fixture_coverage_only",
-      "installedExtensionVerification": "blocked_by_environment_policy"
+      "installedExtensionVerification": "blocked_by_environment_policy",
+      "runtimeVerificationStatus": "pending_installed_and_live_validation",
+      "configurationRequirements": [
+        "Configurar o backend próprio para a análise já implementada sobre dados enviados.",
+        "Paridade de pesquisa/cobertura global requer uma fonte de dados autorizada e integração ainda não implementada."
+      ]
     },
     {
       "id": 29,
@@ -371,15 +495,22 @@
         "src/core/transcript.ts",
         "src/content/youtube.ts",
         "server/ai.mjs",
-        "src/ui/workspace.ts"
+        "src/ui/workspace.ts",
+        "src/content/timeline.ts"
       ],
       "tests": [
         "tests/core.test.ts",
         "tests/content-youtube.test.ts",
-        "tests/backend.test.ts"
+        "tests/backend.test.ts",
+        "tests/timeline.test.ts",
+        "tests/browser/research-ui.spec.ts"
       ],
       "verificationStatus": "fixture_coverage_only",
-      "installedExtensionVerification": "blocked_by_environment_policy"
+      "installedExtensionVerification": "blocked_by_environment_policy",
+      "runtimeVerificationStatus": "pending_installed_and_live_validation",
+      "configurationRequirements": [
+        "Para as ações de IA: escolher e configurar backend, provedor, modelo e credencial próprios; sem configuração retorna not_configured."
+      ]
     },
     {
       "id": 30,
@@ -390,7 +521,9 @@
       "source": ["src/shared/storage.ts", "src/ui/workspace.ts"],
       "tests": ["tests/browser/ui.spec.ts"],
       "verificationStatus": "fixture_coverage_only",
-      "installedExtensionVerification": "blocked_by_environment_policy"
+      "installedExtensionVerification": "blocked_by_environment_policy",
+      "runtimeVerificationStatus": "pending_installed_and_live_validation",
+      "configurationRequirements": []
     },
     {
       "id": 31,
@@ -401,7 +534,12 @@
       "source": ["server/analysis.mjs"],
       "tests": ["tests/backend.test.ts"],
       "verificationStatus": "fixture_coverage_only",
-      "installedExtensionVerification": "blocked_by_environment_policy"
+      "installedExtensionVerification": "blocked_by_environment_policy",
+      "runtimeVerificationStatus": "pending_installed_and_live_validation",
+      "configurationRequirements": [
+        "Configurar o backend próprio para a análise já implementada sobre dados enviados.",
+        "Paridade de pesquisa/cobertura global requer uma fonte de dados autorizada e integração ainda não implementada."
+      ]
     },
     {
       "id": 32,
@@ -412,7 +550,12 @@
       "source": ["server/analysis.mjs"],
       "tests": ["tests/backend.test.ts"],
       "verificationStatus": "fixture_coverage_only",
-      "installedExtensionVerification": "blocked_by_environment_policy"
+      "installedExtensionVerification": "blocked_by_environment_policy",
+      "runtimeVerificationStatus": "pending_installed_and_live_validation",
+      "configurationRequirements": [
+        "Configurar o backend próprio para a análise já implementada sobre dados enviados.",
+        "Paridade de pesquisa/cobertura global requer uma fonte de dados autorizada e integração ainda não implementada."
+      ]
     },
     {
       "id": 33,
@@ -423,7 +566,12 @@
       "source": ["server/analysis.mjs"],
       "tests": ["tests/backend.test.ts"],
       "verificationStatus": "fixture_coverage_only",
-      "installedExtensionVerification": "blocked_by_environment_policy"
+      "installedExtensionVerification": "blocked_by_environment_policy",
+      "runtimeVerificationStatus": "pending_installed_and_live_validation",
+      "configurationRequirements": [
+        "Configurar o backend próprio para a análise já implementada sobre dados enviados.",
+        "Paridade de pesquisa/cobertura global requer uma fonte de dados autorizada e integração ainda não implementada."
+      ]
     },
     {
       "id": 34,
@@ -434,7 +582,13 @@
       "source": ["server/analysis.mjs"],
       "tests": ["tests/backend.test.ts"],
       "verificationStatus": "fixture_coverage_only",
-      "installedExtensionVerification": "blocked_by_environment_policy"
+      "installedExtensionVerification": "blocked_by_environment_policy",
+      "runtimeVerificationStatus": "pending_installed_and_live_validation",
+      "configurationRequirements": [
+        "Configurar o backend próprio para a análise já implementada sobre dados enviados.",
+        "Paridade de pesquisa/cobertura global requer uma fonte de dados autorizada e integração ainda não implementada.",
+        "Dados financeiros, RPM, geografia ou contratos indisponíveis não são inferidos; fonte autorizada e integração adicional seriam necessárias."
+      ]
     },
     {
       "id": 35,
@@ -445,7 +599,13 @@
       "source": ["server/analysis.mjs"],
       "tests": ["tests/backend.test.ts"],
       "verificationStatus": "fixture_coverage_only",
-      "installedExtensionVerification": "blocked_by_environment_policy"
+      "installedExtensionVerification": "blocked_by_environment_policy",
+      "runtimeVerificationStatus": "pending_installed_and_live_validation",
+      "configurationRequirements": [
+        "Configurar o backend próprio para a análise já implementada sobre dados enviados.",
+        "Paridade de pesquisa/cobertura global requer uma fonte de dados autorizada e integração ainda não implementada.",
+        "Dados financeiros, RPM, geografia ou contratos indisponíveis não são inferidos; fonte autorizada e integração adicional seriam necessárias."
+      ]
     },
     {
       "id": 36,
@@ -456,7 +616,13 @@
       "source": ["server/analysis.mjs", "src/ui/workspace.ts"],
       "tests": ["tests/backend.test.ts"],
       "verificationStatus": "fixture_coverage_only",
-      "installedExtensionVerification": "blocked_by_environment_policy"
+      "installedExtensionVerification": "blocked_by_environment_policy",
+      "runtimeVerificationStatus": "pending_installed_and_live_validation",
+      "configurationRequirements": [
+        "Configurar o backend próprio para a análise já implementada sobre dados enviados.",
+        "Dados financeiros, RPM, geografia ou contratos indisponíveis não são inferidos; fonte autorizada e integração adicional seriam necessárias.",
+        "Configurar DATA_DIR para persistir somente observações posteriores ao primeiro registro."
+      ]
     },
     {
       "id": 37,
@@ -467,7 +633,12 @@
       "source": ["server/analysis.mjs"],
       "tests": ["tests/backend.test.ts"],
       "verificationStatus": "fixture_coverage_only",
-      "installedExtensionVerification": "blocked_by_environment_policy"
+      "installedExtensionVerification": "blocked_by_environment_policy",
+      "runtimeVerificationStatus": "pending_installed_and_live_validation",
+      "configurationRequirements": [
+        "Configurar o backend próprio para a análise já implementada sobre dados enviados.",
+        "Dados financeiros, RPM, geografia ou contratos indisponíveis não são inferidos; fonte autorizada e integração adicional seriam necessárias."
+      ]
     },
     {
       "id": 38,
@@ -478,7 +649,12 @@
       "source": ["server/analysis.mjs"],
       "tests": ["tests/backend.test.ts"],
       "verificationStatus": "fixture_coverage_only",
-      "installedExtensionVerification": "blocked_by_environment_policy"
+      "installedExtensionVerification": "blocked_by_environment_policy",
+      "runtimeVerificationStatus": "pending_installed_and_live_validation",
+      "configurationRequirements": [
+        "Configurar o backend próprio para a análise já implementada sobre dados enviados.",
+        "Paridade de pesquisa/cobertura global requer uma fonte de dados autorizada e integração ainda não implementada."
+      ]
     },
     {
       "id": 39,
@@ -489,7 +665,11 @@
       "source": ["server/ai.mjs", "server/index.mjs", "src/ui/workspace.ts"],
       "tests": ["tests/backend.test.ts"],
       "verificationStatus": "fixture_coverage_only",
-      "installedExtensionVerification": "blocked_by_environment_policy"
+      "installedExtensionVerification": "blocked_by_environment_policy",
+      "runtimeVerificationStatus": "pending_installed_and_live_validation",
+      "configurationRequirements": [
+        "Para as ações de IA: escolher e configurar backend, provedor, modelo e credencial próprios; sem configuração retorna not_configured."
+      ]
     },
     {
       "id": 40,
@@ -500,7 +680,11 @@
       "source": ["server/ai.mjs", "src/ui/workspace.ts"],
       "tests": ["tests/backend.test.ts"],
       "verificationStatus": "fixture_coverage_only",
-      "installedExtensionVerification": "blocked_by_environment_policy"
+      "installedExtensionVerification": "blocked_by_environment_policy",
+      "runtimeVerificationStatus": "pending_installed_and_live_validation",
+      "configurationRequirements": [
+        "Para as ações de IA: escolher e configurar backend, provedor, modelo e credencial próprios; sem configuração retorna not_configured."
+      ]
     }
   ],
   "extras": [
@@ -541,12 +725,13 @@
     "fixtureScope": "Testes unitários, DOM e contratos usam fixtures. Testes HTTP usam servidor próprio em loopback; provedores de IA são simulados somente nos testes.",
     "browserUi": {
       "status": "passed",
-      "tests": 4,
+      "tests": 9,
       "sources": [
         "tests/browser/ui.spec.ts",
-        "tests/browser/studio-ui.spec.ts"
+        "tests/browser/studio-ui.spec.ts",
+        "tests/browser/research-ui.spec.ts"
       ],
-      "scope": "UI renderizada em Chromium com fixture das APIs Chrome, canvas real para compressão/prévia e integração dos bundles próprios workspace.js/content.js através de transporte Chrome simulado. Nos testes Studio todas as URLs são interceptadas; não há instalação de extensão, conta real ou contato com YouTube."
+      "scope": "Dois cenários de UI/canvas, quatro de Studio e três de pesquisa/timeline. Bundles próprios workspace.js/content.js reais via transporte Chrome simulado; os cenários integrados interceptam todas as URLs. Não é execução de extensão instalada ou conta real."
     },
     "installedExtension": {
       "status": "blocked_by_environment_policy",
@@ -561,6 +746,32 @@
     "liveAiProvider": {
       "status": "not_performed",
       "reason": "Nenhuma chamada a provedor pago; configuração real continua necessária."
+    },
+    "anonymousPublicYouTubeSmoke": {
+      "status": "fetch_failed",
+      "target": "https://www.youtube.com/@YouTube/videos",
+      "scope": "Tentativa anônima sem conta informada pelo responsável pela integração; não houve resposta utilizável. Compatibilidade do parser com a fonte pública atual permanece não verificada."
     }
+  },
+  "remainingWork": {
+    "resolvedLocally": [
+      "Filtros completos de cards com aplicação/restauração no DOM e atualização do enriquecimento.",
+      "Painel de amostra pública de canal, marcadores de monetização até cinco vídeos e transporte manual.",
+      "Timeline do player nativo com busca/cópia/exportação de trechos e proteção de identidade.",
+      "Rascunhos mid-roll por controles reconhecidos, prévia e cancelamento; validação de comentário reciclado.",
+      "Transação de screenshot com medição antes/depois e descarte quando o contexto muda."
+    ],
+    "runtimePending": [
+      "Extensão instalada bloqueada pela política gerenciada do Chromium; dois cenários ignorados, sem contorno.",
+      "Consulta anônima pública de @YouTube/videos falhou neste ambiente; parser/fonte atual não confirmado.",
+      "Layouts e aceitação do servidor YouTube/Studio não verificados em conta real; testes usam fixtures."
+    ],
+    "productConfiguration": [
+      "IA: provedor/modelo/credenciais e backend próprios.",
+      "Pesquisa global: fonte autorizada, aquisição e integração ainda não implementadas.",
+      "Studio privado: não há integração com APIs privadas de insights.",
+      "Financeiro: receita/RPM/geografia/contratos não disponíveis não são inventados.",
+      "Nuvem/MCP: sincronização, autenticação multiusuário e MCP não implementados."
+    ]
   }
 }

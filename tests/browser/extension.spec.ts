@@ -96,13 +96,11 @@ test("local thumbnail composer and compressor work in a real browser canvas", as
     x.fillRect(0, 0, 800, 450);
     return c.toDataURL().split(",")[1];
   });
-  await page
-    .locator("#image-file")
-    .setInputFiles({
-      name: "fixture.png",
-      mimeType: "image/png",
-      buffer: Buffer.from(png, "base64"),
-    });
+  await page.locator("#image-file").setInputFiles({
+    name: "fixture.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(png, "base64"),
+  });
   await page.locator("#preview-title").fill("Thumbnail de teste local");
   await page.locator("#image-preview").click();
   await expect(page.locator("#image-output")).toBeVisible();

@@ -39,7 +39,7 @@ function comments(count = 2): void {
   document.body.innerHTML = Array.from(
     { length: count },
     (_, index) =>
-      `<ytcp-comment-thread><ytcp-comment><button id="heart-${index}" aria-label="Heart" aria-pressed="false">Heart</button></ytcp-comment></ytcp-comment-thread>`,
+      `<ytcp-comment-thread><ytcp-comment data-comment-id="comment-${index}"><span id="author-text">Author ${index}</span><span id="content-text">Comment ${index}</span><button id="heart-${index}" aria-label="Heart" aria-pressed="false">Heart</button></ytcp-comment></ytcp-comment-thread>`,
   ).join("");
   document
     .querySelectorAll("button")

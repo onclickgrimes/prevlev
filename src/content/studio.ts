@@ -1,4 +1,4 @@
-import { parseCount } from "../core/parse";
+import { parseCount, parseDuration } from "../core/parse";
 
 /** DOM adapters only. No account changes run during module initialization. */
 export type StudioAction =
@@ -15,6 +15,8 @@ export interface StudioPlan {
   readonly action: StudioAction;
   readonly status: "ready" | "unsupported";
   readonly targetCount: number;
+  readonly slotsToCreate?: number;
+  readonly positions?: readonly string[];
   readonly targets: readonly {
     control: string;
     context: string;
@@ -28,12 +30,29 @@ export interface StudioExecution {
   status: "completed" | "cancelled" | "stale" | "unsupported" | "error";
   submitted: number;
   total: number;
+  created?: number;
+  addClicks?: number;
   message: string;
 }
 interface Step {
   element: HTMLElement;
   signature: string;
   value?: string;
+  comment?: CommentContext;
+}
+interface CommentContext {
+  container: HTMLElement;
+  thread: HTMLElement;
+  fingerprint: string;
+  preview: string;
+}
+interface MidrollContext {
+  editor: HTMLElement;
+  fingerprint: string;
+  addButton?: HTMLElement;
+  addSignature?: string;
+  positions: readonly number[];
+  initialFields: HTMLInputElement[];
 }
 interface StoredPlan {
   publicPlan: StudioPlan;
@@ -42,6 +61,7 @@ interface StoredPlan {
   expires: number;
   steps: Step[];
   guards: Step[];
+  midroll?: MidrollContext;
   controller: AbortController;
   state: "pending" | "running";
 }
@@ -140,6 +160,148 @@ function findHeartButtons(doc: Document): HTMLElement[] {
       !candidates.some((other) => other !== button && button.contains(other)),
   );
 }
+function compactText(value: string | null | undefined): string {
+  return (value ?? "").replace(/\s+/g, " ").trim();
+}
+function commentContext(button: HTMLElement): CommentContext | undefined {
+  const container = button.closest<HTMLElement>(
+    "ytcp-comment, ytcp-comment-thread-row, ytcp-comment-thread",
+  );
+  if (!container || !visible(container)) return undefined;
+  const thread =
+    container.closest<HTMLElement>(
+      "ytcp-comment-thread, ytcp-comment-thread-row",
+    ) ?? container;
+  const authorElement = container.querySelector<HTMLElement>(
+    '[id="author-text"], [id="author-name"], .author-text, .author-name, [data-author]',
+  );
+  const textElement = container.querySelector<HTMLElement>(
+    '[id="content-text"], [id="comment-text"], .comment-text, .content-text, ytcp-comment-text, [data-comment-text]',
+  );
+  const author = compactText(authorElement?.textContent);
+  const authorUrl =
+    authorElement?.getAttribute("href") ??
+    authorElement?.querySelector("a")?.getAttribute("href") ??
+    "";
+  const text = compactText(textElement?.textContent);
+  const identity = [container, thread].map((element) => [
+    element.tagName,
+    element.id,
+    element.getAttribute("comment-id"),
+    element.getAttribute("data-comment-id"),
+    element.getAttribute("data-thread-id"),
+  ]);
+  const permalink =
+    container.querySelector('a[href*="lc="]')?.getAttribute("href") ?? "";
+  // An anonymous control-only row cannot identify the comment the user reviewed.
+  if (!author || !text) return undefined;
+  return {
+    container,
+    thread,
+    fingerprint: JSON.stringify({
+      identity,
+      permalink,
+      author,
+      authorUrl,
+      text,
+    }),
+    preview: `${author}: ${text}`,
+  };
+}
+function stepIsCurrent(step: Step): boolean {
+  if (!enabled(step.element) || signature(step.element) !== step.signature)
+    return false;
+  if (!step.comment) return true;
+  const current = commentContext(step.element);
+  return (
+    current?.container === step.comment.container &&
+    current.thread === step.comment.thread &&
+    current.fingerprint === step.comment.fingerprint
+  );
+}
+
+const editorSelector =
+  "ytcp-ad-breaks-editor, ytcp-ad-break-editor, ytcp-video-ad-breaks-editor";
+function midrollEditors(doc: Document): HTMLElement[] {
+  const editors = Array.from(
+    doc.querySelectorAll<HTMLElement>(editorSelector),
+  ).filter(visible);
+  return editors.filter(
+    (editor) =>
+      !editors.some((other) => other !== editor && other.contains(editor)),
+  );
+}
+function midrollFields(editor: HTMLElement): HTMLInputElement[] {
+  return Array.from(editor.querySelectorAll<HTMLInputElement>("input")).filter(
+    (field) =>
+      enabled(field) &&
+      !field.readOnly &&
+      ["text", "time"].includes(field.type) &&
+      (field.type === "time" ||
+        /time|horario|inicio|timestamp/.test(normalize(label(field))) ||
+        /^\d{1,2}:\d{2}(?::\d{2})?$/.test(field.value || field.placeholder)),
+  );
+}
+function addMidrollButtons(
+  editor: HTMLElement,
+  requireEnabled = true,
+): HTMLElement[] {
+  const candidates = Array.from(
+    editor.querySelectorAll<HTMLElement>(
+      'button, ytcp-button, [role="button"]',
+    ),
+  ).filter(
+    (button) =>
+      (requireEnabled ? enabled(button) : visible(button)) &&
+      /^(insert ad slot|insert ad break|add ad slot|add ad break|inserir intervalo(?: de anuncios?)?|adicionar intervalo(?: de anuncios?)?|inserir anuncio)$/.test(
+        normalize(label(button)),
+      ),
+  );
+  return candidates.filter(
+    (button) =>
+      !candidates.some((other) => other !== button && button.contains(other)),
+  );
+}
+function editorFingerprint(editor: HTMLElement): string {
+  const scope =
+    editor.closest(
+      "ytcp-video-monetization, ytcp-video-monetization-editor, ytcp-uploads-dialog",
+    ) ?? editor;
+  const identity = (element: Element) => [
+    element.tagName,
+    element.id,
+    element.getAttribute("video-id"),
+    element.getAttribute("data-video-id"),
+    element.getAttribute("channel-id"),
+    element.getAttribute("data-channel-id"),
+    element.getAttribute("aria-label"),
+  ];
+  const title = compactText(
+    scope.querySelector("#video-title, #video-name, [data-video-title]")
+      ?.textContent,
+  );
+  return JSON.stringify({
+    editor: identity(editor),
+    scope: identity(scope),
+    title,
+  });
+}
+function midrollContextIsCurrent(
+  context: MidrollContext,
+  doc: Document,
+): boolean {
+  const editors = midrollEditors(doc);
+  return (
+    editors.length === 1 &&
+    editors[0] === context.editor &&
+    editorFingerprint(context.editor) === context.fingerprint &&
+    (!context.addButton ||
+      (visible(context.addButton) &&
+        context.editor.contains(context.addButton) &&
+        signature(context.addButton) === context.addSignature &&
+        addMidrollButtons(context.editor, false).length === 1))
+  );
+}
 function timestamp(seconds: number): string {
   const rounded = Math.floor(seconds);
   return [
@@ -235,6 +397,7 @@ export function previewStudioAction(
     if (stored.state === "pending" && stored.expires <= now) plans.delete(id);
   const steps: Step[] = [];
   const guards: Step[] = [];
+  let midroll: MidrollContext | undefined;
   const notes = [...warnings];
   let description = "";
   let unsupported = "";
@@ -249,16 +412,22 @@ export function previewStudioAction(
     const targets = findHeartButtons(doc)
       .filter((button) => heartState(button) !== desired)
       .slice(0, limit);
-    steps.push(
-      ...targets.map((element) => ({ element, signature: signature(element) })),
-    );
-    description = `${desired ? "Dar" : "Remover"} coração em ${targets.length} comentários visíveis.`;
+    for (const element of targets) {
+      const comment = commentContext(element);
+      if (comment)
+        steps.push({ element, signature: signature(element), comment });
+    }
+    description = `${desired ? "Dar" : "Remover"} coração em ${steps.length} comentários visíveis.`;
     notes.push(
       "Cada clique pode publicar a reação no canal. Apenas os comentários visíveis da prévia serão processados.",
     );
-    if (targets.length === 0)
+    if (steps.length !== targets.length)
+      notes.push(
+        "Comentários sem autor e texto reconhecidos foram excluídos da prévia.",
+      );
+    if (steps.length === 0)
       unsupported =
-        "Nenhum botão de coração elegível com estado reconhecido foi encontrado.";
+        "Nenhum comentário com autor, texto e botão de coração reconhecidos foi encontrado.";
   } else if (action === "skip-monetization") {
     const step = doc.querySelector<HTMLElement>(
       "ytcp-video-monetization, ytcp-video-monetization-editor, #monetization-step",
@@ -298,55 +467,50 @@ export function previewStudioAction(
       positions.some(
         (value, index) =>
           !Number.isFinite(value) ||
-          value <= 0 ||
-          (index > 0 && value <= positions[index - 1]),
+          value < 1 ||
+          (index > 0 && Math.floor(value) <= Math.floor(positions[index - 1])),
       )
     ) {
       unsupported =
-        "Informe de 1 a 50 posições positivas em segundos, em ordem crescente.";
+        "Informe de 1 a 50 posições positivas em segundos, distintas após arredondamento e em ordem crescente.";
     } else {
-      const editors = Array.from(
-        doc.querySelectorAll(
-          "ytcp-ad-breaks-editor, ytcp-ad-break-editor, ytcp-video-ad-breaks-editor, ytcp-ad-break-editor-row",
-        ),
-      );
-      const candidates = unique(
-        editors.flatMap((editor) =>
-          Array.from(editor.querySelectorAll<HTMLInputElement>("input")),
-        ),
-      );
-      const labeled = Array.from(
-        doc.querySelectorAll<HTMLInputElement>("input[aria-label]"),
-      ).filter((element) =>
-        /^(ad slot start time|ad break time|horario do intervalo|inicio do intervalo)/.test(
-          normalize(label(element)),
-        ),
-      );
-      const fields = unique([...candidates, ...labeled]).filter(
-        (field) =>
-          enabled(field) &&
-          !field.readOnly &&
-          ["text", "time"].includes(field.type) &&
-          (field.type === "time" ||
-            /time|horario|inicio|timestamp/.test(normalize(label(field))) ||
-            /^\d{1,2}:\d{2}(?::\d{2})?$/.test(
-              field.value || field.placeholder,
-            )),
-      );
-      if (fields.length !== positions.length)
-        unsupported = `Abra o editor de anúncios e crie exatamente ${positions.length} intervalos editáveis. Foram reconhecidos ${fields.length} campos. Nenhuma alteração foi feita.`;
+      const editors = midrollEditors(doc);
+      if (editors.length !== 1)
+        unsupported = `Abra um único editor de intervalos reconhecido. Foram encontrados ${editors.length} editores visíveis.`;
       else {
-        steps.push(
-          ...fields.map((element, index) => ({
-            element,
-            signature: signature(element),
-            value: timestamp(positions[index]),
-          })),
-        );
-        description = `Preencher ${positions.length} intervalos abertos: ${positions.map(timestamp).join(", ")}.`;
-        notes.push(
-          "Apenas preenche os campos abertos. Revise, clique em Continuar e salve no próprio Studio. A entrega de anúncios não é garantida.",
-        );
+        const editor = editors[0];
+        const fields = midrollFields(editor);
+        const missing = positions.length - fields.length;
+        const addButtons = addMidrollButtons(editor);
+        if (missing < 0)
+          unsupported = `O editor contém ${fields.length} intervalos; a prévia possui ${positions.length} posições. Nenhum intervalo será apagado automaticamente.`;
+        else if (missing > 0 && addButtons.length !== 1)
+          unsupported = `São necessários ${missing} novos intervalos, mas não há um único botão Inserir intervalo reconhecido dentro do editor. Foram encontrados ${addButtons.length} controles elegíveis.`;
+        else {
+          midroll = {
+            editor,
+            fingerprint: editorFingerprint(editor),
+            ...(missing > 0
+              ? {
+                  addButton: addButtons[0],
+                  addSignature: signature(addButtons[0]),
+                }
+              : {}),
+            positions: Object.freeze([...positions]),
+            initialFields: fields,
+          };
+          steps.push(
+            ...fields.map((element, index) => ({
+              element,
+              signature: signature(element),
+              value: timestamp(positions[index]),
+            })),
+          );
+          description = `Preencher ${positions.length} intervalos (${missing} a criar): ${positions.map(timestamp).join(", ")}.`;
+          notes.push(
+            "Cria somente rascunhos por controles reconhecidos e preenche os horários. Não clica em Continuar nem Salvar; revise o resultado no Studio. A entrega de anúncios não é garantida.",
+          );
+        }
       }
     }
   } else unsupported = "Ação de Studio desconhecida.";
@@ -355,24 +519,38 @@ export function previewStudioAction(
     id: globalThis.crypto.randomUUID(),
     action,
     status: unsupported ? "unsupported" : "ready",
-    targetCount: unsupported ? 0 : steps.length,
+    targetCount: unsupported ? 0 : (midroll?.positions.length ?? steps.length),
+    ...(midroll
+      ? {
+          slotsToCreate:
+            midroll.positions.length - midroll.initialFields.length,
+          positions: Object.freeze(midroll.positions.map(timestamp)),
+        }
+      : {}),
     targets: Object.freeze(
       unsupported
         ? []
-        : steps.map((step) =>
-            Object.freeze({
-              control: label(step.element),
-              context: (
-                step.element.closest(
-                  "ytcp-comment-thread,ytcp-comment-thread-row,ytcp-comment",
-                )?.textContent ?? description
-              )
-                .replace(/\s+/g, " ")
-                .trim()
-                .slice(0, 220),
-              ...(step.value ? { value: step.value } : {}),
-            }),
-          ),
+        : midroll
+          ? midroll.positions.map((position, index) =>
+              Object.freeze({
+                control:
+                  index < midroll.initialFields.length
+                    ? label(midroll.initialFields[index])
+                    : `Criar: ${label(midroll.addButton!)}`,
+                context: description,
+                value: timestamp(position),
+              }),
+            )
+          : steps.map((step) =>
+              Object.freeze({
+                control: label(step.element),
+                context: (step.comment?.preview ?? description)
+                  .replace(/\s+/g, " ")
+                  .trim()
+                  .slice(0, 220),
+                ...(step.value ? { value: step.value } : {}),
+              }),
+            ),
     ),
     description: description || unsupported,
     warnings: Object.freeze(notes),
@@ -386,6 +564,7 @@ export function previewStudioAction(
       expires: now + ttl,
       steps,
       guards,
+      midroll,
       controller: new AbortController(),
       state: "pending",
     });
@@ -410,6 +589,139 @@ function wait(delay: number, signal: AbortSignal): Promise<void> {
   });
 }
 
+class StudioContextChanged extends Error {}
+
+function setFieldValue(
+  doc: Document,
+  field: HTMLInputElement,
+  value: string,
+): void {
+  const setter = Object.getOwnPropertyDescriptor(
+    doc.defaultView!.HTMLInputElement.prototype,
+    "value",
+  )?.set;
+  if (!setter) throw new Error("Campo sem setter de valor reconhecido.");
+  setter.call(field, value);
+  field.dispatchEvent(new doc.defaultView!.Event("input", { bubbles: true }));
+  field.dispatchEvent(new doc.defaultView!.Event("change", { bubbles: true }));
+}
+
+async function executeMidrolls(stored: StoredPlan): Promise<StudioExecution> {
+  const context = stored.midroll!;
+  const doc = stored.document;
+  const signal = stored.controller.signal;
+  const total = context.positions.length;
+  let submitted = 0;
+  let created = 0;
+  let addClicks = 0;
+  let expected = [...context.initialFields];
+  const signatures = new Map(
+    expected.map((field) => [field, signature(field)]),
+  );
+  const result = (
+    status: StudioExecution["status"],
+    message: string,
+  ): StudioExecution => ({
+    status,
+    submitted,
+    total,
+    created,
+    addClicks,
+    message,
+  });
+  const checkContext = () => {
+    if (signal.aborted) throw new Error("cancelled");
+    if (
+      doc.location.href !== stored.url ||
+      !midrollContextIsCurrent(context, doc)
+    )
+      throw new StudioContextChanged(
+        "O vídeo, editor ou botão de inserir mudou. A rotina foi interrompida.",
+      );
+  };
+  const checkFields = (allowNew = false): HTMLInputElement[] => {
+    checkContext();
+    const current = midrollFields(context.editor);
+    const oldInCurrentOrder = current.filter((field) =>
+      expected.includes(field),
+    );
+    if (
+      oldInCurrentOrder.length !== expected.length ||
+      oldInCurrentOrder.some((field, index) => field !== expected[index]) ||
+      expected.some((field) => signature(field) !== signatures.get(field)) ||
+      current.length < expected.length ||
+      current.length > expected.length + (allowNew ? 1 : 0)
+    ) {
+      throw new StudioContextChanged(
+        "Os campos de intervalo mudaram ou surgiram controles inesperados. Confira os rascunhos antes de continuar manualmente.",
+      );
+    }
+    return current;
+  };
+  try {
+    for (let index = 0; index < total; index++) {
+      checkFields();
+      let field = context.initialFields[index];
+      if (!field) {
+        const add = context.addButton;
+        if (!add || !enabled(add))
+          throw new StudioContextChanged(
+            "O botão Inserir intervalo não está disponível. Nenhum próximo clique será enviado.",
+          );
+        add.click();
+        addClicks++;
+        const deadline = Date.now() + 1000;
+        while (true) {
+          const current = checkFields(true);
+          const added = current.filter((item) => !expected.includes(item));
+          if (added.length === 1) {
+            field = added[0];
+            expected = current;
+            signatures.set(field, signature(field));
+            created++;
+            break;
+          }
+          if (Date.now() >= deadline)
+            throw new Error(
+              "O clique Inserir foi enviado, mas um único campo novo não apareceu em até 1 segundo. O estado do rascunho é incerto; confira o Studio. Nenhum próximo clique foi enviado.",
+            );
+          await wait(Math.min(25, deadline - Date.now()), signal);
+        }
+      }
+      checkFields();
+      setFieldValue(doc, field, timestamp(context.positions[index]));
+      submitted++;
+      if (
+        !field.isConnected ||
+        parseDuration(field.value) !== Math.floor(context.positions[index])
+      )
+        throw new StudioContextChanged(
+          "O campo não preservou o horário preenchido. A rotina foi interrompida; confira o rascunho.",
+        );
+      signatures.set(field, signature(field));
+      checkFields();
+      if (index + 1 < total) await wait(150, signal);
+    }
+    return result(
+      "completed",
+      "Intervalos criados/preenchidos em rascunho. Revise e use Continuar/Salvar manualmente no Studio; isto não confirma aceitação do servidor nem entrega de anúncios.",
+    );
+  } catch (error) {
+    return result(
+      signal.aborted
+        ? "cancelled"
+        : error instanceof StudioContextChanged
+          ? "stale"
+          : "error",
+      signal.aborted
+        ? "Execução cancelada. Um clique de inserção já enviado ainda pode criar um rascunho; confira o Studio. Nenhuma ação posterior foi enviada."
+        : error instanceof Error
+          ? error.message
+          : "Falha ao preencher intervalos.",
+    );
+  }
+}
+
 /** Call only from the explicit confirm action after displaying the complete preview. */
 export async function executeStudioPlan(
   planId: string,
@@ -428,23 +740,28 @@ export async function executeStudioPlan(
     return {
       status: "unsupported",
       submitted: 0,
-      total: stored.steps.length,
+      total: stored.midroll?.positions.length ?? stored.steps.length,
       message: "Esta prévia já está em execução.",
     };
   const { document: doc, steps, controller } = stored;
+  const total = stored.midroll?.positions.length ?? steps.length;
   if (
     Date.now() > stored.expires ||
     doc.location.href !== stored.url ||
-    [...steps, ...stored.guards].some(
-      (step) =>
-        !enabled(step.element) || signature(step.element) !== step.signature,
-    )
+    [...steps, ...stored.guards].some((step) => !stepIsCurrent(step)) ||
+    (stored.midroll &&
+      (!midrollContextIsCurrent(stored.midroll, doc) ||
+        midrollFields(stored.midroll.editor).length !==
+          stored.midroll.initialFields.length ||
+        midrollFields(stored.midroll.editor).some(
+          (field, index) => field !== stored.midroll!.initialFields[index],
+        )))
   ) {
     plans.delete(planId);
     return {
       status: "stale",
       submitted: 0,
-      total: steps.length,
+      total,
       message:
         "A página ou os controles mudaram. Gere uma nova prévia antes de confirmar.",
     };
@@ -456,6 +773,7 @@ export async function executeStudioPlan(
   if (signal?.aborted) controller.abort();
   let submitted = 0;
   try {
+    if (stored.midroll) return await executeMidrolls(stored);
     for (const step of steps) {
       if (controller.signal.aborted)
         return {
@@ -467,8 +785,8 @@ export async function executeStudioPlan(
         };
       if (
         doc.location.href !== stored.url ||
-        !enabled(step.element) ||
-        signature(step.element) !== step.signature
+        !stepIsCurrent(step) ||
+        stored.guards.some((guard) => !stepIsCurrent(guard))
       )
         return {
           status: "stale",
@@ -478,19 +796,7 @@ export async function executeStudioPlan(
             "Um controle mudou durante a execução. A rotina foi interrompida; confira o resultado no Studio.",
         };
       if (step.value !== undefined) {
-        const field = step.element as HTMLInputElement;
-        const setter = Object.getOwnPropertyDescriptor(
-          doc.defaultView!.HTMLInputElement.prototype,
-          "value",
-        )?.set;
-        if (!setter) throw new Error("Campo sem setter de valor reconhecido.");
-        setter.call(field, step.value);
-        field.dispatchEvent(
-          new doc.defaultView!.Event("input", { bubbles: true }),
-        );
-        field.dispatchEvent(
-          new doc.defaultView!.Event("change", { bubbles: true }),
-        );
+        setFieldValue(doc, step.element as HTMLInputElement, step.value);
       } else step.element.click();
       submitted++;
       if (submitted < steps.length) await wait(150, controller.signal);

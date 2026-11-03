@@ -22,6 +22,7 @@ import {
   sortVideos,
   filterComments,
   netProfit,
+  type VideoFilter,
 } from "../core/metrics";
 import { videoIdFromUrl } from "../core/parse";
 import { toCsv } from "../core/export";
@@ -63,6 +64,35 @@ let image: File | undefined;
 let previewUrl: string | undefined;
 let silences: Silence[] = [];
 let silenceDuration: number | undefined;
+let channelVideos: VideoRecord[] = [];
+interface TimelineView {
+  available: boolean;
+  currentTime: number;
+  duration?: number;
+  paused: boolean;
+  videoId?: string;
+  segments: TranscriptSegment[];
+  limitations: string[];
+}
+let timeline: TimelineView | undefined;
+const filterIds = [
+  "video-filter",
+  "channel-filter",
+  "min-views",
+  "max-views",
+  "min-subscribers",
+  "max-subscribers",
+  "min-duration",
+  "max-duration",
+  "min-vph",
+  "max-vph",
+  "min-outlier",
+  "max-outlier",
+  "published-after",
+  "published-before",
+  "short-filter",
+  "sort",
+];
 const compact = (n?: number) =>
   n === undefined
     ? "—"
@@ -168,12 +198,17 @@ on("enrich", async () => {
     "Consultando até 10 canais públicos no YouTube, sem enviar credenciais…",
   );
   try {
+    const tabId = targetTab();
     const result = await chrome.runtime.sendMessage({
       type: "ENRICH_CHANNELS",
       videos: snapshot.videos,
     });
     if (result.status !== "ok") throw new Error(result.error);
     snapshot.videos = result.videos as VideoRecord[];
+    await chrome.tabs.sendMessage(tabId, {
+      type: "SET_ENRICHMENT",
+      videos: snapshot.videos,
+    });
     await chrome.storage.local.set({ snapshot });
     renderVideos();
     notice(
@@ -183,22 +218,47 @@ on("enrich", async () => {
     $<HTMLButtonElement>("enrich").disabled = false;
   }
 });
-function visibleVideos() {
+function readVideoFilter(): VideoFilter {
+  const optional = (id: string) => (value(id) === "" ? undefined : num(id));
   const mode = value("short-filter");
+  return {
+    query: value("video-filter"),
+    channel: value("channel-filter"),
+    minViews: optional("min-views"),
+    maxViews: optional("max-views"),
+    minSubscribers: optional("min-subscribers"),
+    maxSubscribers: optional("max-subscribers"),
+    minDurationSeconds: optional("min-duration"),
+    maxDurationSeconds: optional("max-duration"),
+    minVph: optional("min-vph"),
+    maxVph: optional("max-vph"),
+    minOutlier: optional("min-outlier"),
+    maxOutlier: optional("max-outlier"),
+    publishedAfter: value("published-after") || undefined,
+    publishedBefore: value("published-before") || undefined,
+    shorts: mode === "shorts" ? "only" : mode === "long" ? "exclude" : "all",
+  };
+}
+function visibleVideos() {
   return sortVideos(
-    filterVideos(snapshot.videos, {
-      query: value("video-filter"),
-      minViews: value("min-views") ? num("min-views") : undefined,
-      shorts: mode === "shorts" ? "only" : mode === "long" ? "exclude" : "all",
-    }),
+    filterVideos(snapshot.videos, readVideoFilter()),
     value("sort") === "date"
       ? "recent"
-      : (value("sort") as "views" | "vph" | "title"),
+      : (value("sort") as
+          | "views"
+          | "vph"
+          | "title"
+          | "outlier"
+          | "duration"
+          | "subscribers"),
+    Date.now(),
+    snapshot.videos,
   );
 }
 function renderVideos() {
   const videos = visibleVideos(),
     body = $("video-rows");
+  renderMetrics(videos);
   body.replaceChildren();
   $("video-count").textContent = `(${videos.length})`;
   for (const video of videos) {
@@ -215,6 +275,12 @@ function renderVideos() {
       compact(lifetimeVph(video)),
       outlierScore(video, snapshot.videos)?.toFixed(1).concat("×") ?? "—",
       compact(video.subscribers),
+      video.durationSeconds === undefined
+        ? "—"
+        : `${Math.floor(video.durationSeconds / 60)}:${String(Math.floor(video.durationSeconds % 60)).padStart(2, "0")}`,
+      video.publishedAt
+        ? new Date(video.publishedAt).toLocaleDateString("pt-BR")
+        : "—",
     ])
       row.append(element("td", val));
     const action = element("td"),
@@ -232,7 +298,7 @@ function renderVideos() {
         "td",
         "Nenhum vídeo carregado corresponde aos filtros. Abra o YouTube e colete a aba.",
       );
-    cell.colSpan = 6;
+    cell.colSpan = 8;
     row.append(cell);
     body.append(row);
   }
@@ -265,25 +331,29 @@ function renderComments() {
       element("p", "Nenhum comentário carregado corresponde ao filtro."),
     );
 }
-function render() {
-  const summary = summarizeVideos(snapshot.videos);
+function renderMetrics(videos: VideoRecord[]) {
+  const summary = summarizeVideos(videos);
   $("metrics").replaceChildren();
   for (const [name, val, note] of [
-    ["VÍDEOS NA AMOSTRA", compact(summary.count), "Somente os carregados"],
+    [
+      "VÍDEOS FILTRADOS",
+      compact(summary.count),
+      `${summary.shorts} Shorts identificados`,
+    ],
     [
       "VIEWS CONHECIDAS",
-      compact(summary.totalViews),
+      compact(summary.knownViews ? summary.totalViews : undefined),
       `${summary.knownViews} vídeos com dados`,
     ],
     [
       "MEDIANA DE VIEWS",
       compact(summary.medianViews),
-      "Referência desta amostra",
+      `Média ${compact(summary.meanViews)} · amostra filtrada`,
     ],
     [
-      "SHORTS IDENTIFICADOS",
-      compact(summary.shorts),
-      "Formato obtido dos cards",
+      "MEDIANA DE VPH MÉDIO",
+      compact(summary.medianVph),
+      "Desde a publicação; não é a última hora",
     ],
   ]) {
     const card = element("div");
@@ -295,6 +365,8 @@ function render() {
     );
     $("metrics").append(card);
   }
+}
+function render() {
   renderVideos();
   renderComments();
   $("current-video").textContent =
@@ -308,9 +380,55 @@ function render() {
     );
   $<HTMLInputElement>("swipe-title").value = snapshot.title;
   $<HTMLInputElement>("swipe-url").value = snapshot.url;
+  if (!value("channel-url"))
+    $<HTMLInputElement>("channel-url").value =
+      snapshot.videos.find((v) => v.id === snapshot.videoId)?.channelUrl ??
+      snapshot.videos.find((v) => v.channelUrl)?.channelUrl ??
+      (/^https:\/\/www\.youtube\.com\/(?:@|channel\/)/.test(snapshot.url)
+        ? snapshot.url.replace(
+            /\/(?:videos|shorts|featured|about)(?:[?#].*)?$/,
+            "",
+          )
+        : "");
 }
-for (const id of ["video-filter", "min-views", "short-filter", "sort"])
-  $(id).addEventListener("input", renderVideos);
+for (const id of filterIds)
+  $(id).addEventListener("input", () => {
+    try {
+      renderVideos();
+      if ($("notice").classList.contains("error"))
+        notice("Filtros atualizados na amostra coletada.");
+    } catch (error) {
+      fail(error);
+    }
+  });
+on("reset-filters", () => {
+  for (const id of filterIds)
+    $<HTMLInputElement>(id).value =
+      id === "short-filter" ? "all" : id === "sort" ? "views" : "";
+  renderVideos();
+  notice("Filtros do painel limpos.");
+});
+on("apply-page-filter", async () => {
+  visibleVideos();
+  const result = await tabMessage<{ visible: number; total: number }>(
+    "APPLY_FILTER",
+    {
+      filter: {
+        ...readVideoFilter(),
+        sort: value("sort") === "date" ? "recent" : value("sort"),
+      },
+    },
+  );
+  notice(
+    `Filtros aplicados na aba: ${result.visible} de ${result.total} cards visíveis.`,
+  );
+});
+on("clear-page-filter", async () => {
+  await tabMessage("CLEAR_FILTER");
+  notice(
+    "Filtros da aba YouTube removidos. A preferência Ocultar Shorts continua ativa se selecionada.",
+  );
+});
 for (const id of ["comment-filter", "comment-likes", "comment-questions"])
   $(id).addEventListener("input", renderComments);
 on("export-json", () =>
@@ -353,24 +471,25 @@ on("frame", async () => {
 });
 async function screenshot(kind: string) {
   const tabId = targetTab();
-  const details = (await chrome.tabs.sendMessage(tabId, {
-    type: "CAPTURE_CARD",
-    kind,
-    redact: $<HTMLInputElement>("redact").checked,
-  })) as {
-    status: string;
-    error?: string;
-    rect: Rect;
-    redactions: Rect[];
-    viewportWidth: number;
-  };
-  if (details.status !== "ok")
-    throw new Error(details.error ?? "Área de captura indisponível.");
   const capture = await chrome.runtime.sendMessage({
     type: "CAPTURE_SCREENSHOT",
     tabId,
+    kind,
+    redact: $<HTMLInputElement>("redact").checked,
   });
   if (capture.status !== "ok") throw new Error(capture.error);
+  const details = capture.capture as
+    | {
+        rect: Rect;
+        redactions: Rect[];
+        viewportWidth: number;
+        captureStamp: string;
+      }
+    | undefined;
+  if (!details?.captureStamp || !details.rect || !details.viewportWidth)
+    throw new Error(
+      "A captura não retornou uma medição validada; imagem descartada.",
+    );
   const image = await loadImage(capture.dataUrl);
   downloadBlob(
     await cropScreenshot(
@@ -388,6 +507,193 @@ async function screenshot(kind: string) {
 on("card-shot", () => screenshot("video"));
 on("analytics-shot", () => screenshot("analytics"));
 on("latest-shot", () => screenshot("latest-performance"));
+function renderChannel() {
+  for (const [id, sort] of [
+    ["channel-recent", "recent"],
+    ["channel-popular", "views"],
+  ] as const) {
+    const container = $(id);
+    container.replaceChildren();
+    const records = sortVideos(channelVideos, sort).slice(0, 10);
+    for (const video of records) {
+      const row = element("article");
+      row.className = "channel-video";
+      const a = element("a", video.title);
+      a.href = safeLink(video.url);
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      row.append(
+        a,
+        element(
+          "small",
+          `${compact(video.views)} views · ${video.publishedAt ? new Date(video.publishedAt).toLocaleDateString("pt-BR") : "data indisponível"}`,
+        ),
+      );
+      const save = element("button", "+ Salvar referência");
+      save.addEventListener("click", () => {
+        void saveVideo(video).catch(fail);
+      });
+      row.append(save);
+      container.append(row);
+    }
+    if (!records.length)
+      container.append(element("p", "Nenhum vídeo disponível nesta amostra."));
+  }
+  $<HTMLButtonElement>("channel-use").disabled = !channelVideos.length;
+}
+on("channel-load", async () => {
+  $<HTMLButtonElement>("channel-load").disabled = true;
+  notice("Consultando a primeira página pública do canal no YouTube…");
+  try {
+    const r = await chrome.runtime.sendMessage({
+      type: "CHANNEL_RESEARCH",
+      channelUrl: value("channel-url").trim(),
+    });
+    if (r.status !== "ok") throw new Error(r.error);
+    const data = r.data as {
+      videos: VideoRecord[];
+      channelUrl: string;
+      channelName?: string;
+      warnings: string[];
+    };
+    channelVideos = data.videos;
+    renderChannel();
+    $("channel-source").textContent =
+      `${data.channelName ?? data.channelUrl} · ${channelVideos.length} vídeos encontrados na primeira resposta pública. ${data.warnings.join(" ")}`;
+    notice(
+      "Amostra pública carregada. A lista não representa todo o catálogo do canal.",
+    );
+  } finally {
+    $<HTMLButtonElement>("channel-load").disabled = false;
+  }
+});
+on("channel-loaded", () => {
+  const url = value("channel-url").trim().replace(/\/$/, "");
+  channelVideos = snapshot.videos.filter(
+    (v) => !url || v.channelUrl?.replace(/\/$/, "") === url,
+  );
+  renderChannel();
+  $("channel-source").textContent =
+    `${channelVideos.length} vídeos da coleta atual${url ? " com URL de canal correspondente" : ""}. Não foi feita consulta de rede.`;
+});
+on("channel-use", async () => {
+  const videos = new Map(snapshot.videos.map((v) => [v.id, v]));
+  for (const video of channelVideos)
+    videos.set(video.id, { ...videos.get(video.id), ...video });
+  snapshot.videos = [...videos.values()];
+  await chrome.storage.local.set({ snapshot });
+  render();
+  notice(
+    `${channelVideos.length} vídeos da amostra do canal adicionados à pesquisa.`,
+  );
+});
+on("sample-monetization", async () => {
+  const videos = channelVideos.length ? channelVideos : snapshot.videos;
+  if (!videos.length)
+    throw new Error("Colete vídeos ou consulte um canal primeiro.");
+  $<HTMLButtonElement>("sample-monetization").disabled = true;
+  notice("Examinando marcadores em páginas públicas de uma amostra limitada…");
+  try {
+    const r = await chrome.runtime.sendMessage({
+      type: "SAMPLE_MONETIZATION",
+      videos,
+      maxSamples: num("monetization-count"),
+    });
+    if (r.status !== "ok") throw new Error(r.error);
+    $("channel-monetization").textContent = JSON.stringify(r.data, null, 2);
+    notice(
+      "Amostra examinada. O resultado não confirma receita nem monetização do canal.",
+    );
+  } finally {
+    $<HTMLButtonElement>("sample-monetization").disabled = false;
+  }
+});
+function timeLabel(seconds: number) {
+  const value = Math.max(0, Math.floor(seconds));
+  return `${Math.floor(value / 60)}:${String(value % 60).padStart(2, "0")}`;
+}
+function renderTimeline() {
+  const state = timeline;
+  const slider = $<HTMLInputElement>("timeline-range");
+  slider.disabled = !state?.available || !state.duration;
+  slider.max = String(state?.duration ?? 0);
+  slider.value = String(state?.currentTime ?? 0);
+  $("timeline-state").textContent = state?.available
+    ? `${timeLabel(state.currentTime)} / ${state.duration ? timeLabel(state.duration) : "duração indisponível"} · ${state.paused ? "Pausado" : "Reproduzindo"} · ${state.limitations.join(" ")}`
+    : "Nenhum vídeo carregado na aba selecionada.";
+  const list = $("timeline-segments");
+  list.replaceChildren();
+  const query = value("timeline-query").toLocaleLowerCase();
+  for (const segment of (state?.segments ?? [])
+    .filter((s) => !query || s.text.toLocaleLowerCase().includes(query))
+    .slice(0, 500)) {
+    const b = element(
+      "button",
+      `${timeLabel(segment.start)} · ${segment.text}`,
+    );
+    b.addEventListener("click", () => {
+      void updateTimeline("SEEK_VIDEO", {
+        seconds: segment.start,
+        expectedVideoId: state?.videoId,
+      }).catch(fail);
+    });
+    list.append(b);
+  }
+  if (!list.childNodes.length)
+    list.append(
+      element(
+        "p",
+        "Abra a transcrição no YouTube e atualize a timeline para navegar por trechos.",
+      ),
+    );
+}
+async function updateTimeline(
+  type = "GET_TIMELINE",
+  extra: Record<string, unknown> = {},
+) {
+  const r = await tabMessage<{ state: TimelineView }>(type, extra);
+  if (!r.state)
+    throw new Error(
+      "O content script não disponibilizou a timeline. Recarregue a aba YouTube.",
+    );
+  timeline = r.state;
+  renderTimeline();
+}
+on("timeline-refresh", () => updateTimeline());
+on("timeline-toggle", () =>
+  updateTimeline("TOGGLE_PLAYBACK", { expectedVideoId: timeline?.videoId }),
+);
+for (const [id, delta] of [
+  ["timeline-back", -5],
+  ["timeline-forward", 5],
+  ["timeline-frame-back", -1 / 30],
+  ["timeline-frame-forward", 1 / 30],
+] as const)
+  on(id, async () => {
+    if (!timeline?.available) await updateTimeline();
+    if (!timeline?.available)
+      throw new Error("Abra um vídeo na aba selecionada.");
+    await updateTimeline("SEEK_VIDEO", {
+      seconds: Math.max(0, timeline.currentTime + delta),
+      expectedVideoId: timeline.videoId,
+    });
+  });
+$("timeline-range").addEventListener("change", () => {
+  void updateTimeline("SEEK_VIDEO", {
+    seconds: num("timeline-range"),
+    expectedVideoId: timeline?.videoId,
+  }).catch(fail);
+});
+$("timeline-query").addEventListener("input", renderTimeline);
+$("tab-select").addEventListener("change", () => {
+  timeline = undefined;
+  renderTimeline();
+});
+on("timeline-capture", async () => {
+  const r = await tabMessage<{ dataUrl: string }>("CAPTURE_FRAME");
+  downloadBlob(await (await fetch(r.dataUrl)).blob(), "prevlev-frame.png");
+  notice("Frame capturado localmente.");
+});
 $("image-file").addEventListener("change", () => {
   image = $<HTMLInputElement>("image-file").files?.[0];
   $("image-info").textContent = image

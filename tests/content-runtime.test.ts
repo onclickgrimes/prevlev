@@ -98,6 +98,40 @@ it("inicia sem alterar canal, oculta Shorts e responde somente à própria exten
     status: "ok",
     redactions: [{ x: 30, y: 40, width: 80, height: 30 }],
   });
+  const stamp = async () =>
+    ((await requestCapture()) as { captureStamp: string }).captureStamp;
+  const stableStamp = await stamp();
+  expect(await stamp()).toBe(stableStamp);
+  // A viewport can move and return to the same coordinates while the screenshot is pending.
+  window.dispatchEvent(new Event("scroll"));
+  expect(await stamp()).not.toBe(stableStamp);
+  const beforeResizeEvent = await stamp();
+  window.dispatchEvent(new Event("resize"));
+  expect(await stamp()).not.toBe(beforeResizeEvent);
+  const originalWidth = window.innerWidth;
+  Object.defineProperty(window, "innerWidth", {
+    configurable: true,
+    value: originalWidth + 1,
+  });
+  expect(await stamp()).not.toBe(stableStamp);
+  Object.defineProperty(window, "innerWidth", {
+    configurable: true,
+    value: originalWidth,
+  });
+  const beforeScroll = await stamp();
+  Object.defineProperty(window, "scrollY", { configurable: true, value: 25 });
+  expect(await stamp()).not.toBe(beforeScroll);
+  Object.defineProperty(window, "scrollY", { configurable: true, value: 0 });
+  const beforeMove = await stamp();
+  sensitive.getBoundingClientRect = () => rect(50, 40, 80, 30);
+  expect(await stamp()).not.toBe(beforeMove);
+  // Same-node text changes outside the selected card still invalidate a pending capture.
+  const beforeText = await stamp();
+  heart.firstChild!.nodeValue = "Coração alterado";
+  expect(await stamp()).not.toBe(beforeText);
+  const beforeAttribute = await stamp();
+  heart.setAttribute("aria-label", "Novo coração");
+  expect(await stamp()).not.toBe(beforeAttribute);
   const shadow = document.querySelector("#prevlev-controls")!.shadowRoot!;
   const query = shadow.querySelector<HTMLInputElement>("#query")!;
   query.value = "novo";

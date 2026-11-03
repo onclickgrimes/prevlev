@@ -15,6 +15,7 @@
         <div class="sidebar-label">ESPAÇO DE TRABALHO</div>
         <nav aria-label="Ferramentas">
           <button data-page="research" class="active">◈ &nbsp; Pesquisa</button
+          ><button data-page="channel">▥ &nbsp; Canal</button
           ><button data-page="images">▧ &nbsp; Imagens</button
           ><button data-page="transcript">≋ &nbsp; Transcrição</button
           ><button data-page="comments">☷ &nbsp; Comentários</button
@@ -28,7 +29,7 @@
           <p>
             Seus dados ficam aqui até você solicitar uma análise no seu backend.
           </p>
-          <span class="pill">VERSÃO 0.1 · INDEPENDENTE</span>
+          <span class="pill">VERSÃO 0.2 · INDEPENDENTE</span>
         </div>
       </aside>
       <main>
@@ -84,6 +85,9 @@
                 <option value="views">Mais visualizações</option>
                 <option value="vph">Maior VPH estimado</option>
                 <option value="date">Mais recentes</option>
+                <option value="outlier">Maior outlier</option>
+                <option value="duration">Maior duração</option>
+                <option value="subscribers">Mais inscritos</option>
                 <option value="title">Título</option></select
               ><select id="short-filter">
                 <option value="all">Todos os formatos</option>
@@ -97,6 +101,85 @@
                 aria-label="Views mínimas"
               />
             </div>
+            <details class="advanced-filters">
+              <summary>Filtros por métricas, duração e data</summary>
+              <div class="form-grid">
+                <label
+                  >Canal<input id="channel-filter" placeholder="Nome do canal"
+                /></label>
+                <label
+                  >Views máximas<input id="max-views" type="number" min="0"
+                /></label>
+                <label
+                  >Inscritos mínimos<input
+                    id="min-subscribers"
+                    type="number"
+                    min="0" /></label
+                ><label
+                  >Inscritos máximos<input
+                    id="max-subscribers"
+                    type="number"
+                    min="0"
+                /></label>
+                <label
+                  >Duração mínima (s)<input
+                    id="min-duration"
+                    type="number"
+                    min="0" /></label
+                ><label
+                  >Duração máxima (s)<input
+                    id="max-duration"
+                    type="number"
+                    min="0"
+                /></label>
+                <label
+                  >VPH médio mínimo<input
+                    id="min-vph"
+                    type="number"
+                    min="0"
+                    step="0.1" /></label
+                ><label
+                  >VPH médio máximo<input
+                    id="max-vph"
+                    type="number"
+                    min="0"
+                    step="0.1"
+                /></label>
+                <label
+                  >Outlier mínimo (×)<input
+                    id="min-outlier"
+                    type="number"
+                    min="0"
+                    step="0.1" /></label
+                ><label
+                  >Outlier máximo (×)<input
+                    id="max-outlier"
+                    type="number"
+                    min="0"
+                    step="0.1"
+                /></label>
+                <label
+                  >Publicado desde<input
+                    id="published-after"
+                    type="date" /></label
+                ><label
+                  >Publicado até<input id="published-before" type="date"
+                /></label>
+              </div>
+              <p class="footnote">
+                Limites inclusivos. Datas usam dias UTC; valores desconhecidos
+                ficam fora de um filtro que exige essa métrica. O outlier mantém
+                a referência da amostra inteira.
+              </p>
+            </details>
+            <div class="actions">
+              <button id="reset-filters">Limpar filtros do painel</button
+              ><button id="apply-page-filter">
+                Aplicar estes filtros na aba YouTube</button
+              ><button id="clear-page-filter">
+                Restaurar cards na aba YouTube
+              </button>
+            </div>
             <div class="table-wrap">
               <table>
                 <thead>
@@ -106,6 +189,8 @@
                     <th>VPH MÉDIO*</th>
                     <th>OUTLIER*</th>
                     <th>INSCRITOS</th>
+                    <th>DURAÇÃO</th>
+                    <th>PUBLICAÇÃO</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -128,6 +213,63 @@
               ><button id="card-shot">Capturar card</button>
             </div>
             <pre id="video-result"></pre>
+          </div>
+        </section>
+        <section id="channel" class="page" hidden>
+          <div class="section-intro">
+            <h2>Os vídeos do canal, em perspectiva.</h2>
+            <p>
+              Compare recentes e populares da amostra carregada ou consulte a
+              primeira página pública do canal no YouTube.
+            </p>
+          </div>
+          <div class="card">
+            <div class="form-grid">
+              <label
+                >Canal público (URL /@handle ou /channel/ID)<input
+                  id="channel-url"
+                  type="url"
+                  placeholder="https://www.youtube.com/@canal"
+              /></label>
+            </div>
+            <div class="actions">
+              <button id="channel-load" class="primary">
+                Consultar página pública</button
+              ><button id="channel-loaded">Usar vídeos já coletados</button
+              ><button id="channel-use" disabled>
+                Adicionar esta amostra à pesquisa
+              </button>
+            </div>
+            <p id="channel-source" class="muted">
+              Nenhum canal consultado. Não é necessário configurar backend.
+            </p>
+          </div>
+          <div class="grid two">
+            <div class="card">
+              <h2>Mais recentes disponíveis</h2>
+              <div id="channel-recent"></div>
+            </div>
+            <div class="card">
+              <h2>Mais populares disponíveis</h2>
+              <div id="channel-popular"></div>
+            </div>
+          </div>
+          <div class="card">
+            <h2>Marcadores de monetização por amostra</h2>
+            <p class="muted">
+              Consulta páginas públicas de até cinco vídeos desta amostra.
+              Marcadores de anúncio ou música não confirmam monetização do canal
+              ou receita do criador.
+            </p>
+            <label
+              >Quantidade de vídeos<input
+                id="monetization-count"
+                type="number"
+                min="1"
+                max="5"
+                value="3" /></label
+            ><button id="sample-monetization">Examinar amostra pública</button>
+            <pre id="channel-monetization"></pre>
           </div>
         </section>
         <section id="images" class="page" hidden>
@@ -204,6 +346,43 @@
           </div>
         </section>
         <section id="transcript" class="page" hidden>
+          <div class="card">
+            <div class="row">
+              <h2>Timeline do vídeo na aba selecionada</h2>
+              <button id="timeline-refresh">Atualizar timeline</button>
+            </div>
+            <p id="timeline-state" class="muted">
+              Conecte um vídeo carregado no YouTube.
+            </p>
+            <label
+              >Posição do vídeo<input
+                id="timeline-range"
+                type="range"
+                min="0"
+                max="0"
+                value="0"
+                step="0.1"
+                disabled
+            /></label>
+            <div class="actions">
+              <button id="timeline-back">−5 s</button
+              ><button id="timeline-toggle">Reproduzir / pausar</button
+              ><button id="timeline-forward">+5 s</button
+              ><button id="timeline-frame-back">−1/30 s</button
+              ><button id="timeline-frame-forward">+1/30 s</button
+              ><button id="timeline-capture">Capturar frame atual</button>
+            </div>
+            <label
+              >Buscar na transcrição com timestamps<input
+                id="timeline-query"
+                placeholder="Palavra ou trecho"
+            /></label>
+            <div id="timeline-segments" class="timeline-segments"></div>
+            <p class="footnote">
+              Passo de frame estimado em 1/30 s; não detecta a taxa de quadros
+              do arquivo. Busca e leitura usam a transcrição aberta no YouTube.
+            </p>
+          </div>
           <div class="card">
             <h2>Transcrição visível no YouTube</h2>
             <p class="muted">
@@ -329,7 +508,7 @@
                 Avançar etapa de monetização
               </option>
               <option value="midrolls">
-                Preencher intervalos de mid-roll abertos
+                Criar ou preencher intervalos mid-roll reconhecidos
               </option>
             </select>
             <div class="form-grid">

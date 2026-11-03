@@ -1,4 +1,4 @@
-# Prevlev
+# Prevlev · v0.2.0
 
 Extensão Chrome Manifest V3 independente para pesquisar vídeos, preparar imagens e operar ferramentas assistidas no YouTube/Studio. O núcleo funciona no navegador; análises de amostra e IA usam um backend próprio opcional.
 
@@ -25,16 +25,20 @@ A coleta considera o conteúdo carregado na página: não percorre automaticamen
 
 ## O que está disponível
 
-- Filtros e ordenação de vídeos carregados, ocultação de Shorts, contagens, VPH médio e outlier com referência explícita da amostra.
+- Filtros completos de vídeos carregados por título/canal, views, inscritos, duração, VPH, outlier, datas e formato, com ordenação e ações explícitas para aplicar/restaurar os cards no YouTube.
+- Painel de canal com recentes/populares da primeira resposta HTML pública e análise de marcadores de monetização em até cinco vídeos da amostra.
 - Coleta, filtro, cópia e exportação de comentários; transcrição visível/importada com exportação TXT, VTT e Markdown.
+- Timeline do player nativo com busca por trechos, seleção/cópia/exportação da transcrição, posicionamento, reprodução/pausa e captura de frame.
 - Compressão proporcional de imagens, prévia de thumbnail/título, download/cópia de thumbnails públicas e captura de frame ou de áreas visíveis.
 - Calculadora de lucro, leitura de métricas visíveis e ações assistidas no Studio com prévia, confirmação e cancelamento.
 - Swipe File local com referências, pastas por nome e importação/exportação JSON.
 - Backend opcional com relatórios sobre os dados enviados, similaridade lexical, registro de observações de views e adaptador configurável de IA.
 
-VPH é a média de views desde a publicação, e não as visualizações da última hora. Outlier usa os vídeos comparáveis da amostra. Marcadores de anúncios não confirmam que um criador recebe receita. Não são produzidos valores de RPM, geografia ou receita de canais a partir de dados ausentes.
+VPH é a média de views desde a publicação, e não as visualizações da última hora. Outlier usa pelo menos três outros vídeos comparáveis da amostra. Quando há identidade de canal conhecida, não mistura canais ou referências sem identidade; quando o alvo não tem identidade, a referência é a amostra informada. Marcadores de anúncios não confirmam que um criador recebe receita. Não são produzidos valores de RPM, geografia ou receita de canais a partir de dados ausentes.
 
 O enriquecimento de inscritos é manual: consulta páginas públicas do YouTube de até dez canais por ação, sem credenciais, preservando como desconhecidas as contagens ausentes. A análise de silêncios para mid-roll usa um arquivo de áudio local escolhido pelo usuário; o arquivo não é enviado ao backend.
+
+O painel de canal não pagina a coleção e ordena apenas os vídeos reconhecidos no HTML inicial. “Mais populares” significa mais views dentro dessa amostra. A timeline usa a duração disponível no player e recusa comandos se a identidade do vídeo mudar. O passo de 1/30 s é estimado; a extensão não detecta o FPS real nem promete precisão de um frame.
 
 ## Backend e IA opcionais
 
@@ -48,7 +52,9 @@ Para hospedagem pública ainda é necessário escolher infraestrutura, HTTPS, au
 
 Nenhuma alteração de canal é iniciada ao carregar uma página. Operações de corações, monetização e intervalos exigem uma prévia com os controles reconhecidos e confirmação explícita. A prévia expira, é de uso único e é recusada se os controles mudarem. Cancelar interrompe as próximas ações, sem desfazer cliques já enviados.
 
-O adaptador de mid-roll preenche intervalos **já abertos**, deixando criação e salvamento para o usuário. O avanço de monetização preserva a escolha já feita e não responde questionários de adequação. Períodos personalizados exigem seletor aberto com campos reconhecidos. Layouts desconhecidos resultam em mensagem de indisponibilidade. Os adaptadores foram verificados em fixtures, sem operação em canal real.
+O adaptador de mid-roll apresenta posições e quantidade de novos intervalos na prévia. Após confirmação, preenche os campos existentes e pode criar **rascunhos** pelo botão Inserir reconhecido dentro de um único editor, aguardando até um segundo por novo campo. Não clica em **Continuar** nem **Salvar**; revisão e salvamento ficam com o usuário. O avanço de monetização preserva a escolha já feita e não responde questionários de adequação. Períodos personalizados exigem seletor aberto com campos reconhecidos. Layouts desconhecidos resultam em mensagem de indisponibilidade. Os adaptadores foram verificados em fixtures, sem operação em canal real.
+
+Corações são vinculados ao comentário revisado por identidade, autor e texto. Antes de cada clique, o adaptador revalida o contexto e interrompe se a interface reciclar o mesmo botão para outro comentário. Isso não confirma a aceitação do clique pelo servidor YouTube.
 
 ## Desenvolvimento e verificação
 
@@ -62,7 +68,9 @@ npm run test:ui
 
 Os testes cobrem cálculos e incertezas, parsing PT/EN, dados ausentes, coleta em fixtures, transcrição, exportação, limites de mídia, confirmação/cancelamento do Studio e chamadas HTTP do backend em loopback. O adaptador de IA usa fixtures e respostas simuladas identificadas somente nos testes. A aprovação dessas verificações não comprova compatibilidade com todos os layouts ou uma integração real com provedor externo.
 
-`test:ui` requer o build em `dist/` e um Chromium disponível. Quatro testes de UI passaram usando fixtures das APIs Chrome: salvar/exportar Swipe File, canvas real para imagens e integração dos bundles próprios `workspace.js`/`content.js` para prévia, confirmação, cancelamento e recusa de alvo alterado no Studio. Nos testes de Studio todas as URLs são interceptadas, sem contato com YouTube ou conta real. Os dois testes de extensão instalada foram explicitamente ignorados porque a política gerenciada deste ambiente contém `ExtensionInstallBlocklist=[*]`. Não houve contorno da política; esses testes não contam como aprovados. A verificação separada por tipo de evidência está na [matriz de cobertura](docs/FEATURES.md).
+`test:ui` requer o build em `dist/` e um Chromium disponível. Nove testes de navegador em fixtures passaram: dois de UI/canvas, quatro de Studio e três de pesquisa/timeline. Os cenários integrados usam os bundles próprios `workspace.js`/`content.js` com transporte Chrome simulado e URLs interceptadas, sem conta real. Os dois testes de extensão instalada foram explicitamente ignorados porque a política gerenciada deste ambiente contém `ExtensionInstallBlocklist=[*]`. Não houve contorno da política; esses testes não contam como aprovados.
+
+Uma tentativa anônima de consultar `https://www.youtube.com/@YouTube/videos` retornou `fetch failed` neste ambiente. O parser público tem testes em fixtures; compatibilidade com a fonte atual, seletores reais do Studio e aceitação de ações pelo servidor continuam sem validação. A [matriz de cobertura](docs/FEATURES.md) separa implementação local, runtime pendente e configuração/trabalho de produto.
 
 | Diretório           | Responsabilidade                                                            |
 | ------------------- | --------------------------------------------------------------------------- |
@@ -74,6 +82,12 @@ Os testes cobrem cálculos e incertezas, parsing PT/EN, dados ausentes, coleta e
 | `server`            | Servidor próprio, análises do dataset e adaptador opcional de IA            |
 | `tests`             | Testes unitários e integração em fixtures/loopback                          |
 | `docs`              | Cobertura, backend e privacidade                                            |
+
+Capturas ativam a aba e medem o alvo antes e depois de capturar. Mudanças detectadas em URL, viewport, rolagem, revisão do DOM, geometria ou identidade dos campos sensíveis descartam a imagem. Isso reduz capturas inconsistentes; a ocultação cobre apenas os campos reconhecidos e não garante anonimização total.
+
+## Pendências além do runtime
+
+Configurar IA exige escolher backend/provedor/modelos e fornecer credenciais no servidor. Pesquisa global exige uma fonte autorizada e integração adicional. Insights privados do Studio, dados financeiros indisponíveis, sincronização em nuvem, autenticação multiusuário e MCP não estão implementados. Configurar a URL do backend não cria essas integrações: o backend incluído continua trabalhando sobre os dados enviados.
 
 ## Método e limites da reconstrução
 

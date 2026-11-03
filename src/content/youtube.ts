@@ -10,6 +10,12 @@ import {
   parsePublishedAt,
   videoIdFromUrl,
 } from "../core/parse";
+import {
+  filterVideos,
+  sortVideos,
+  validateVideoFilter,
+  type VideoFilter,
+} from "../core/metrics";
 
 export const CARD_SELECTOR =
   "ytd-rich-item-renderer,ytd-video-renderer,ytd-grid-video-renderer,ytd-compact-video-renderer,yt-lockup-view-model,ytd-reel-item-renderer,ytm-shorts-lockup-view-model";
@@ -275,32 +281,102 @@ export function readYouTubeSnapshot(
   };
 }
 
-export interface CardFilter {
-  query: string;
-  minimumViews: number;
-  shorts: "all" | "only" | "exclude";
-  sort: "default" | "views" | "vph";
+export type CardSort =
+  | "default"
+  | "views"
+  | "vph"
+  | "outlier"
+  | "recent"
+  | "duration"
+  | "subscribers"
+  | "title";
+export interface CardFilter extends VideoFilter {
+  minimumViews?: number;
+  sort: CardSort;
+}
+export const cardSorts: readonly CardSort[] = [
+  "default",
+  "views",
+  "vph",
+  "outlier",
+  "recent",
+  "duration",
+  "subscribers",
+  "title",
+];
+export const cardNumericFields = [
+  "minViews",
+  "maxViews",
+  "minSubscribers",
+  "maxSubscribers",
+  "minDurationSeconds",
+  "maxDurationSeconds",
+  "minVph",
+  "maxVph",
+  "minOutlier",
+  "maxOutlier",
+] as const;
+/** Validate both UI input and messages before changing the page. Legacy minimumViews remains accepted. */
+export function normalizeCardFilter(input: unknown): CardFilter {
+  if (!input || typeof input !== "object" || Array.isArray(input))
+    throw new Error("Filtro inválido.");
+  const raw = input as Record<string, unknown>;
+  const result: CardFilter = {
+    sort: "default",
+    shorts: "all",
+    query: "",
+    channel: "",
+  };
+  if (raw.sort !== undefined) {
+    if (!cardSorts.includes(raw.sort as CardSort))
+      throw new Error("Ordenação desconhecida.");
+    result.sort = raw.sort as CardSort;
+  }
+  if (raw.shorts !== undefined) {
+    if (!["all", "only", "exclude"].includes(String(raw.shorts)))
+      throw new Error("Formato de vídeo desconhecido.");
+    result.shorts = raw.shorts as CardFilter["shorts"];
+  }
+  for (const key of [
+    "query",
+    "channel",
+    "publishedAfter",
+    "publishedBefore",
+  ] as const)
+    if (raw[key] !== undefined && raw[key] !== "") {
+      if (typeof raw[key] !== "string")
+        throw new Error("Use texto e datas válidas no filtro.");
+      result[key] = raw[key] as string;
+    }
+  for (const key of cardNumericFields)
+    if (raw[key] !== undefined) {
+      if (typeof raw[key] !== "number")
+        throw new Error("Os limites do filtro devem ser números.");
+      result[key] = raw[key] as number;
+    }
+  if (raw.minimumViews !== undefined && raw.minViews === undefined) {
+    if (typeof raw.minimumViews !== "number")
+      throw new Error("O mínimo de views deve ser numérico.");
+    result.minViews = raw.minimumViews;
+  }
+  validateVideoFilter(result);
+  return result;
 }
 export function filterAndSortCards(
   cards: VideoCard[],
   filter: CardFilter,
-  vph: (video: VideoRecord) => number | undefined,
+  _vph?: (video: VideoRecord) => number | undefined,
+  now = Date.now(),
 ): VideoCard[] {
-  const visible = cards.filter(
-    ({ video }) =>
-      (!filter.query ||
-        `${video.title} ${video.channel ?? ""}`
-          .toLocaleLowerCase()
-          .includes(filter.query.toLocaleLowerCase())) &&
-      (video.views ?? 0) >= filter.minimumViews &&
-      (filter.shorts === "all" ||
-        (filter.shorts === "only") === !!video.isShort),
-  );
-  return filter.sort === "default"
-    ? visible
-    : [...visible].sort(
-        (a, b) =>
-          ((filter.sort === "vph" ? vph(b.video) : b.video.views) ?? -1) -
-          ((filter.sort === "vph" ? vph(a.video) : a.video.views) ?? -1),
-      );
+  const normalized = normalizeCardFilter(filter),
+    baseline = cards.map((card) => card.video);
+  const selected = new Set(filterVideos(baseline, normalized, now));
+  const sorted =
+    normalized.sort === "default"
+      ? baseline
+      : sortVideos(baseline, normalized.sort, now, baseline);
+  const byVideo = new Map(cards.map((card) => [card.video, card]));
+  return sorted
+    .filter((video) => selected.has(video))
+    .map((video) => byVideo.get(video)!);
 }

@@ -2,12 +2,47 @@ import { getSettings } from "./shared/storage";
 import { callBackend } from "./shared/backend";
 import type { RemoteFeature, VideoRecord } from "./shared/types";
 import { enrichChannels } from "./core/enrichment";
+import { researchChannel, sampleMonetization } from "./core/channel-research";
 const ownUi = (sender: chrome.runtime.MessageSender) =>
   sender.id === chrome.runtime.id &&
   sender.url?.startsWith(chrome.runtime.getURL(""));
 const youtube = (url?: string) =>
   !!url && /^https:\/\/(www|studio)\.youtube\.com\//.test(url);
 let capturing = false;
+function captureMeasurement(
+  value: unknown,
+): Record<string, unknown> & { captureStamp: string } {
+  const item =
+    value !== null && typeof value === "object"
+      ? (value as Record<string, unknown>)
+      : {};
+  if (item.status !== "ok")
+    throw new Error(
+      typeof item.error === "string"
+        ? item.error
+        : "Não foi possível medir o card nesta página.",
+    );
+  const rect =
+    item.rect !== null && typeof item.rect === "object"
+      ? (item.rect as Record<string, unknown>)
+      : {};
+  if (
+    typeof item.captureStamp !== "string" ||
+    !item.captureStamp ||
+    typeof item.viewportWidth !== "number" ||
+    item.viewportWidth <= 0 ||
+    !["x", "y", "width", "height"].every(
+      (key) => typeof rect[key] === "number" && Number.isFinite(rect[key]),
+    ) ||
+    Number(rect.width) <= 0 ||
+    Number(rect.height) <= 0 ||
+    !Array.isArray(item.redactions)
+  )
+    throw new Error(
+      "Medição de captura incompatível; recarregue a página do YouTube/Studio.",
+    );
+  return item as Record<string, unknown> & { captureStamp: string };
+}
 chrome.runtime.onMessage.addListener(
   (message: unknown, sender, sendResponse) => {
     if (sender.id !== chrome.runtime.id) return;
@@ -45,6 +80,43 @@ chrome.runtime.onMessage.addListener(
           ...(await enrichChannels(m.videos as VideoRecord[], fetch)),
         };
       }
+      if (m.type === "CHANNEL_RESEARCH") {
+        if (!ownUi(sender))
+          throw new Error(
+            "Use a página da extensão para pesquisar um canal público.",
+          );
+        if (typeof m.channelUrl !== "string")
+          throw new Error("Informe uma URL pública de canal.");
+        if (
+          m.order !== undefined &&
+          m.order !== "recent" &&
+          m.order !== "popular"
+        )
+          throw new Error("Ordem de canal inválida.");
+        return {
+          status: "ok",
+          data: await researchChannel(m.channelUrl, fetch, m.order),
+        };
+      }
+      if (m.type === "SAMPLE_MONETIZATION") {
+        if (!ownUi(sender))
+          throw new Error(
+            "Use a página da extensão para consultar uma amostra pública.",
+          );
+        if (
+          !Array.isArray(m.videos) ||
+          (m.maxSamples !== undefined && typeof m.maxSamples !== "number")
+        )
+          throw new Error("Informe os vídeos e o limite da amostra.");
+        return {
+          status: "ok",
+          data: await sampleMonetization(
+            m.videos as VideoRecord[],
+            fetch,
+            m.maxSamples as number | undefined,
+          ),
+        };
+      }
       if (m.type === "CAPTURE_SCREENSHOT") {
         if (!ownUi(sender) && !youtube(sender.tab?.url))
           throw new Error("Origem não permitida.");
@@ -67,6 +139,33 @@ chrome.runtime.onMessage.addListener(
           });
           if (active?.id !== tab.id || active.url !== tab.url)
             throw new Error("A aba mudou durante a captura. Tente novamente.");
+          const kind = m.kind ?? "video";
+          if (
+            !["video", "analytics", "latest-performance"].includes(String(kind))
+          )
+            throw new Error("Tipo de captura inválido.");
+          const measure = async () => {
+            let value: unknown;
+            try {
+              value = await chrome.tabs.sendMessage(tab.id!, {
+                type: "CAPTURE_CARD",
+                kind,
+                redact: Boolean(m.redact),
+              });
+            } catch {
+              throw new Error(
+                "Abra o painel Prevlev pela aba YouTube/Studio e recarregue a página para medir o card.",
+              );
+            }
+            return captureMeasurement(value);
+          };
+          const capture = await measure();
+          const [ready] = await chrome.tabs.query({
+            active: true,
+            windowId: tab.windowId,
+          });
+          if (ready?.id !== tab.id || ready.url !== tab.url)
+            throw new Error("A aba mudou antes da captura. Tente novamente.");
           let dataUrl: string;
           try {
             dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, {
@@ -85,7 +184,32 @@ chrome.runtime.onMessage.addListener(
             throw new Error(
               "A aba mudou durante a captura. Imagem descartada.",
             );
-          return { status: "ok", dataUrl };
+          const measuredAfter = await measure();
+          if (
+            capture.captureStamp !== measuredAfter.captureStamp ||
+            JSON.stringify([
+              capture.rect,
+              capture.redactions,
+              capture.viewportWidth,
+            ]) !==
+              JSON.stringify([
+                measuredAfter.rect,
+                measuredAfter.redactions,
+                measuredAfter.viewportWidth,
+              ])
+          )
+            throw new Error(
+              "A rolagem, o layout ou os campos sensíveis mudaram durante a captura. Imagem descartada.",
+            );
+          const [verified] = await chrome.tabs.query({
+            active: true,
+            windowId: tab.windowId,
+          });
+          if (verified?.id !== tab.id || verified.url !== tab.url)
+            throw new Error(
+              "A aba mudou durante a medição. Imagem descartada.",
+            );
+          return { status: "ok", dataUrl, capture };
         } finally {
           try {
             const [active] = await chrome.tabs.query({

@@ -20,7 +20,7 @@ let context: BrowserContext;
 let studio: Page;
 let workspace: Page;
 const studioUrl = "https://studio.youtube.com/channel/UCfixture/comments";
-const fixture = `<!doctype html><html><head><title>Studio fixture</title></head><body>${Array.from({ length: 4 }, (_, index) => `<ytcp-comment-thread><ytcp-comment><button aria-label="Heart" aria-pressed="false" id="heart-${index}">Heart ${index}</button></ytcp-comment></ytcp-comment-thread>`).join("")}</body></html>`;
+const fixture = `<!doctype html><html><head><title>Studio fixture</title></head><body>${Array.from({ length: 4 }, (_, index) => `<ytcp-comment-thread><ytcp-comment data-comment-id="comment-${index}"><span id="author-text">Author ${index}</span><span id="content-text">Comment ${index}</span><button aria-label="Heart" aria-pressed="false" id="heart-${index}">Heart ${index}</button></ytcp-comment></ytcp-comment-thread>`).join("")}</body></html>`;
 
 test.beforeAll(async () => {
   browser = await chromium.launch({
@@ -193,6 +193,74 @@ test("actual Studio UI cancellation clears a preview and the adapter rejects an 
   await studio.evaluate(() =>
     history.pushState(null, "", "/channel/UCother/comments"),
   );
+  await workspace.locator("#studio-confirm").click();
+  await expect(workspace.locator("#studio-plan")).toContainText(
+    '"status": "stale"',
+  );
+  expect(
+    await studio.evaluate(
+      () => (window as unknown as FixtureWindow).__fixtureClicks,
+    ),
+  ).toBe(0);
+});
+
+test("Studio UI creates confirmed midroll draft slots and leaves saving manual", async () => {
+  await studio.evaluate(() => {
+    document.body.innerHTML =
+      '<ytcp-ad-breaks-editor data-video-id="video-1"><button id="insert" aria-label="Insert ad slot">Insert ad slot</button></ytcp-ad-breaks-editor><button id="continue">Continue</button><button id="save">Save</button>';
+    (window as unknown as FixtureWindow).__fixtureClicks = 0;
+    document.body.dataset.saveClicks = "0";
+    const editor = document.querySelector("ytcp-ad-breaks-editor")!;
+    document.querySelector("#insert")!.addEventListener("click", () => {
+      (window as unknown as FixtureWindow).__fixtureClicks++;
+      const field = document.createElement("input");
+      field.setAttribute("aria-label", "Ad slot start time");
+      field.value = "00:00:00";
+      editor.append(field);
+    });
+    for (const button of document.querySelectorAll("#save, #continue"))
+      button.addEventListener("click", () => {
+        document.body.dataset.saveClicks = String(
+          Number(document.body.dataset.saveClicks) + 1,
+        );
+      });
+  });
+  await workspace.locator("#studio-action").selectOption("midrolls");
+  await workspace.locator("#duration").fill("900");
+  await workspace.locator("#interval").fill("180");
+  await workspace.locator("#studio-preview").click();
+  await expect(workspace.locator("#studio-plan")).toContainText(
+    '"slotsToCreate": 4',
+  );
+  expect(await studio.locator("ytcp-ad-breaks-editor input").count()).toBe(0);
+  await workspace.locator("#studio-confirm").click();
+  await expect(workspace.locator("#studio-plan")).toContainText(
+    '"status": "completed"',
+  );
+  await expect(workspace.locator("#studio-plan")).toContainText('"created": 4');
+  expect(
+    await studio
+      .locator("ytcp-ad-breaks-editor input")
+      .evaluateAll((inputs) =>
+        inputs.map((input) => (input as HTMLInputElement).value),
+      ),
+  ).toEqual(["00:03:00", "00:06:00", "00:09:00", "00:12:00"]);
+  expect(await studio.locator("body").getAttribute("data-save-clicks")).toBe(
+    "0",
+  );
+});
+
+test("Studio UI refuses a recycled comment that preserved its button and URL", async () => {
+  await workspace.locator("#action-limit").fill("1");
+  await workspace.locator("#studio-preview").click();
+  await expect(workspace.locator("#studio-confirm")).toBeEnabled();
+  await studio.evaluate(() => {
+    const button = document.querySelector("#heart-0")!;
+    button
+      .closest("ytcp-comment")!
+      .querySelector('[id="content-text"]')!.textContent =
+      "A new unrelated comment in a recycled row";
+  });
   await workspace.locator("#studio-confirm").click();
   await expect(workspace.locator("#studio-plan")).toContainText(
     '"status": "stale"',

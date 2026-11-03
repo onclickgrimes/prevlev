@@ -12,7 +12,11 @@ Imagens escolhidas para compressão/prévia e frames são processados em canvas 
 
 O enriquecimento de inscritos ocorre somente por solicitação explícita e consulta até dez páginas públicas de canal do YouTube por ação. Essas requisições usam `credentials: 'omit'`, recusam redirecionamentos e têm limites de tempo/tamanho; não executam scripts da página recebida. Contagens não publicadas ou não reconhecidas continuam desconhecidas. Arquivos locais de áudio escolhidos para detectar silêncios de mid-roll são decodificados no navegador via AudioContext/PCM e não são enviados.
 
-Capturas usam a área visível da aba selecionada e podem ativá-la temporariamente. A ocultação de dados sensíveis cobre apenas campos reconhecidos. Revise a imagem antes de compartilhá-la: nomes ou outros dados fora desses campos podem continuar visíveis. Captura de vídeo pode falhar pelas restrições de origem da mídia.
+O painel de canal consulta a primeira resposta HTML pública de `/videos` e lê JSON literal, sem executar scripts recebidos ou usar API privada. Não pagina o catálogo. A análise de monetização consulta no máximo cinco páginas públicas de vídeos por ação e retorna inferência de baixa confiança, incluindo desconhecido quando não há evidência utilizável. Essas consultas também omitem credenciais. A consulta pública anônima tentada neste ambiente falhou, portanto a compatibilidade com a fonte atual não foi confirmada.
+
+A timeline atua no player nativo da aba selecionada após comandos explícitos. Busca, seleção, cópia e exportação usam os trechos da transcrição já carregados. Não envia o áudio/vídeo ao backend. Comandos do painel revalidam a identidade do vídeo antes de posicionar ou reproduzir/pausar; o passo de 1/30 s é estimado.
+
+Capturas usam a área visível e podem ativar temporariamente a aba selecionada. A transação mede o alvo após ativar a aba e novamente depois da captura. Se URL, viewport/rolagem, revisão do DOM, geometria ou identidade dos campos sensíveis mudarem, descarta a imagem. A ocultação cobre apenas campos reconhecidos e não garante anonimização total. Revise antes de compartilhar: nomes ou outros dados fora desses campos podem continuar visíveis. Captura de vídeo pode falhar pelas restrições de origem da mídia.
 
 ## No backend escolhido
 
@@ -35,4 +39,4 @@ Veja [BACKEND.md](BACKEND.md) para autenticação, CORS, limites, variáveis de 
 
 ## Ações que alteram um canal
 
-Prévia não envia alteração. A confirmação pode enviar cliques de corações ou avanço de etapa pela interface do Studio, conforme descrito no plano. Os planos têm prazo e são invalidados quando os alvos mudam. O cancelamento interrompe ações futuras, sem reverter operações já recebidas pelo YouTube. Intervalos de anúncio preenchidos ainda devem ser revisados e salvos manualmente.
+Prévia não envia alteração. A confirmação pode enviar cliques de corações, avanço de etapa ou criação/preenchimento de rascunhos mid-roll pela interface do Studio, conforme descrito no plano. Os planos têm prazo e são invalidados quando os alvos mudam. Corações revalidam identidade, autor e texto do comentário antes de cada clique, incluindo botões reciclados para outro comentário. Mid-roll exige editor e botão Inserir reconhecidos, informa os novos rascunhos na prévia e não clica em Continuar/Salvar. O cancelamento interrompe ações futuras, sem reverter operações já recebidas pelo YouTube. Intervalos criados ou preenchidos ainda devem ser revisados e salvos manualmente. Todos esses fluxos foram verificados em fixtures, sem operação em canal real.

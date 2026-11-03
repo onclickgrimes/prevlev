@@ -22,11 +22,17 @@ export function lifetimeVph(
     !video.publishedAt
   )
     return undefined;
-  const age = (now - Date.parse(video.publishedAt)) / 3_600_000;
-  return age > 0 ? video.views / age : undefined;
+  const published = knownPublication(video.publishedAt, now);
+  if (published === undefined) return undefined;
+  const age = (now - published) / 3_600_000;
+  const rate = age > 0 ? video.views / age : undefined;
+  return rate !== undefined && Number.isFinite(rate) ? rate : undefined;
 }
 
-/** Excludes the target itself and requires at least three known comparable videos. */
+/**
+ * Excludes the target and requires at least three known comparable videos.
+ * Known channels use their own identity; only an identity-free target uses the whole dataset.
+ */
 export function outlierScore(
   video: VideoRecord,
   baseline: readonly VideoRecord[],
@@ -37,14 +43,13 @@ export function outlierScore(
     video.views < 0
   )
     return undefined;
+  const channel = channelIdentity(video);
   const values = baseline
     .filter(
       (other) =>
         other.id !== video.id &&
         other.isShort === video.isShort &&
-        (!video.channelId ||
-          !other.channelId ||
-          video.channelId === other.channelId),
+        comparableChannel(channel, channelIdentity(other)),
     )
     .map((other) => other.views)
     .filter(
@@ -117,15 +122,78 @@ export interface VideoFilter {
   minSubscribers?: number;
   maxSubscribers?: number;
   minVph?: number;
+  maxVph?: number;
   minOutlier?: number;
+  maxOutlier?: number;
+  minDurationSeconds?: number;
+  maxDurationSeconds?: number;
+  /** YYYY-MM-DD includes the start of that UTC day; timestamp bounds are exact. */
+  publishedAfter?: string;
+  /** YYYY-MM-DD includes the end of that UTC day; timestamp bounds are exact. */
+  publishedBefore?: string;
   shorts?: "all" | "only" | "exclude";
   channel?: string;
 }
+
+/** Throws before filtering so an impossible range cannot silently hide every result. */
+export function validateVideoFilter(filter: VideoFilter): void {
+  const pairs = [
+    ["minViews", "maxViews", "visualizações"],
+    ["minSubscribers", "maxSubscribers", "inscritos"],
+    ["minVph", "maxVph", "VPH"],
+    ["minOutlier", "maxOutlier", "outlier"],
+    ["minDurationSeconds", "maxDurationSeconds", "duração em segundos"],
+  ] as const;
+  for (const [minKey, maxKey, label] of pairs) {
+    const min = filter[minKey],
+      max = filter[maxKey];
+    for (const value of [min, max]) {
+      if (
+        value !== undefined &&
+        (typeof value !== "number" || !Number.isFinite(value) || value < 0)
+      )
+        throw new Error(
+          `O filtro de ${label} exige valores finitos não negativos.`,
+        );
+    }
+    if (min !== undefined && max !== undefined && min > max)
+      throw new Error(
+        `No filtro de ${label}, o mínimo não pode superar o máximo.`,
+      );
+  }
+  const after =
+    filter.publishedAfter === undefined
+      ? undefined
+      : isoBoundary(filter.publishedAfter, false);
+  const before =
+    filter.publishedBefore === undefined
+      ? undefined
+      : isoBoundary(filter.publishedBefore, true);
+  if (after !== undefined && before !== undefined && after > before)
+    throw new Error(
+      "A data inicial de publicação não pode superar a data final.",
+    );
+  if (
+    filter.shorts !== undefined &&
+    !["all", "only", "exclude"].includes(filter.shorts)
+  )
+    throw new Error("Selecione um filtro de Shorts válido.");
+}
+
 export function filterVideos(
   videos: readonly VideoRecord[],
   filter: VideoFilter,
   now = Date.now(),
 ): VideoRecord[] {
+  validateVideoFilter(filter);
+  const after =
+    filter.publishedAfter === undefined
+      ? undefined
+      : isoBoundary(filter.publishedAfter, false);
+  const before =
+    filter.publishedBefore === undefined
+      ? undefined
+      : isoBoundary(filter.publishedBefore, true);
   const query = normalize(filter.query ?? "");
   return videos.filter((video) => {
     if (
@@ -135,14 +203,27 @@ export function filterVideos(
       return false;
     if (
       filter.channel &&
-      !normalize(video.channel ?? "").includes(normalize(filter.channel))
+      !normalize(
+        `${video.channel ?? ""} ${video.channelId ?? ""} ${video.channelUrl ?? ""}`,
+      ).includes(normalize(filter.channel))
     )
       return false;
     if (
-      (filter.shorts === "only" && !video.isShort) ||
-      (filter.shorts === "exclude" && video.isShort)
+      (filter.shorts === "only" && video.isShort !== true) ||
+      (filter.shorts === "exclude" && video.isShort !== false)
     )
       return false;
+    if (after !== undefined || before !== undefined) {
+      const published = video.publishedAt
+        ? knownPublication(video.publishedAt, now)
+        : undefined;
+      if (
+        published === undefined ||
+        (after !== undefined && published < after) ||
+        (before !== undefined && published > before)
+      )
+        return false;
+    }
     const constraints: [
       number | undefined,
       number | undefined,
@@ -150,13 +231,20 @@ export function filterVideos(
     ][] = [
       [video.views, filter.minViews, filter.maxViews],
       [video.subscribers, filter.minSubscribers, filter.maxSubscribers],
-      [lifetimeVph(video, now), filter.minVph, undefined],
-      [outlierScore(video, videos), filter.minOutlier, undefined],
+      [
+        video.durationSeconds,
+        filter.minDurationSeconds,
+        filter.maxDurationSeconds,
+      ],
+      [lifetimeVph(video, now), filter.minVph, filter.maxVph],
+      [outlierScore(video, videos), filter.minOutlier, filter.maxOutlier],
     ];
     return constraints.every(
       ([value, min, max]) =>
         (min === undefined && max === undefined) ||
         (value !== undefined &&
+          Number.isFinite(value) &&
+          value >= 0 &&
           (min === undefined || value >= min) &&
           (max === undefined || value <= max)),
     );
@@ -165,21 +253,38 @@ export function filterVideos(
 
 export function sortVideos(
   videos: readonly VideoRecord[],
-  by: "views" | "vph" | "outlier" | "recent" | "title",
+  by:
+    | "views"
+    | "vph"
+    | "outlier"
+    | "recent"
+    | "title"
+    | "duration"
+    | "subscribers",
   now = Date.now(),
+  baseline: readonly VideoRecord[] = videos,
 ): VideoRecord[] {
   if (by === "title")
     return [...videos].sort((a, b) => a.title.localeCompare(b.title));
-  const get = (video: VideoRecord) =>
-    by === "views"
-      ? video.views
-      : by === "vph"
-        ? lifetimeVph(video, now)
-        : by === "outlier"
-          ? outlierScore(video, videos)
-          : video.publishedAt
-            ? Date.parse(video.publishedAt)
-            : undefined;
+  const get = (video: VideoRecord): number | undefined => {
+    if (by === "recent")
+      return video.publishedAt
+        ? knownPublication(video.publishedAt, now)
+        : undefined;
+    const value =
+      by === "views"
+        ? video.views
+        : by === "duration"
+          ? video.durationSeconds
+          : by === "subscribers"
+            ? video.subscribers
+            : by === "vph"
+              ? lifetimeVph(video, now)
+              : outlierScore(video, baseline);
+    return value !== undefined && Number.isFinite(value) && value >= 0
+      ? value
+      : undefined;
+  };
   return [...videos].sort((a, b) => {
     const left = get(a),
       right = get(b);
@@ -252,4 +357,114 @@ function normalize(value: string): string {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLocaleLowerCase();
+}
+
+/** Accept unambiguous ISO dates only, rejecting Date.parse's invalid-day rollover. */
+function isoBoundary(value: string, endOfDay: boolean): number {
+  if (typeof value !== "string")
+    throw new Error(
+      "Informe uma data ISO válida: AAAA-MM-DD ou timestamp com fuso horário.",
+    );
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value);
+  const timestamp =
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?(Z|[+-]\d{2}:\d{2})$/.exec(
+      value,
+    );
+  if (!dateOnly && !timestamp)
+    throw new Error(
+      "Informe uma data ISO válida: AAAA-MM-DD ou timestamp com fuso horário.",
+    );
+  const [year, month, day] = value.slice(0, 10).split("-").map(Number);
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  if (month < 1 || month > 12 || day < 1 || day > days[month - 1])
+    throw new Error("A data de publicação contém um dia ou mês inválido.");
+  if (timestamp) {
+    const zone = timestamp[8];
+    if (
+      Number(timestamp[4]) > 23 ||
+      Number(timestamp[5]) > 59 ||
+      Number(timestamp[6] ?? 0) > 59 ||
+      (zone !== "Z" &&
+        (Number(zone.slice(1, 3)) > 23 || Number(zone.slice(4)) > 59))
+    )
+      throw new Error("O horário ou fuso da data de publicação é inválido.");
+  }
+  const parsed = Date.parse(
+    dateOnly
+      ? `${value}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}Z`
+      : value,
+  );
+  if (!Number.isFinite(parsed))
+    throw new Error("A data de publicação é inválida.");
+  return parsed;
+}
+
+function knownPublication(value: string, now: number): number | undefined {
+  if (!Number.isFinite(now)) return undefined;
+  try {
+    const timestamp = isoBoundary(value, false);
+    return timestamp <= now ? timestamp : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+interface ChannelIdentity {
+  id?: string;
+  handle?: string;
+  name?: string;
+  ambiguous?: boolean;
+}
+
+function channelIdentity(video: VideoRecord): ChannelIdentity {
+  const explicitId = video.channelId?.trim();
+  let id =
+    explicitId && /^[A-Za-z0-9_-]{1,128}$/.test(explicitId)
+      ? explicitId
+      : undefined;
+  let handle: string | undefined;
+  if (video.channelUrl) {
+    try {
+      const url = new URL(video.channelUrl);
+      if (
+        url.protocol === "https:" &&
+        ["www.youtube.com", "youtube.com", "m.youtube.com"].includes(
+          url.hostname,
+        ) &&
+        !url.username &&
+        !url.password &&
+        !url.port
+      ) {
+        const path = decodeURIComponent(url.pathname).replace(/\/$/, "");
+        const linkedId = /^\/channel\/([A-Za-z0-9_-]{1,128})$/.exec(path)?.[1];
+        if (id && linkedId && id !== linkedId) return { ambiguous: true };
+        id ??= linkedId;
+        handle = /^\/@([\p{L}\p{N}_.\-·]{1,100})$/u
+          .exec(path)?.[1]
+          .normalize("NFC")
+          .toLocaleLowerCase();
+      }
+    } catch {
+      /* Invalid URLs cannot establish a channel alias. */
+    }
+  }
+  const name = video.channel
+    ? normalize(video.channel).trim().replace(/\s+/g, " ") || undefined
+    : undefined;
+  return { id, handle, name };
+}
+
+function comparableChannel(
+  target: ChannelIdentity,
+  peer: ChannelIdentity,
+): boolean {
+  if (target.ambiguous || peer.ambiguous) return false;
+  if (!target.id && !target.handle && !target.name) return true;
+  // A definitive shared ID also handles channel URL aliases and handle renames.
+  if (target.id && peer.id) return target.id === peer.id;
+  if (target.handle && peer.handle) return target.handle === peer.handle;
+  // Names can collide, so use them only when neither side has a stronger identity.
+  if (target.id || target.handle || peer.id || peer.handle) return false;
+  return !!target.name && target.name === peer.name;
 }

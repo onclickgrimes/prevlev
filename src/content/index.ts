@@ -1,11 +1,17 @@
 import { getSettings, saveSettings } from "../shared/storage";
 import type { Settings, VideoRecord } from "../shared/types";
-import { lifetimeVph, outlierScore, inferMonetization } from "../core/metrics";
+import {
+  lifetimeVph,
+  outlierScore,
+  inferMonetization,
+  sortVideos,
+} from "../core/metrics";
 import { captureFrame } from "../core/media";
 import {
   readYouTubeSnapshot,
   readVideoCards,
   filterAndSortCards,
+  normalizeCardFilter,
   type CardFilter,
 } from "./youtube";
 import {
@@ -16,6 +22,7 @@ import {
   setStudioPeriod,
   getStudioRedactionTargets,
 } from "./studio";
+import { mountTimeline, dispatchTimeline } from "./timeline";
 
 const HOST_ID = "prevlev-controls";
 const HIDDEN = "data-prevlev-hidden";
@@ -25,12 +32,67 @@ let timer: ReturnType<typeof setTimeout> | undefined;
 let suspended = false;
 let navigationListening = false;
 let updatePanel: () => void = () => {};
-const filter: CardFilter = {
+let filter: CardFilter = {
   query: "",
-  minimumViews: 0,
   shorts: "all",
   sort: "default",
 };
+let filterError = "";
+let syncFilterForm: () => void = () => {};
+const channelEnrichment = new Map<
+  string,
+  { subscribers: number; channel?: string }
+>();
+let pageRevision = 0;
+let identitySequence = 0;
+const elementIdentities = new WeakMap<Element, number>();
+function elementIdentity(element: Element): number {
+  let identity = elementIdentities.get(element);
+  if (identity === undefined) {
+    identity = ++identitySequence;
+    elementIdentities.set(element, identity);
+  }
+  return identity;
+}
+function channelKeys(
+  video: Pick<VideoRecord, "channelId" | "channelUrl">,
+): string[] {
+  const keys: string[] = [];
+  if (video.channelId && /^UC[\w-]{1,100}$/.test(video.channelId))
+    keys.push(`id:${video.channelId}`);
+  if (video.channelUrl)
+    try {
+      const url = new URL(video.channelUrl);
+      if (
+        url.origin === "https://www.youtube.com" &&
+        !url.search &&
+        !url.hash &&
+        /^\/(?:@[^/]+|channel\/[^/]+)$/.test(url.pathname)
+      )
+        keys.push(url.href);
+    } catch {
+      /* Malformed identities are ignored. */
+    }
+  return keys;
+}
+function enrichedVideo(video: VideoRecord): VideoRecord {
+  const info = channelKeys(video)
+    .map((key) => channelEnrichment.get(key))
+    .find(Boolean);
+  return info
+    ? {
+        ...video,
+        subscribers: video.subscribers ?? info.subscribers,
+        channel: video.channel ?? info.channel,
+      }
+    : video;
+}
+function loadedCards() {
+  return readVideoCards(document).map((card) => ({
+    ...card,
+    video: enrichedVideo(card.video),
+  }));
+}
 const originalOrder = new WeakMap<HTMLElement, number>();
 let nextOrder = 0;
 
@@ -39,6 +101,8 @@ function listen(): void {
     observer?.observe(document.documentElement, {
       childList: true,
       subtree: true,
+      attributes: true,
+      characterData: true,
     });
 }
 function schedule(): void {
@@ -52,8 +116,28 @@ function schedule(): void {
 function navigation(enabled: boolean): void {
   if (navigationListening === enabled) return;
   navigationListening = enabled;
-  if (enabled) document.addEventListener("yt-navigate-finish", schedule);
-  else document.removeEventListener("yt-navigate-finish", schedule);
+  if (enabled) {
+    document.addEventListener("yt-navigate-finish", schedule);
+    window.addEventListener("scroll", captureViewportChanged, true);
+    window.addEventListener("resize", captureViewportChanged);
+    window.visualViewport?.addEventListener("scroll", captureViewportChanged);
+    window.visualViewport?.addEventListener("resize", captureViewportChanged);
+  } else {
+    document.removeEventListener("yt-navigate-finish", schedule);
+    window.removeEventListener("scroll", captureViewportChanged, true);
+    window.removeEventListener("resize", captureViewportChanged);
+    window.visualViewport?.removeEventListener(
+      "scroll",
+      captureViewportChanged,
+    );
+    window.visualViewport?.removeEventListener(
+      "resize",
+      captureViewportChanged,
+    );
+  }
+}
+function captureViewportChanged(): void {
+  if (!suspended) pageRevision++;
 }
 window.addEventListener("pagehide", () => {
   suspended = true;
@@ -72,17 +156,17 @@ window.addEventListener("pageshow", (event) => {
 });
 function apply(): void {
   if (!settings || suspended) return;
+  if (observer?.takeRecords().length) pageRevision++;
   observer?.disconnect();
   try {
     mount();
-    const cards = readVideoCards(document);
+    mountTimeline(document).refresh();
+    const cards = loadedCards();
     const base = cards.map((card) => card.video);
     for (const { element } of cards)
       if (!originalOrder.has(element)) originalOrder.set(element, nextOrder++);
     const allowed = new Set(
-      filterAndSortCards(cards, filter, (video) => lifetimeVph(video)).map(
-        (card) => card.element,
-      ),
+      filterAndSortCards(cards, filter).map((card) => card.element),
     );
     for (const { element, video } of cards) {
       const hidden =
@@ -115,6 +199,11 @@ function apply(): void {
       else if (!cards.some((c) => c.element === element))
         element.removeAttribute(HIDDEN);
     }
+    const ranked =
+      filter.sort === "default"
+        ? base
+        : sortVideos(base, filter.sort, Date.now(), base);
+    const rank = new Map(ranked.map((video, index) => [video, index]));
     const groups = new Map<HTMLElement, typeof cards>();
     for (const card of cards)
       if (card.element.parentElement) {
@@ -129,7 +218,9 @@ function apply(): void {
                 (originalOrder.get(a.element) ?? 0) -
                 (originalOrder.get(b.element) ?? 0),
             )
-          : [...group].sort((a, b) => metric(b.video) - metric(a.video));
+          : [...group].sort(
+              (a, b) => (rank.get(a.video) ?? 0) - (rank.get(b.video) ?? 0),
+            );
       // Replace only card positions, preserving advertisements and other siblings.
       const slots = Array.from(parent.childNodes).filter((node) =>
         group.some((card) => card.element === node),
@@ -149,9 +240,6 @@ function apply(): void {
   } finally {
     listen();
   }
-}
-function metric(video: VideoRecord): number {
-  return (filter.sort === "vph" ? lifetimeVph(video) : video.views) ?? -1;
 }
 function number(value: number): string {
   return new Intl.NumberFormat("pt-BR", {
@@ -173,39 +261,85 @@ function mount(): void {
   host.style.cssText =
     "position:fixed;bottom:18px;left:18px;z-index:2147483646";
   const shadow = host.attachShadow({ mode: "open" });
-  shadow.innerHTML = `<style>:host{font:13px/1.4 system-ui;color:#f5f5fa}*{box-sizing:border-box}button,input,select{font:inherit}button{cursor:pointer;background:#8b7bff;border:0;border-radius:8px;padding:9px 12px;color:#fff}button.secondary{background:#30313c}details{background:#15161e;border:1px solid #454050;border-radius:12px;box-shadow:0 8px 30px #0006;width:290px}summary{cursor:pointer;padding:12px;font-weight:700;color:#c3baff}section{padding:0 12px 12px;display:grid;gap:9px}label{display:flex;align-items:center;gap:8px}label.stack{display:grid;gap:4px}input[type=text],input[type=number],select{width:100%;min-width:0;color:#fff;background:#242532;border:1px solid #484959;border-radius:6px;padding:7px}p{margin:0;color:#bfc0cd;font-size:11px}.row{display:flex;gap:6px}#status{color:#c5c0ff}a{color:#b7aaff}</style><details><summary>Prevlev · Ferramentas</summary><section><label><input id="shorts" type="checkbox"> Ocultar Shorts</label><label><input id="metrics" type="checkbox"> Mostrar métricas nos cards</label><label class="stack">Filtrar vídeos carregados<input id="query" type="text" placeholder="Título ou canal"></label><label class="stack">Mínimo de visualizações<input id="minimum" type="number" min="0" step="1" value="0"></label><label class="stack">Formato<select id="format"><option value="all">Todos</option><option value="only">Só Shorts</option><option value="exclude">Sem Shorts</option></select></label><label class="stack">Ordenação<select id="sort"><option value="default">Ordem original</option><option value="views">Mais visualizados</option><option value="vph">Maior VPH médio</option></select></label><div class="row"><button id="scan">Analisar página</button><button id="workspace" class="secondary">Abrir painel</button></div><p id="status" role="status"></p><p>Somente conteúdo já carregado. VPH médio desde a publicação. Nenhuma alteração no canal é feita ao abrir esta ferramenta.</p></section></details>`;
+  const numericControls = [
+    ["minViews", "min-views", "Views mín."],
+    ["maxViews", "max-views", "Views máx."],
+    ["minSubscribers", "min-subscribers", "Inscritos mín."],
+    ["maxSubscribers", "max-subscribers", "Inscritos máx."],
+    ["minDurationSeconds", "min-duration", "Duração mín. (s)"],
+    ["maxDurationSeconds", "max-duration", "Duração máx. (s)"],
+    ["minVph", "min-vph", "VPH médio mín."],
+    ["maxVph", "max-vph", "VPH médio máx."],
+    ["minOutlier", "min-outlier", "Outlier mín."],
+    ["maxOutlier", "max-outlier", "Outlier máx."],
+  ] as const;
+  shadow.innerHTML = `<style>:host{font:13px/1.4 system-ui;color:#f5f5fa}*{box-sizing:border-box}button,input,select{font:inherit}button{cursor:pointer;background:#8b7bff;border:0;border-radius:8px;padding:9px 12px;color:#fff}button.secondary{background:#30313c}details{background:#15161e;border:1px solid #454050;border-radius:12px;box-shadow:0 8px 30px #0006;width:320px;max-height:calc(100vh - 60px);overflow:auto}summary{cursor:pointer;padding:12px;font-weight:700;color:#c3baff}section{padding:0 12px 12px;display:grid;gap:9px}label{display:flex;align-items:center;gap:8px}label.stack{display:grid;gap:4px}.ranges{display:grid;grid-template-columns:1fr 1fr;gap:8px}input[type=text],input[type=number],input[type=date],select{width:100%;min-width:0;color:#fff;background:#242532;border:1px solid #484959;border-radius:6px;padding:7px}p{margin:0;color:#bfc0cd;font-size:11px}.row{display:flex;gap:6px;flex-wrap:wrap}#status{color:#c5c0ff}a{color:#b7aaff}</style><details><summary>Prevlev · Ferramentas</summary><section><label><input id="shorts" type="checkbox"> Ocultar Shorts</label><label><input id="metrics" type="checkbox"> Mostrar métricas nos cards</label><label class="stack">Título ou texto<input id="query" type="text" placeholder="Filtrar vídeos carregados"></label><label class="stack">Canal<input id="channel" type="text" placeholder="Nome, ID ou handle"></label><div class="ranges">${numericControls.map(([, id, label]) => `<label class="stack">${label}<input id="${id}" type="number" min="0" step="any"></label>`).join("")}<label class="stack">Publicado a partir de<input id="published-after" type="date"></label><label class="stack">Publicado até<input id="published-before" type="date"></label></div><label class="stack">Formato<select id="format"><option value="all">Todos</option><option value="only">Só Shorts</option><option value="exclude">Sem Shorts</option></select></label><label class="stack">Ordenação<select id="sort"><option value="default">Ordem original</option><option value="views">Mais visualizados</option><option value="vph">Maior VPH médio</option><option value="outlier">Maior outlier</option><option value="recent">Mais recentes</option><option value="duration">Maior duração</option><option value="subscribers">Mais inscritos</option><option value="title">Título</option></select></label><div class="row"><button id="clear-filter" class="secondary">Limpar filtros</button><button id="scan">Analisar página</button><button id="workspace" class="secondary">Abrir painel</button></div><p id="status" role="status"></p><p>Somente conteúdo já carregado. VPH médio desde a publicação; datas relativas são aproximadas. Campos ausentes ficam fora quando seu limite está ativo. Nenhuma alteração no canal é feita por estes filtros.</p></section></details>`;
   const field = <T extends HTMLElement>(id: string) =>
     shadow.getElementById(id) as T;
+  syncFilterForm = () => {
+    field<HTMLInputElement>("query").value = filter.query ?? "";
+    field<HTMLInputElement>("channel").value = filter.channel ?? "";
+    for (const [key, id] of numericControls)
+      field<HTMLInputElement>(id).value =
+        filter[key] === undefined ? "" : String(filter[key]);
+    field<HTMLInputElement>("published-after").value =
+      filter.publishedAfter ?? "";
+    field<HTMLInputElement>("published-before").value =
+      filter.publishedBefore ?? "";
+    field<HTMLSelectElement>("format").value = filter.shorts ?? "all";
+    field<HTMLSelectElement>("sort").value = filter.sort;
+  };
+  syncFilterForm();
   field<HTMLInputElement>("shorts").checked = settings.hideShorts;
   field<HTMLInputElement>("metrics").checked = settings.showMetrics;
   field("shorts").addEventListener("change", () => {
     settings.hideShorts = field<HTMLInputElement>("shorts").checked;
-    void saveSettings(settings);
+    void saveSettings(settings).catch(showError);
     apply();
   });
   field("metrics").addEventListener("change", () => {
     settings.showMetrics = field<HTMLInputElement>("metrics").checked;
-    void saveSettings(settings);
+    void saveSettings(settings).catch(showError);
     apply();
   });
-  field("query").addEventListener("input", () => {
-    filter.query = field<HTMLInputElement>("query").value;
-    schedule();
-  });
-  field("minimum").addEventListener("input", () => {
-    filter.minimumViews = Math.max(
-      0,
-      Number(field<HTMLInputElement>("minimum").value) || 0,
-    );
-    schedule();
-  });
-  field("format").addEventListener("change", () => {
-    filter.shorts = field<HTMLSelectElement>("format")
-      .value as CardFilter["shorts"];
-    apply();
-  });
-  field("sort").addEventListener("change", () => {
-    filter.sort = field<HTMLSelectElement>("sort").value as CardFilter["sort"];
+  const readForm = () => {
+    try {
+      const input: Record<string, unknown> = {
+        query: field<HTMLInputElement>("query").value,
+        channel: field<HTMLInputElement>("channel").value,
+        shorts: field<HTMLSelectElement>("format").value,
+        sort: field<HTMLSelectElement>("sort").value,
+        publishedAfter: field<HTMLInputElement>("published-after").value,
+        publishedBefore: field<HTMLInputElement>("published-before").value,
+      };
+      for (const [key, id] of numericControls) {
+        const control = field<HTMLInputElement>(id);
+        if (!control.validity.valid)
+          throw new Error("Use limites numéricos não negativos.");
+        if (control.value !== "") input[key] = Number(control.value);
+      }
+      filter = normalizeCardFilter(input);
+      filterError = "";
+      schedule();
+    } catch (error) {
+      filterError = error instanceof Error ? error.message : String(error);
+      updatePanel();
+    }
+  };
+  for (const id of [
+    "query",
+    "channel",
+    "published-after",
+    "published-before",
+    ...numericControls.map(([, id]) => id),
+  ])
+    field(id).addEventListener("input", readForm);
+  for (const id of ["format", "sort"])
+    field(id).addEventListener("change", readForm);
+  field("clear-filter").addEventListener("click", () => {
+    filter = normalizeCardFilter({});
+    filterError = "";
+    syncFilterForm();
     apply();
   });
   field("scan").addEventListener("click", () => {
@@ -222,8 +356,9 @@ function mount(): void {
       .catch(showError);
   });
   updatePanel = () => {
-    const cards = readVideoCards(document);
+    const cards = loadedCards();
     field("status").textContent =
+      filterError ||
       `${cards.filter((c) => !c.element.hasAttribute(HIDDEN)).length} de ${cards.length} vídeos carregados visíveis`;
     field<HTMLInputElement>("shorts").checked = settings.hideShorts;
     field<HTMLInputElement>("metrics").checked = settings.showMetrics;
@@ -237,6 +372,7 @@ function mount(): void {
 
 async function snapshot() {
   const value = readYouTubeSnapshot(document);
+  value.videos = value.videos.map(enrichedVideo);
   if (location.hostname === "studio.youtube.com") {
     const metrics = readStudioMetrics(document);
     value.studio = {
@@ -267,9 +403,78 @@ interface Message {
   planId?: string;
   start?: string;
   end?: string;
+  filter?: unknown;
+  videos?: unknown;
+  seconds?: unknown;
+  expectedVideoId?: unknown;
 }
 async function dispatch(message: Message): Promise<unknown> {
   switch (message.type) {
+    case "APPLY_FILTER":
+    case "CLEAR_FILTER": {
+      if (!settings) throw new Error("Aguarde a extensão carregar.");
+      filter = normalizeCardFilter(
+        message.type === "CLEAR_FILTER" ? {} : message.filter,
+      );
+      filterError = "";
+      syncFilterForm();
+      apply();
+      const cards = loadedCards();
+      return {
+        status: "ok",
+        visible: cards.filter((card) => !card.element.hasAttribute(HIDDEN))
+          .length,
+        total: cards.length,
+        filter,
+      };
+    }
+    case "SET_ENRICHMENT": {
+      if (!Array.isArray(message.videos) || message.videos.length > 2000)
+        throw new Error("Envie até 2000 vídeos para atualizar os inscritos.");
+      const entries: Array<
+        [string, { subscribers: number; channel?: string }]
+      > = [];
+      for (const raw of message.videos) {
+        if (!raw || typeof raw !== "object")
+          throw new Error("Dados de canal inválidos.");
+        const record = raw as Record<string, unknown>;
+        if (record.subscribers === undefined) continue;
+        if (
+          typeof record.subscribers !== "number" ||
+          !Number.isFinite(record.subscribers) ||
+          record.subscribers < 0
+        )
+          throw new Error("Contagem de inscritos inválida.");
+        const identity = {
+          channelId:
+            typeof record.channelId === "string" ? record.channelId : undefined,
+          channelUrl:
+            typeof record.channelUrl === "string"
+              ? record.channelUrl
+              : undefined,
+        };
+        for (const key of channelKeys(identity))
+          entries.push([
+            key,
+            {
+              subscribers: record.subscribers,
+              channel:
+                typeof record.channel === "string" ? record.channel : undefined,
+            },
+          ]);
+      }
+      for (const [key, info] of entries) {
+        channelEnrichment.set(key, info);
+        while (channelEnrichment.size > 2000)
+          channelEnrichment.delete(channelEnrichment.keys().next().value!);
+      }
+      apply();
+      return { status: "ok", updated: entries.length };
+    }
+    case "GET_TIMELINE":
+    case "SEEK_VIDEO":
+    case "TOGGLE_PLAYBACK":
+      return { status: "ok", state: await dispatchTimeline(message, document) };
     case "GET_SNAPSHOT":
       return { status: "ok", snapshot: await snapshot() };
     case "COPY_TITLE_ID": {
@@ -288,6 +493,10 @@ async function dispatch(message: Message): Promise<unknown> {
       };
     }
     case "CAPTURE_CARD": {
+      if (suspended)
+        throw new Error(
+          "A página está suspensa. Ative a aba e tente novamente.",
+        );
       const selector =
         message.kind === "analytics"
           ? "ytcp-analytics-section,ytcp-channel-analytics,#analytics-content"
@@ -323,11 +532,12 @@ async function dispatch(message: Message): Promise<unknown> {
         throw new Error(
           "O card precisa estar inteiro visível na janela para capturar. Ajuste a rolagem ou o zoom.",
         );
-      const redactions = message.redact
+      const redactionNodes = message.redact
         ? getStudioRedactionTargets(document)
             .map((el) => {
               const box = el.getBoundingClientRect();
               return {
+                element: el,
                 x: box.x,
                 y: box.y,
                 width: box.width,
@@ -344,6 +554,12 @@ async function dispatch(message: Message): Promise<unknown> {
                 box.y + box.height > r.top,
             )
         : [];
+      const redactions = redactionNodes.map(({ x, y, width, height }) => ({
+        x,
+        y,
+        width,
+        height,
+      }));
       if (
         message.redact &&
         (message.kind === "analytics" ||
@@ -353,11 +569,40 @@ async function dispatch(message: Message): Promise<unknown> {
         throw new Error(
           "Nenhum campo sensível visível foi reconhecido neste card. A captura foi interrompida para evitar uma imagem sem ocultação. Confira o layout do Studio ou desative a ocultação conscientemente.",
         );
+      if (observer?.takeRecords().length) pageRevision++;
+      const captureStamp = JSON.stringify({
+        url: location.href,
+        revision: pageRevision,
+        element: elementIdentity(element),
+        content: element.textContent,
+        rect: { x: r.x, y: r.y, width: r.width, height: r.height },
+        viewport: {
+          width: innerWidth,
+          height: innerHeight,
+          scrollX: window.scrollX,
+          scrollY: window.scrollY,
+          visual: window.visualViewport
+            ? {
+                x: window.visualViewport.offsetLeft,
+                y: window.visualViewport.offsetTop,
+                width: window.visualViewport.width,
+                height: window.visualViewport.height,
+                scale: window.visualViewport.scale,
+              }
+            : null,
+        },
+        redactions: redactionNodes.map(({ element: target, ...box }) => ({
+          ...box,
+          identity: elementIdentity(target),
+          content: target.textContent,
+        })),
+      });
       return {
         status: "ok",
         rect: { x: r.x, y: r.y, width: r.width, height: r.height },
         viewportWidth: innerWidth,
         redactions,
+        captureStamp,
       };
     }
     case "GET_MONETIZATION":
@@ -415,7 +660,12 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 void getSettings()
   .then((value) => {
     settings = value;
-    observer = new MutationObserver(schedule);
+    observer = new MutationObserver((records) => {
+      if (records.length) {
+        pageRevision++;
+        schedule();
+      }
+    });
     if (!suspended) {
       navigation(true);
       apply();

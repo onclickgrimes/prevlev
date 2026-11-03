@@ -7,6 +7,7 @@ import {
   readComments,
   readVisibleTranscript,
   filterAndSortCards,
+  normalizeCardFilter,
 } from "../src/content/youtube";
 
 beforeEach(() => {
@@ -112,5 +113,87 @@ describe("coleta de dados visíveis do YouTube", () => {
         () => undefined,
       ).map((c) => c.video.views),
     ).toEqual([500, 100]);
+  });
+  it("combina todos os limites usando o dataset completo para outlier e ordenação", () => {
+    const rows = [
+      ["ccccccccccc", "Vídeo C", 200, 120, 2000, "2026-10-27"],
+      ["aaaaaaaaaaa", "Alfa destaque", 1000, 600, 1000, "2026-11-01"],
+      ["ddddddddddd", "Vídeo D", 300, 300, 3000, "2026-10-31"],
+      ["bbbbbbbbbbb", "Vídeo B", 100, 60, 500, "2026-11-02"],
+    ] as const;
+    document.body.innerHTML = rows
+      .map(
+        ([id, title, views, duration, subs, date]) =>
+          `<ytd-video-renderer><a id="video-title" href="/watch?v=${id}">${title}</a><ytd-channel-name><a href="/@CanalAzul">Canal azul</a></ytd-channel-name><div id="metadata-line"><span>${views} views</span><span>${date}</span></div><span data-subscribers>${subs} inscritos</span><span data-duration>PT${duration}S</span></ytd-video-renderer>`,
+      )
+      .join("");
+    const now = Date.parse("2026-11-03T12:00:00Z"),
+      cards = readVideoCards(document, new Date(now));
+    const full = normalizeCardFilter({
+      query: "Alfa",
+      channel: "@CanalAzul",
+      minViews: 200,
+      maxViews: 1500,
+      minSubscribers: 800,
+      maxSubscribers: 2500,
+      minDurationSeconds: 120,
+      maxDurationSeconds: 700,
+      minVph: 10,
+      maxVph: 30,
+      minOutlier: 4,
+      maxOutlier: 6,
+      publishedAfter: "2026-10-31",
+      publishedBefore: "2026-11-02",
+      shorts: "exclude",
+      sort: "outlier",
+    });
+    expect(
+      filterAndSortCards(cards, full, undefined, now).map(
+        (card) => card.video.id,
+      ),
+    ).toEqual(["aaaaaaaaaaa"]);
+    expect(
+      filterAndSortCards(
+        cards,
+        { minViews: 200, sort: "outlier" },
+        undefined,
+        now,
+      ).map((card) => card.video.id),
+    ).toEqual(["aaaaaaaaaaa", "ddddddddddd", "ccccccccccc"]);
+    expect(
+      filterAndSortCards(cards, { sort: "duration" }, undefined, now).map(
+        (card) => card.video.durationSeconds,
+      ),
+    ).toEqual([600, 300, 120, 60]);
+    expect(
+      filterAndSortCards(cards, { sort: "subscribers" }, undefined, now).map(
+        (card) => card.video.subscribers,
+      ),
+    ).toEqual([3000, 2000, 1000, 500]);
+    expect(
+      filterAndSortCards(cards, { sort: "recent" }, undefined, now).map(
+        (card) => card.video.id,
+      ),
+    ).toEqual(["bbbbbbbbbbb", "aaaaaaaaaaa", "ddddddddddd", "ccccccccccc"]);
+  });
+  it("recusa limites e mensagens inválidas antes de alterar o filtro", () => {
+    expect(() => normalizeCardFilter({ minViews: 200, maxViews: 100 })).toThrow(
+      "mínimo",
+    );
+    expect(() => normalizeCardFilter({ minVph: Infinity })).toThrow("finitos");
+    expect(() => normalizeCardFilter({ minSubscribers: "1" })).toThrow(
+      "números",
+    );
+    expect(() =>
+      normalizeCardFilter({
+        publishedAfter: "2026-11-03",
+        publishedBefore: "2026-11-01",
+      }),
+    ).toThrow();
+    expect(() => normalizeCardFilter({ sort: "unsafe" })).toThrow("Ordenação");
+    expect(normalizeCardFilter({ minimumViews: 20 })).toMatchObject({
+      minViews: 20,
+      sort: "default",
+    });
   });
 });

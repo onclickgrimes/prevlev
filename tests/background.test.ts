@@ -35,6 +35,13 @@ const contentSender: chrome.runtime.MessageSender = {
   url: first.url,
   tab: first,
 };
+const baseMeasurement = {
+  status: "ok",
+  captureStamp: "stable-layout",
+  rect: { x: 10, y: 20, width: 400, height: 200 },
+  viewportWidth: 1280,
+  redactions: [] as { x: number; y: number; width: number; height: number }[],
+};
 
 function chromeHarness() {
   let active = first;
@@ -47,6 +54,7 @@ function chromeHarness() {
   });
   const captureVisibleTab = vi.fn(async () => "data:image/png;base64,captured");
   const create = vi.fn(async () => target);
+  const sendMessage = vi.fn(async () => ({ ...baseMeasurement }));
   const storageGet = vi.fn(async () => ({
     settings: {
       ...defaultSettings,
@@ -61,7 +69,7 @@ function chromeHarness() {
   };
   const chromeApi = {
     runtime,
-    tabs: { get, query, update, captureVisibleTab, create },
+    tabs: { get, query, update, captureVisibleTab, create, sendMessage },
     storage: { local: { get: storageGet } },
   };
   return {
@@ -72,6 +80,7 @@ function chromeHarness() {
     update,
     captureVisibleTab,
     create,
+    sendMessage,
     storageGet,
     runtime,
     setActive: (value: chrome.tabs.Tab) => {
@@ -99,18 +108,16 @@ beforeEach(() => {
   vi.useFakeTimers();
   browser = chromeHarness();
   vi.stubGlobal("chrome", browser.chromeApi);
-  fetcher = vi
-    .fn<typeof fetch>()
-    .mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          status: "ok",
-          source: "prevlev:test",
-          data: { videoCount: 2 },
-        }),
-        { headers: { "Content-Type": "application/json" } },
-      ),
-    );
+  fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+    new Response(
+      JSON.stringify({
+        status: "ok",
+        source: "prevlev:test",
+        data: { videoCount: 2 },
+      }),
+      { headers: { "Content-Type": "application/json" } },
+    ),
+  );
   vi.stubGlobal("fetch", fetcher);
 });
 afterEach(() => {
@@ -129,6 +136,7 @@ describe("service worker e autorização de mensagens", () => {
       browser.update,
       browser.captureVisibleTab,
       browser.create,
+      browser.sendMessage,
       browser.storageGet,
       browser.runtime.getURL,
       fetcher,
@@ -216,6 +224,102 @@ describe("service worker e autorização de mensagens", () => {
   });
 });
 
+describe("pesquisa pública iniciada pela UI própria", () => {
+  it("nega pesquisa e amostragem originadas do content script antes da rede", async () => {
+    const listener = await importBackground();
+    expect(
+      await send(
+        listener,
+        {
+          type: "CHANNEL_RESEARCH",
+          channelUrl: "https://www.youtube.com/@fixture",
+        },
+        contentSender,
+      ),
+    ).toMatchObject({ status: "error" });
+    expect(
+      await send(
+        listener,
+        { type: "SAMPLE_MONETIZATION", videos: [{ id: "aaaaaaaaaaa" }] },
+        contentSender,
+      ),
+    ).toMatchObject({ status: "error" });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+  it("entrega cards públicos com cobertura explícita para UI própria com sender.tab", async () => {
+    const html = `var ytInitialData = ${JSON.stringify({ videoRenderer: { videoId: "aaaaaaaaaaa", title: { simpleText: "Vídeo fixture" }, viewCountText: { simpleText: "10 views" } } })};`;
+    fetcher.mockResolvedValueOnce(
+      new Response(html, { headers: { "Content-Type": "text/html" } }),
+    );
+    const listener = await importBackground();
+    const result = await send(
+      listener,
+      {
+        type: "CHANNEL_RESEARCH",
+        channelUrl: "https://www.youtube.com/@fixture",
+        order: "popular",
+      },
+      { ...uiSender, tab: first },
+    );
+    expect(result).toMatchObject({
+      status: "ok",
+      data: {
+        coverage: "initial-public-page",
+        videos: [{ id: "aaaaaaaaaaa", views: 10 }],
+      },
+    });
+    expect(fetcher).toHaveBeenCalledWith(
+      "https://www.youtube.com/@fixture/videos",
+      expect.objectContaining({ credentials: "omit", redirect: "error" }),
+    );
+  });
+  it("valida URL e máximo de amostras antes de buscar e mantém marcadores como inferência", async () => {
+    const listener = await importBackground();
+    expect(
+      await send(listener, {
+        type: "CHANNEL_RESEARCH",
+        channelUrl: "https://evil.example/@fixture",
+      }),
+    ).toMatchObject({ status: "error" });
+    expect(
+      await send(listener, {
+        type: "SAMPLE_MONETIZATION",
+        videos: [{ id: "aaaaaaaaaaa" }],
+        maxSamples: 6,
+      }),
+    ).toMatchObject({ status: "error" });
+    expect(fetcher).not.toHaveBeenCalled();
+    fetcher.mockResolvedValueOnce(
+      new Response('{"adSlots":[{"slot":true}]}', {
+        headers: { "Content-Type": "text/html" },
+      }),
+    );
+    expect(
+      await send(listener, {
+        type: "SAMPLE_MONETIZATION",
+        videos: [{ id: "aaaaaaaaaaa", url: "https://evil.example" }],
+        maxSamples: 1,
+      }),
+    ).toMatchObject({
+      status: "ok",
+      data: {
+        assessments: [
+          {
+            videoId: "aaaaaaaaaaa",
+            status: "markers-present",
+            confidence: "low",
+            source: "public-youtube",
+          },
+        ],
+      },
+    });
+    expect(fetcher).toHaveBeenCalledWith(
+      "https://www.youtube.com/watch?v=aaaaaaaaaaa",
+      expect.objectContaining({ credentials: "omit", redirect: "error" }),
+    );
+  });
+});
+
 describe("captura com validação da aba e recuperação", () => {
   it("captura somente a aba alvo validada e restaura a aba anterior", async () => {
     const listener = await importBackground();
@@ -225,11 +329,68 @@ describe("captura com validação da aba e recuperação", () => {
         { type: "CAPTURE_SCREENSHOT", tabId: 2 },
         { ...uiSender, tab: first },
       ),
-    ).toEqual({ status: "ok", dataUrl: "data:image/png;base64,captured" });
+    ).toEqual({
+      status: "ok",
+      dataUrl: "data:image/png;base64,captured",
+      capture: baseMeasurement,
+    });
     expect(browser.captureVisibleTab).toHaveBeenCalledWith(1, {
       format: "png",
     });
     expect(browser.update.mock.calls.map((call) => call[0])).toEqual([2, 1]);
+    expect(browser.sendMessage).toHaveBeenCalledTimes(2);
+    expect(browser.sendMessage).toHaveBeenCalledWith(2, {
+      type: "CAPTURE_CARD",
+      kind: "video",
+      redact: false,
+    });
+    expect(browser.sendMessage.mock.invocationCallOrder[0]).toBeLessThan(
+      browser.captureVisibleTab.mock.invocationCallOrder[0],
+    );
+    expect(browser.sendMessage.mock.invocationCallOrder[1]).toBeGreaterThan(
+      browser.captureVisibleTab.mock.invocationCallOrder[0],
+    );
+  });
+  it.each(["scroll", "layout", "redaction"])(
+    "descarta a imagem quando %s muda sem mudança da URL",
+    async (change) => {
+      browser.sendMessage
+        .mockResolvedValueOnce(baseMeasurement)
+        .mockResolvedValueOnce({
+          ...baseMeasurement,
+          captureStamp: `${change}-changed`,
+          ...(change === "redaction"
+            ? { redactions: [{ x: 80, y: 30, width: 100, height: 20 }] }
+            : {}),
+        });
+      const listener = await importBackground();
+      const result = await send(listener, {
+        type: "CAPTURE_SCREENSHOT",
+        tabId: 2,
+        kind: "analytics",
+        redact: true,
+      });
+      expect(result).toMatchObject({
+        status: "error",
+        error: expect.stringContaining("Imagem descartada"),
+      });
+      expect(result).not.toHaveProperty("dataUrl");
+      expect(browser.captureVisibleTab).toHaveBeenCalledOnce();
+    },
+  );
+  it("interrompe antes da captura se a medição falhar ou não tiver revisão verificável", async () => {
+    browser.sendMessage.mockResolvedValueOnce({
+      ...baseMeasurement,
+      captureStamp: "",
+    });
+    const listener = await importBackground();
+    expect(
+      await send(listener, { type: "CAPTURE_SCREENSHOT", tabId: 2 }),
+    ).toMatchObject({
+      status: "error",
+      error: expect.stringContaining("Medição de captura incompatível"),
+    });
+    expect(browser.captureVisibleTab).not.toHaveBeenCalled();
   });
   it("descarta antes de capturar quando a página alvo navega durante a ativação", async () => {
     browser.query

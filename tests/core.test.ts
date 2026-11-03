@@ -10,6 +10,7 @@ import {
   outlierScore,
   sortVideos,
   summarizeVideos,
+  validateVideoFilter,
 } from "../src/core/metrics";
 import {
   parseCount,
@@ -140,6 +141,99 @@ describe("honest local metrics", () => {
     });
     expect(median([NaN, 4, 2])).toBe(3);
   });
+  it("keeps different handles and unknown-channel peers out of a known handle baseline", () => {
+    const target = video("target", 1000, {
+      channel: "Shared display name",
+      channelUrl: "https://www.youtube.com/@CanalAzul",
+    });
+    const same = [100, 200, 300].map((views, index) =>
+      video(`same-${index}`, views, {
+        channelUrl: "https://www.youtube.com/@canalazul/",
+      }),
+    );
+    const different = [1, 1, 1].map((views, index) =>
+      video(`other-${index}`, views, {
+        channel: "Shared display name",
+        channelUrl: "https://www.youtube.com/@OutroCanal",
+      }),
+    );
+    const unknown = [1, 1, 1].map((views, index) =>
+      video(`unknown-${index}`, views),
+    );
+    expect(
+      outlierScore(target, [target, ...same, ...different, ...unknown]),
+    ).toBe(5);
+    expect(
+      outlierScore(target, [...same.slice(0, 2), ...different, ...unknown]),
+    ).toBeUndefined();
+  });
+  it("matches channel URL IDs with explicit IDs while keeping case-sensitive IDs distinct", () => {
+    const target = video("target", 1000, { channelId: "UCAbc123" });
+    const peers = [100, 200, 300].map((views, index) =>
+      video(`same-${index}`, views, {
+        channelUrl: "https://www.youtube.com/channel/UCAbc123",
+      }),
+    );
+    const different = [1, 1, 1].map((views, index) =>
+      video(`other-${index}`, views, { channelId: "UCabc123" }),
+    );
+    expect(outlierScore(target, [...peers, ...different])).toBe(5);
+    expect(
+      outlierScore(
+        video("url-target", 1000, {
+          channelUrl: "https://www.youtube.com/channel/UCAbc123",
+        }),
+        peers.map((item) => ({
+          ...item,
+          channelUrl: undefined,
+          channelId: "UCAbc123",
+        })),
+      ),
+    ).toBe(5);
+  });
+  it("uses names only for two name-only identities and retains the documented identity-free fallback", () => {
+    const target = video("target", 1000, { channel: "Música Azul" });
+    const named = [100, 200, 300].map((views, index) =>
+      video(`named-${index}`, views, { channel: "  musica AZUL  " }),
+    );
+    const linked = [1, 1, 1].map((views, index) =>
+      video(`linked-${index}`, views, {
+        channel: "Música Azul",
+        channelUrl: "https://www.youtube.com/@outro",
+      }),
+    );
+    expect(
+      outlierScore(target, [...named, ...linked, video("unknown", 1)]),
+    ).toBe(5);
+    expect(
+      outlierScore(target, [...named.slice(0, 2), ...linked]),
+    ).toBeUndefined();
+    expect(
+      outlierScore(video("identity-free", 1000), [
+        video("a", 100, { channelId: "a" }),
+        video("b", 200, { channelUrl: "https://www.youtube.com/@b" }),
+        video("c", 300),
+      ]),
+    ).toBe(5);
+  });
+  it("uses definitive matching IDs over renamed handles and rejects contradictory ID metadata", () => {
+    const target = video("target", 1000, {
+      channelId: "same",
+      channelUrl: "https://www.youtube.com/@newhandle",
+    });
+    const renamed = [100, 200, 300].map((views, index) =>
+      video(`same-${index}`, views, {
+        channelId: "same",
+        channelUrl: "https://www.youtube.com/@oldhandle",
+      }),
+    );
+    expect(outlierScore(target, renamed)).toBe(5);
+    const conflict = video("conflict", 1000, {
+      channelId: "same",
+      channelUrl: "https://www.youtube.com/channel/different",
+    });
+    expect(outlierScore(conflict, renamed)).toBeUndefined();
+  });
   it("filters missing metrics as unknown and folds accents in search", () => {
     const list = [
       video("a", 100, { title: "Criação", subscribers: 20 }),
@@ -191,6 +285,195 @@ describe("honest local metrics", () => {
     });
     expect(inferMonetization('{"adPlacements":[]}').status).toBe("unknown");
     expect(inferMonetization("adPlacements").status).toBe("unknown");
+  });
+});
+
+describe("complete video filters and stable ordering", () => {
+  it("treats zero as an active inclusive threshold and excludes missing or invalid metrics", () => {
+    const list = [
+      video("zero", 0, { durationSeconds: 0, subscribers: 0 }),
+      video("unknown"),
+      video("invalid", NaN, { durationSeconds: -1, subscribers: Infinity }),
+      video("positive", 5, { durationSeconds: 60, subscribers: 5 }),
+    ];
+    expect(
+      filterVideos(list, { minViews: 0, maxViews: 0 }).map((item) => item.id),
+    ).toEqual(["zero"]);
+    expect(
+      filterVideos(list, { minDurationSeconds: 0, maxDurationSeconds: 0 }).map(
+        (item) => item.id,
+      ),
+    ).toEqual(["zero"]);
+    expect(
+      filterVideos(list, { minSubscribers: 0, maxSubscribers: 0 }).map(
+        (item) => item.id,
+      ),
+    ).toEqual(["zero"]);
+    expect(
+      filterVideos(list, {
+        minDurationSeconds: 60,
+        maxDurationSeconds: 60,
+      }).map((item) => item.id),
+    ).toEqual(["positive"]);
+  });
+  it("applies min and max VPH using known publication times, including a real zero rate", () => {
+    const list = [
+      video("zero", 0, { publishedAt: "2026-11-02T20:00:00Z" }),
+      video("twenty-five", 100, { publishedAt: "2026-11-02T20:00:00Z" }),
+      video("fifty", 200, { publishedAt: "2026-11-02T20:00:00Z" }),
+      video("unknown", 100),
+      video("future", 100, { publishedAt: "2026-11-04" }),
+    ];
+    expect(
+      filterVideos(list, { minVph: 25, maxVph: 25 }, now).map(
+        (item) => item.id,
+      ),
+    ).toEqual(["twenty-five"]);
+    expect(
+      filterVideos(list, { maxVph: 0 }, now).map((item) => item.id),
+    ).toEqual(["zero"]);
+  });
+  it("matches a channel name, ID or handle URL without requiring all three fields", () => {
+    const named = video("named", 1, { channel: "Música Azul" });
+    const identified = video("identified", 1, { channelId: "UCCanalAzul" });
+    const handled = video("handled", 1, {
+      channelUrl: "https://www.youtube.com/@CanalAzul",
+    });
+    const list = [named, identified, handled, video("unknown", 1)];
+    expect(filterVideos(list, { channel: "musica azul" })).toEqual([named]);
+    expect(filterVideos(list, { channel: "UCCanalAzul" })).toEqual([
+      identified,
+    ]);
+    expect(filterVideos(list, { channel: "@canalazul" })).toEqual([handled]);
+  });
+  it("includes whole UTC boundary days and exact timezone-qualified instants", () => {
+    const list = [
+      video("start", 1, { publishedAt: "2026-11-01T00:00:00Z" }),
+      video("end", 1, { publishedAt: "2026-11-01T23:59:59.999Z" }),
+      video("next", 1, { publishedAt: "2026-11-02T00:00:00Z" }),
+      video("unknown", 1),
+    ];
+    expect(
+      filterVideos(
+        list,
+        { publishedAfter: "2026-11-01", publishedBefore: "2026-11-01" },
+        now,
+      ).map((item) => item.id),
+    ).toEqual(["start", "end"]);
+    expect(
+      filterVideos(
+        list,
+        {
+          publishedAfter: "2026-11-01T21:59:59.999-02:00",
+          publishedBefore: "2026-11-01T23:59:59.999Z",
+        },
+        now,
+      ).map((item) => item.id),
+    ).toEqual(["end"]);
+  });
+  it("keeps invalid and future metadata unknown in date filters and recent/VPH ordering", () => {
+    const invalid = [
+      video("future", 10, { publishedAt: "2026-11-04" }),
+      video("rollover", 10, { publishedAt: "2026-02-31" }),
+      video("ambiguous-zone", 10, { publishedAt: "2026-11-01T12:00:00" }),
+      video("garbage", 10, { publishedAt: "invalid" }),
+    ];
+    const known = video("known", 10, { publishedAt: "2026-11-01T12:00:00Z" });
+    expect(
+      filterVideos(
+        [...invalid, known],
+        { publishedAfter: "2026-01-01" },
+        now,
+      ).map((item) => item.id),
+    ).toEqual(["known"]);
+    expect(
+      sortVideos([...invalid, known], "recent", now).map((item) => item.id),
+    ).toEqual(["known", ...invalid.map((item) => item.id)]);
+    for (const item of invalid) expect(lifetimeVph(item, now)).toBeUndefined();
+  });
+  it("rejects nonfinite, negative, impossible and invalid-date ranges before examining videos", () => {
+    for (const filter of [
+      { minViews: -1 },
+      { maxVph: Infinity },
+      { minOutlier: NaN },
+      { minViews: 2, maxViews: 1 },
+      { minSubscribers: 2, maxSubscribers: 1 },
+      { minVph: 2, maxVph: 1 },
+      { minOutlier: 2, maxOutlier: 1 },
+      { minDurationSeconds: 61, maxDurationSeconds: 60 },
+      { publishedAfter: "2026-11-02", publishedBefore: "2026-11-01" },
+      { publishedBefore: "2026-02-29" },
+      { publishedAfter: "2026-13-01" },
+      { publishedAfter: "2026-11-01T25:00:00Z" },
+      { publishedAfter: "2026-11-01T00:00:00+25:00" },
+      { publishedAfter: "2026-11-01T00:00:00" },
+    ])
+      expect(() => filterVideos([], filter, now)).toThrow();
+    expect(() =>
+      validateVideoFilter({
+        minViews: 0,
+        maxViews: 0,
+        publishedAfter: "2024-02-29",
+        publishedBefore: "2024-02-29",
+      }),
+    ).not.toThrow();
+  });
+  it("keeps the complete channel baseline after text filters for both scores and sorting", () => {
+    const a = video("a", 1000, { title: "keep a", channelId: "channel-a" });
+    const b = video("b", 2000, { title: "keep b", channelId: "channel-b" });
+    const all = [
+      b,
+      a,
+      ...[1, 2, 3].map((index) =>
+        video(`a${index}`, 100, { channelId: "channel-a" }),
+      ),
+      ...[1, 2, 3].map((index) =>
+        video(`b${index}`, 1000, { channelId: "channel-b" }),
+      ),
+    ];
+    const filtered = filterVideos(
+      all,
+      { query: "keep", minOutlier: 2, maxOutlier: 10 },
+      now,
+    );
+    expect(filtered).toEqual([b, a]);
+    expect(sortVideos(filtered, "outlier", now, all)).toEqual([a, b]);
+    expect(outlierScore(a, all)).toBe(10);
+    expect(outlierScore(b, all)).toBe(2);
+    expect(filterVideos(all, { query: "keep", maxOutlier: 2 }, now)).toEqual([
+      b,
+    ]);
+  });
+  it("distinguishes a zero outlier from an unknown reference and supports duration/subscriber sorting", () => {
+    const list = [
+      video("zero", 0),
+      video("one", 100),
+      video("two", 200),
+      video("three", 300),
+    ];
+    expect(filterVideos(list, { minOutlier: 0, maxOutlier: 0 }, now)).toEqual([
+      list[0],
+    ]);
+    expect(filterVideos(list.slice(0, 3), { maxOutlier: 0 }, now)).toEqual([]);
+    const sortable = [
+      video("unknown"),
+      video("short", 1, { durationSeconds: 30, subscribers: 300 }),
+      video("long", 1, { durationSeconds: 300, subscribers: 30 }),
+      video("zero", 1, { durationSeconds: 0, subscribers: 0 }),
+    ];
+    expect(sortVideos(sortable, "duration").map((item) => item.id)).toEqual([
+      "long",
+      "short",
+      "zero",
+      "unknown",
+    ]);
+    expect(sortVideos(sortable, "subscribers").map((item) => item.id)).toEqual([
+      "short",
+      "long",
+      "zero",
+      "unknown",
+    ]);
+    expect(sortable[0].id).toBe("unknown");
   });
 });
 

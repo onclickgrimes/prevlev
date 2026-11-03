@@ -19,7 +19,7 @@ const hearts = (count = 2) =>
     Array.from(
       { length: count },
       (_, index) =>
-        `<ytcp-comment-thread><ytcp-comment><button aria-label="Heart" id="heart-${index}" aria-pressed="false">Heart</button></ytcp-comment></ytcp-comment-thread>`,
+        `<ytcp-comment-thread><ytcp-comment data-comment-id="comment-${index}"><span id="author-text">Author ${index}</span><span id="content-text">Comment ${index}</span><button aria-label="Heart" id="heart-${index}" aria-pressed="false">Heart</button></ytcp-comment></ytcp-comment-thread>`,
     ).join(""),
   );
 
@@ -61,6 +61,67 @@ describe("safe Studio adapter", () => {
     expect((await executeStudioPlan(plan.id)).status).toBe("stale");
     expect(click).not.toHaveBeenCalled();
   });
+  it("rejects a recycled comment row while preserving the same heart button", async () => {
+    for (const changed of ["author", "text", "identity", "container"]) {
+      const doc = hearts(1);
+      const button = doc.querySelector<HTMLElement>("button")!;
+      const click = vi.fn();
+      button.addEventListener("click", click);
+      const plan = previewStudioAction("hearts-add", {}, doc);
+      expect(plan.status).toBe("ready");
+      if (changed === "author")
+        doc.querySelector("#author-text")!.textContent = "Another author";
+      if (changed === "text")
+        doc.querySelector('[id="content-text"]')!.textContent =
+          "A different comment";
+      if (changed === "identity")
+        doc.querySelector<HTMLElement>("ytcp-comment")!.dataset.commentId =
+          "another-comment";
+      if (changed === "container") {
+        const replacement = doc
+          .querySelector("ytcp-comment")!
+          .cloneNode(true) as HTMLElement;
+        replacement.querySelector("button")!.replaceWith(button);
+        doc.querySelector("ytcp-comment")!.replaceWith(replacement);
+      }
+      expect(doc.querySelector("button")).toBe(button);
+      expect(await executeStudioPlan(plan.id)).toMatchObject({
+        status: "stale",
+        submitted: 0,
+      });
+      expect(click).not.toHaveBeenCalled();
+    }
+  });
+  it("rechecks comment text before every click during a running batch", async () => {
+    const doc = hearts(2);
+    const first = doc.querySelector<HTMLElement>("#heart-0")!;
+    const second = doc.querySelector<HTMLElement>("#heart-1")!;
+    const click = vi.fn();
+    second.addEventListener("click", click);
+    first.addEventListener("click", () => {
+      second
+        .closest("ytcp-comment")!
+        .querySelector('[id="content-text"]')!.textContent =
+        "Recycled into another comment";
+    });
+    const plan = previewStudioAction("hearts-add", {}, doc);
+    expect(await executeStudioPlan(plan.id)).toMatchObject({
+      status: "stale",
+      submitted: 1,
+    });
+    expect(click).not.toHaveBeenCalled();
+  });
+  it("refuses heart controls without an identifiable author and comment text", () => {
+    expect(
+      previewStudioAction(
+        "hearts-add",
+        {},
+        fixture(
+          '<ytcp-comment><button aria-label="Heart">Heart</button></ytcp-comment>',
+        ),
+      ).status,
+    ).toBe("unsupported");
+  });
   it("does not replay a cancelled plan and refuses other hosts", async () => {
     const plan = previewStudioAction("hearts-add", {}, hearts(1));
     expect(cancelStudioPlan(plan.id)).toBe(true);
@@ -87,7 +148,7 @@ describe("safe Studio adapter", () => {
   });
   it("removes only currently hearted comments with recognized labels", () => {
     const doc = fixture(
-      '<ytcp-comment><button aria-label="Remove heart">Remove</button><button aria-label="Heart" aria-pressed="false">Heart</button><button aria-label="Like">Like</button></ytcp-comment>',
+      '<ytcp-comment data-comment-id="fixture-comment"><span id="author-text">Fixture author</span><span id="content-text">Fixture comment text</span><button aria-label="Remove heart">Remove</button><button aria-label="Heart" aria-pressed="false">Heart</button><button aria-label="Like">Like</button></ytcp-comment>',
     );
     expect(previewStudioAction("hearts-remove", {}, doc).targetCount).toBe(1);
   });
@@ -120,7 +181,7 @@ describe("safe Studio adapter", () => {
   });
   it("does not double-count nested heart controls", () => {
     const doc = fixture(
-      '<ytcp-comment><ytcp-icon-button aria-label="Heart"><button aria-label="Heart">Heart</button></ytcp-icon-button></ytcp-comment>',
+      '<ytcp-comment data-comment-id="fixture-comment"><span id="author-text">Fixture author</span><span id="content-text">Fixture comment text</span><ytcp-icon-button aria-label="Heart"><button aria-label="Heart">Heart</button></ytcp-icon-button></ytcp-comment>',
     );
     expect(previewStudioAction("hearts-add", {}, doc).targetCount).toBe(1);
   });
