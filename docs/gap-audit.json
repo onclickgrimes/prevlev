@@ -1622,6 +1622,13 @@
           "src/ui/images.ts"
         ],
         "meaning": "Há código novo em andamento; isso não comprova todos os critérios nem runtime real. Revalidar antes de encerrar o item."
+      },
+      "nineLocalGapCheckpoint": {
+        "status": "implemented_local_scope_fixture_tested",
+        "scope": "Reset/Done confirma e restaura metadados e avatar sem trocar a candidata selecionada quando os arquivos não mudam.",
+        "limits": "O contexto e os números editados continuam ilustrativos, sem teste de audiência.",
+        "runtimeVerified": false,
+        "fullReferenceParity": false
       }
     },
     {
@@ -1663,6 +1670,13 @@
           "src/ui/images.ts"
         ],
         "meaning": "Há código novo em andamento; isso não comprova todos os critérios nem runtime real. Revalidar antes de encerrar o item."
+      },
+      "nineLocalGapCheckpoint": {
+        "status": "implemented_local_scope_fixture_tested",
+        "scope": "Seleção explícita de coleção congelada ou aba autorizada, URL/superfície observada, cancelamento e guarda de contexto. A leitura GET_IMAGE_CONTEXT não grava nem substitui a coleta.",
+        "limits": "Somente a amostra DOM disponível; não carrega automaticamente cada feed nem atribui uma origem única a coleções mistas.",
+        "runtimeVerified": false,
+        "fullReferenceParity": false
       }
     },
     {
@@ -2066,7 +2080,14 @@
       ],
       "runtimeGate": "RT01",
       "implementationProofIsRuntimeProof": false,
-      "workRemainingAtBaseline": true
+      "workRemainingAtBaseline": true,
+      "nineLocalGapCheckpoint": {
+        "status": "implemented_local_scope_fixture_tested",
+        "scope": "JSON/CSV/Markdown incluem saídas de IA válidas já disponíveis, com procedência e marcação de conteúdo gerado; exports não geram chamadas.",
+        "limits": "Saídas ausentes ou invalidadas não são inventadas; textos gerados não recebem timestamps da transcrição.",
+        "runtimeVerified": false,
+        "fullReferenceParity": false
+      }
     },
     {
       "id": "D20",
@@ -2106,7 +2127,14 @@
       ],
       "runtimeGate": "RT01",
       "implementationProofIsRuntimeProof": false,
-      "workRemainingAtBaseline": true
+      "workRemainingAtBaseline": true,
+      "nineLocalGapCheckpoint": {
+        "status": "implemented_local_scope_fixture_tested",
+        "scope": "Cache vincula vídeo, entrada, modelo, origem, streaming e backend; salvar/remover conexão invalida o cache.",
+        "limits": "Validação em serviço real permanece separada dos testes de transporte/fixtures.",
+        "runtimeVerified": false,
+        "fullReferenceParity": false
+      }
     },
     {
       "id": "D21",
@@ -2146,7 +2174,14 @@
       ],
       "runtimeGate": "RT03",
       "implementationProofIsRuntimeProof": false,
-      "workRemainingAtBaseline": true
+      "workRemainingAtBaseline": true,
+      "nineLocalGapCheckpoint": {
+        "status": "implemented_local_scope_fixture_tested",
+        "scope": "Precisão explícita em segundos ou frames/FPS, preservação de frações elegíveis e timeline local navegável; adapter legado recusa frações.",
+        "limits": "Cursor e timeline são locais e declarados; não afirmam seek/preview no Studio real.",
+        "runtimeVerified": false,
+        "fullReferenceParity": false
+      }
     },
     {
       "id": "D22",
@@ -2286,7 +2321,14 @@
       ],
       "runtimeGate": "RT03",
       "implementationProofIsRuntimeProof": false,
-      "workRemainingAtBaseline": true
+      "workRemainingAtBaseline": true,
+      "nineLocalGapCheckpoint": {
+        "status": "implemented_local_scope_fixture_tested",
+        "scope": "Composição AnalyticsOnly/VideoInfo com moldura/tema/fundo/alpha/escala, sobre PNG local ou recorte validado. URL real, stamp, máscaras, cancelamento e contexto são revalidados antes de aceitar, compor e baixar.",
+        "limits": "O tema altera a moldura, preservando os pixels da captura; metadados são declarados. Não há reconstrução automática de widgets privados ou garantia total de anonimização.",
+        "runtimeVerified": false,
+        "fullReferenceParity": false
+      }
     },
     {
       "id": "D25",
@@ -2378,6 +2420,13 @@
           "src/content/studio.ts"
         ],
         "meaning": "Há código novo em andamento; isso não comprova todos os critérios nem runtime real. Revalidar antes de encerrar o item."
+      },
+      "nineLocalGapCheckpoint": {
+        "status": "implemented_local_scope_fixture_tested",
+        "scope": "Publicação e período declarados são descartados ao mudar vídeo, aba ou navegação; mesmo vídeo com somente query/período alterados preserva a declaração.",
+        "limits": "A data de publicação é manual; não foi validada em conta real.",
+        "runtimeVerified": false,
+        "fullReferenceParity": false
       }
     },
     {
@@ -2555,7 +2604,14 @@
           "part": "geração real e entrada privada autorizada quando exigidas",
           "category": "external_credential_or_decision"
         }
-      ]
+      ],
+      "nineLocalGapCheckpoint": {
+        "status": "implemented_local_scope_fixture_tested",
+        "scope": "Grupos estruturados manuais de conteúdo/nicho/estratégia/feedback/performance/tópicos/roteiro/etapas com alvo, fonte, cobertura, trechos, reassociação, exports e backup limitados.",
+        "limits": "Declarações e correspondência literal não verificam verdade, estratégia, contrato, causalidade ou finanças. Não há geração/análise automática desses grupos.",
+        "runtimeVerified": false,
+        "fullReferenceParity": false
+      }
     },
     {
       "id": "D30",
@@ -2615,7 +2671,14 @@
           "part": "cobertura abrangente além das fontes já coletadas",
           "category": "external_credential_or_decision"
         }
-      ]
+      ],
+      "nineLocalGapCheckpoint": {
+        "status": "implemented_local_scope_fixture_tested",
+        "scope": "Nichos oferece seleção explícita de modo de outlier; preserva o modo e exporta método, referência, contagens e procedência. Canal sem identidade robusta fica desconhecido, sem fallback.",
+        "limits": "Referência de amostra, não índice proprietário ou média do catálogo completo; modo é escolhido explicitamente no nicho.",
+        "runtimeVerified": false,
+        "fullReferenceParity": false
+      }
     },
     {
       "id": "D31",
@@ -2800,6 +2863,13 @@
           "src/ui/research.ts"
         ],
         "meaning": "Há código novo em andamento; isso não comprova todos os critérios nem runtime real. Revalidar antes de encerrar o item."
+      },
+      "nineLocalGapCheckpoint": {
+        "status": "implemented_local_scope_fixture_tested",
+        "scope": "Nichos oferece seleção explícita de modo de outlier; preserva o modo e exporta método, referência, contagens e procedência. Canal sem identidade robusta fica desconhecido, sem fallback.",
+        "limits": "Referência de amostra, não índice proprietário ou média do catálogo completo; modo é escolhido explicitamente no nicho.",
+        "runtimeVerified": false,
+        "fullReferenceParity": false
       }
     }
   ],
@@ -3323,6 +3393,29 @@
         "D29",
         "D30/D33"
       ]
+    },
+    {
+      "ids": [
+        "D09",
+        "D10",
+        "D19",
+        "D20",
+        "D21",
+        "D24",
+        "D26",
+        "D29",
+        "D30/D33"
+      ],
+      "scope": "Nove escopos locais; ver docs/NINE_LOCAL_GAPS.md",
+      "status": "implemented_local_scope_fixture_tested",
+      "functionalSourceCommit": "5e0641196181a1106030d0defc778c103f86c280",
+      "automatedPassed": 686,
+      "automatedFiles": 60,
+      "browserPassed": 162,
+      "browserSkipped": 2,
+      "runtimeVerified": false,
+      "fullReferenceParity": false,
+      "remainingLocalAuditItemsFromThisNineItemBatch": []
     }
   ]
 }

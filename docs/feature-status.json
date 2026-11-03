@@ -1162,6 +1162,29 @@
         "D29",
         "D30/D33"
       ]
+    },
+    {
+      "ids": [
+        "D09",
+        "D10",
+        "D19",
+        "D20",
+        "D21",
+        "D24",
+        "D26",
+        "D29",
+        "D30/D33"
+      ],
+      "scope": "Nove escopos locais; ver docs/NINE_LOCAL_GAPS.md",
+      "status": "implemented_local_scope_fixture_tested",
+      "functionalSourceCommit": "5e0641196181a1106030d0defc778c103f86c280",
+      "automatedPassed": 686,
+      "automatedFiles": 60,
+      "browserPassed": 162,
+      "browserSkipped": 2,
+      "runtimeVerified": false,
+      "fullReferenceParity": false,
+      "remainingLocalAuditItemsFromThisNineItemBatch": []
     }
   ]
 }

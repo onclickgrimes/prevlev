@@ -1,5 +1,7 @@
 # Ledger de diferenças comprovadas da referência
 
+Checkpoint das nove lacunas locais implementado e verificado: [escopo entregue e limites](NINE_LOCAL_GAPS.md). 686 testes automatizados e162 cenários de navegador aprovados;2 ignorados por política. Descrições históricas abaixo permanecem como registro da base, não como afirmação de ausência atual.
+
 Checkpoint de contexto D20/D26: cache inclui backend salvo e conexão invalida resultados; troca de vídeo/aba descarta publicação e período declarados. Verificação local:630 testes e10 cenários direcionados; demais lacunas continuam abertas.
 
 Revisão local adicional de segurança e correção: [coleta, imagens, transcrições e fontes](LOCAL_SAFETY_FOLLOWUP.md). Publicação suspensa; aceite por fixtures permanece separado do runtime real.

@@ -1,3 +1,11 @@
+# Checkpoint final das nove lacunas locais
+
+Em 3 de novembro de 2026, typecheck, lint, **686 testes automatizados em 60 arquivos** e build passaram. A regressão completa do build final passou em **162 cenários de navegador**, com **2 ignorados** por política da extensão instalada. A fonte foi congelada durante a execução. O pacote próprio foi verificado por CRC e hashes de suas dez entradas.
+
+Foram integrados Reset/Done reversível, amostras explícitas por fonte, exportação de saídas IA válidas, cache por backend, precisão/timeline local de mid-roll, composição Studio, vínculo de publicação por identidade, relatório estruturado manual e modo de outlier no nicho. Revisões e fixtures incluem respostas tardias, troca de backend/aba/URL, PNG local substituindo captura pendente, alteração de máscaras e download com contexto invalidado. [Escopo e limites completos](NINE_LOCAL_GAPS.md).
+
+D20/D26 foram publicados como checkpoint `971c26ec31f9ff4b100515bc54afaf3b4212b638`; a fonte funcional integrada final é `5e0641196181a1106030d0defc778c103f86c280`. Nenhuma geração paga, conta/canal real ou mudança de políticas ocorreu. Código e implementação manual/local não comprovam runtime ou paridade completa.
+
 # Checkpoint D20/D26 · vínculo de contexto
 
 Em 3 de novembro de 2026, `npm run check` passou com **630 testes em 54 arquivos**, typecheck, lint e build. **10 cenários direcionados de navegador** passaram no build final, incluindo troca de backend com reseleção do mesmo modelo/origem e troca de vídeo descartando publicação/período. A suíte integral anterior do follow-up (124 aprovações e dois ignorados) não foi repetida neste checkpoint localizado.
