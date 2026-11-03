@@ -266,7 +266,7 @@ function frameSeconds(value:string,fps:number):number|undefined{
  const match=/^(\d{1,3}):(\d{2}):(\d{2}):(\d{2})$/.exec(value);if(!match)return undefined;const [,hours,minutes,seconds,frames]=match.map(Number);if(minutes>59||seconds>59||frames>=fps)return undefined;return hours*3600+minutes*60+seconds+frames/fps;
 }
 function modernIsCurrent(context:ModernMidrollContext,doc:Document,replaceField=false):boolean{
- const parts=modernParts(doc);return !!parts&&parts.panel===context.panel&&parts.toolbar===context.toolbar&&parts.timeControl===context.timeControl&&parts.addButton===context.addButton&&modernFingerprint(parts,doc)===context.fingerprint&&validModernFps(parts,context.fps)&&signature(parts.addButton)===context.addSignature&&(replaceField||parts.field===context.field&&signature(parts.field)===context.fieldSignature);
+ const parts=modernParts(doc);return !!parts&&parts.panel===context.panel&&parts.toolbar===context.toolbar&&parts.timeControl===context.timeControl&&parts.addButton===context.addButton&&modernFingerprint(parts,doc)===context.fingerprint&&validModernFps(parts,context.fps)&&frameSeconds(parts.field.value,context.fps)!==undefined&&signature(parts.addButton)===context.addSignature&&(replaceField||parts.field===context.field&&signature(parts.field)===context.fieldSignature);
 }
 function midrollEditors(doc: Document): HTMLElement[] {
   const editors = Array.from(
@@ -419,11 +419,19 @@ export function readStudioMetrics(doc: Document = document):StudioMetrics {
  if(!studioDocument(doc)){result.warnings.push('Abra o YouTube Studio para ler métricas exibidas.');return result;}
  const revenueCandidates:{value:number;currency?:string;code?:string;source:StudioMetricSource}[]=[];
  const quantityCandidates:{value:number;source:StudioMetricSource}[]=[];
+ let currencyConflict=false;
  const addRevenue=(element:HTMLElement,selector:string,metricLabel:string)=>{
   if(!visible(element))return;const raw=compactText(element.textContent),value=displayedMoney(raw);if(value===undefined)return;
-  const currency=raw.match(/R\$|US\$|€|£|\$/)?.[0];
-  const declared=element.closest('[data-currency], [currency]')?.getAttribute('data-currency')??element.closest('[currency]')?.getAttribute('currency');
-  const code=declared&&/^[A-Z]{3}$/.test(declared)?declared:currency==='R$'?'BRL':currency==='US$'?'USD':currency==='€'?'EUR':currency==='£'?'GBP':undefined;
+  const symbols=raw.match(/R\$|US\$|€|£|\$/g)??[],currency=symbols[0];
+  const symbolCodes:Record<string,string>={'R$':'BRL','US$':'USD','€':'EUR','£':'GBP'},codes=new Set<string>();
+  for(const symbol of symbols)if(symbolCodes[symbol])codes.add(symbolCodes[symbol]);
+  // Only the existing documented currency attributes on this value's ancestry
+  // are evidence. Conflicting declarations must not be masked by precedence.
+  for(let scope:HTMLElement|null=element;scope;scope=scope.parentElement){
+   for(const attribute of ['data-currency','currency']){const declared=scope.getAttribute(attribute);if(declared&&/^[A-Z]{3}$/.test(declared))codes.add(declared);}
+  }
+  if(codes.size>1){currencyConflict=true;return;}
+  const code=codes.values().next().value;
   revenueCandidates.push({value,currency,code,source:{selector,label:metricLabel,raw}});
  };
  for(const element of doc.querySelectorAll<HTMLElement>('#TOTAL_ESTIMATED_EARNINGS-tab #metric-total'))addRevenue(element,'#TOTAL_ESTIMATED_EARNINGS-tab #metric-total','Receita estimada exibida');
@@ -434,7 +442,8 @@ export function readStudioMetrics(doc: Document = document):StudioMetrics {
   if(/^videos$|video count|quantidade de videos/.test(normalize(metricLabel))){const raw=compactText(valueElement.textContent),value=parseCount(raw);if(value!==undefined&&Number.isInteger(value)&&value>=0)quantityCandidates.push({value,source:{selector:`${card.tagName.toLowerCase()} #metric-value/#metric-total`,label:metricLabel,raw}});}
  }
  const revenueKeys=new Set(revenueCandidates.map(item=>JSON.stringify([item.value,item.currency??'',item.code??''])));
- if(revenueKeys.size===1){const candidate=revenueCandidates[0];result.revenue=candidate.value;result.currency=candidate.currency;result.currencyCode=candidate.code;result.sources.revenue=candidate.source;if(candidate.currency||candidate.code)result.sources.currency=candidate.source;if(candidate.currency==='$'&&!candidate.code)result.warnings.push('O símbolo $ não identifica sozinho a moeda; nenhum código ISO foi presumido.');}
+ if(currencyConflict)result.warnings.push('Há evidências de moeda conflitantes em uma receita visível. Receita e moeda permanecem desconhecidas, sem escolher outro card como substituto. Declare manualmente receita, moeda, origem e vínculo do período antes de calcular.');
+ else if(revenueKeys.size===1){const candidate=revenueCandidates[0];result.revenue=candidate.value;result.currency=candidate.currency;result.currencyCode=candidate.code;result.sources.revenue=candidate.source;if(candidate.currency||candidate.code)result.sources.currency=candidate.source;if(candidate.currency==='$'&&!candidate.code)result.warnings.push('O símbolo $ não identifica sozinho a moeda; nenhum código ISO foi presumido.');}
  else if(revenueKeys.size>1)result.warnings.push('Mais de um valor de receita visível diverge. A receita permanece desconhecida; escolha o valor e o período manualmente.');
  const quantities=new Set(quantityCandidates.map(item=>item.value));if(quantities.size===1){result.videoCount=quantityCandidates[0].value;result.sources.videoCount=quantityCandidates[0].source;}else if(quantities.size>1)result.warnings.push('Há quantidades de vídeos divergentes na página; nenhuma foi escolhida automaticamente.');
  const periods=Array.from(doc.querySelectorAll<HTMLElement>('#date-range-label, yta-date-range-selector #label, yta-date-range-picker #label')).filter(visible).map(element=>({element,raw:compactText(element.textContent)})).filter(item=>item.raw);
@@ -540,6 +549,7 @@ export function previewStudioAction(
       if(modernPresent){
         if(!modern)unsupported='O editor moderno exige um painel, um timestamp H:MM:SS:FF editável e um único controle #add-ad-break visível.';
         else if(!validModernFps(modern,input.fps))unsupported='O timestamp usa frames. Informe explicitamente FPS 24, 25, 30, 48, 50 ou 60 e confira se corresponde ao editor; FPS ausente, fracionário ou divergente não é presumido.';
+        else if(frameSeconds(modern.field.value,input.fps)===undefined)unsupported='O timestamp atual não é válido para o FPS declarado. Use H:MM:SS:FF com minutos e segundos de 00 a 59 e frames menores que FPS; nenhum campo ou clique foi enviado.';
         else if(positions.some(value=>Math.abs(value*input.fps!-Math.round(value*input.fps!))>1e-7))unsupported='Uma posição está fora da grade do FPS declarado. A prévia não arredonda posições manuais para outro frame.';
         else if(positions.some((value,index)=>index>0&&Math.round(value*input.fps!)<=Math.round(positions[index-1]*input.fps!)))unsupported='As posições devem ocupar frames distintos e em ordem crescente na grade do FPS declarado.';
         else{
