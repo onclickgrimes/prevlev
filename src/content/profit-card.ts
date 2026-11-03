@@ -207,6 +207,7 @@ export function createProfitCardAdapter(dependencies: ProfitCardDependencies) {
       if (receipt && !current(receipt.public.id)) return state;
       const removedOwnPresentation = removePresentation();
       if (!removedOwnPresentation) { clear("invalidated", "A apresentação foi alterada externamente; o conteúdo nativo foi preservado."); return state; }
+      if (!receipt) { emit({ ...state, removedOwnPresentation }); return state; }
       emit({ status: "restored", observationId: receipt?.public.id, removedOwnPresentation }); return state;
     },
     cancel(): ProfitCardState { if (!disposed) clear("cancelled", "Apresentação cancelada; nenhuma receita nativa foi alterada."); return state; },

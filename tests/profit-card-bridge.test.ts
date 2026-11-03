@@ -65,6 +65,15 @@ describe("sequenced, bounded profit card commands", () => {
     expect((await bridge.dispatch({ type: "STUDIO_PROFIT_SHOW", session: sessionA, sequence: 4, observationId: next.id, input: input(first) })).status).toBe("error");
     expect(adapter.getPresentationElement()).toBeUndefined();
   });
+  it("does not turn a cancelled receipt into a restored/current receipt when preparing a capture", async () => {
+    const { bridge, adapter } = fixture();
+    const receipt = (await bridge.dispatch({ type: "STUDIO_PROFIT_OBSERVE", session: sessionA, sequence: 1 })).observation!;
+    adapter.cancel();
+    await bridge.prepareCapture();
+    expect(adapter.getState().status).toBe("cancelled");
+    expect((await bridge.dispatch({ type: "STUDIO_PROFIT_SHOW", session: sessionA, sequence: 2, observationId: receipt.id, input: input(receipt) })).error).toContain("outra observação");
+    expect(adapter.getPresentationElement()).toBeUndefined();
+  });
 });
 
 describe("capture preparation removes or refuses adjacent private estimates", () => {
