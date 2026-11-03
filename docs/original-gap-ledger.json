@@ -2049,11 +2049,13 @@
       "functionalSourceCommit": "5e0641196181a1106030d0defc778c103f86c280",
       "automatedPassed": 686,
       "automatedFiles": 60,
-      "browserPassed": 162,
+      "browserPassed": 163,
       "browserSkipped": 2,
       "runtimeVerified": false,
       "fullReferenceParity": false,
-      "remainingLocalAuditItemsFromThisNineItemBatch": []
+      "remainingLocalAuditItemsFromThisNineItemBatch": [],
+      "browserFullRunPassed": 162,
+      "browserAdditionalTargetedPassed": 1
     }
   ]
 }

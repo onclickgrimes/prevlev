@@ -82,6 +82,16 @@ test('cancel while the final capture measurement waits cannot be undone by its l
   await page.evaluate(async()=>{(window as unknown as Fixture).__gapState.finishMeasurement!();await new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())));});
   await expect(page.locator('#studio-compose-render')).toBeDisabled();await expect(page.locator('#studio-compose-source')).toHaveText('Nenhuma imagem fornecida.');await expect(page.locator('#studio-compose-status')).toContainText('Composição cancelada');
 });
+test('a local PNG survives the late rejection of a previous capture after navigation',async()=>{
+  await page.evaluate(()=>{const state=(window as unknown as Fixture).__gapState;state.tabUrl='https://studio.youtube.com/video/aaaaaaaaaaa/analytics';state.holdMeasurement=true;});
+  await page.locator('[data-page="studio"]').click();await page.locator('#studio-compose-enabled').check();await page.locator('#analytics-shot').click();
+  await expect.poll(()=>page.evaluate(()=>!!(window as unknown as Fixture).__gapState.finishMeasurement)).toBe(true);
+  const png=await page.evaluate(()=>{const canvas=document.createElement('canvas');canvas.width=8;canvas.height=4;canvas.getContext('2d')!.fillRect(0,0,8,4);return canvas.toDataURL().split(',')[1];});
+  await page.locator('#studio-compose-file').setInputFiles({name:'nova-origem-local.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')});
+  await expect(page.locator('#studio-compose-source')).toContainText('nova-origem-local.png');
+  await page.evaluate(async()=>{const state=(window as unknown as Fixture).__gapState;state.tabUrl='https://studio.youtube.com/video/bbbbbbbbbbb/analytics';state.finishMeasurement!();await new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())));});
+  await expect(page.locator('#studio-compose-source')).toContainText('nova-origem-local.png');await expect(page.locator('#studio-compose-render')).toBeEnabled();
+});
 test('workspace passes fractional frame positions and refuses conflicting editor FPS before sending',async()=>{
   await page.locator('[data-page="studio"]').click();await page.locator('#studio-action').selectOption('midrolls');await page.locator('#duration').fill('600');await page.locator('#midroll-mode').selectOption('quantity');await page.locator('#midroll-position-precision').selectOption('frames');await page.locator('#midroll-position-fps').fill('30');await page.locator('#midroll-playhead').fill('250.5');await page.locator('#midroll-include-playhead').check();await page.locator('#studio-preview').click();
   await expect(page.locator('#studio-confirm')).toBeEnabled();const plans=await page.evaluate(()=>(window as unknown as Fixture).__gapState.messages.filter(m=>m.type==='STUDIO_PREVIEW'));

@@ -1,6 +1,6 @@
 # Checkpoint final das nove lacunas locais
 
-Em 3 de novembro de 2026, typecheck, lint, **686 testes automatizados em 60 arquivos** e build passaram. A regressão completa do build final passou em **162 cenários de navegador**, com **2 ignorados** por política da extensão instalada. A fonte foi congelada durante a execução. O pacote próprio foi verificado por CRC e hashes de suas dez entradas.
+Em 3 de novembro de 2026, typecheck, lint, **686 testes automatizados em 60 arquivos** e build passaram. A regressão completa do build final passou em **162 cenários de navegador**, com **2 ignorados** por política da extensão instalada. A fonte foi congelada durante a execução. O pacote próprio foi verificado por CRC e hashes de suas dez entradas. Uma regressão adicional, na mesma fonte funcional, confirmou que um PNG local novo sobrevive à rejeição tardia de uma captura antiga após navegação:1 cenário direcionado aprovado. Total de aprovações de navegador verificadas:163 (162 na suíte integral+1 dirigido).
 
 Foram integrados Reset/Done reversível, amostras explícitas por fonte, exportação de saídas IA válidas, cache por backend, precisão/timeline local de mid-roll, composição Studio, vínculo de publicação por identidade, relatório estruturado manual e modo de outlier no nicho. Revisões e fixtures incluem respostas tardias, troca de backend/aba/URL, PNG local substituindo captura pendente, alteração de máscaras e download com contexto invalidado. [Escopo e limites completos](NINE_LOCAL_GAPS.md).
 

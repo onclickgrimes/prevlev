@@ -58,7 +58,7 @@ Limite: Referência de amostra, não índice proprietário ou média do catálog
 
 ## Verificação e publicação
 
-`npm run check`: typecheck, lint, **686 testes em 60 arquivos** e build aprovados. Suíte completa de navegador: **162 aprovados e 2 ignorados** pela política gerenciada de extensões. Não houve contorno. O ZIP próprio do build foi verificado por CRC e SHA-256 interno; dez entradas, sem testes ou credenciais.
+`npm run check`: typecheck, lint, **686 testes em 60 arquivos** e build aprovados. Suíte completa de navegador: **162 aprovados e 2 ignorados** pela política gerenciada de extensões. Não houve contorno. O ZIP próprio do build foi verificado por CRC e SHA-256 interno; dez entradas, sem testes ou credenciais. Uma regressão adicional, na mesma fonte funcional, confirmou que um PNG local novo sobrevive à rejeição tardia de uma captura antiga após navegação:1 cenário direcionado aprovado. Total de aprovações de navegador verificadas:163 (162 na suíte integral+1 dirigido).
 
 A revisão encontrou e corrigiu seleção de candidata após Reset, navegação A→B no mesmo tabId, invalidação enquanto a última medição aguardava e download com contexto alterado. Os testes de integração cobrem esses estados e a ausência de geração/coleta automática. Fonte e árvore são reconferidas antes de cada publicação, por fast-forward sem force.
 
