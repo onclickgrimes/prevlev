@@ -151,7 +151,7 @@ export interface HomePreviewOptions {
   original:PreviewVersion;candidate:PreviewVersion;candidates?:PreviewVersion[];
   context?:'desktop'|'mobile'|'list';mode?:'side-by-side'|'original'|'candidate'|'gallery';
   theme?:'dark'|'light';position?:'first'|'random';seed?:number;
-  feed?:'home'|'trending'|'subscriptions'|'channel'|'search';feedLabel?:string;contextVideos?:readonly VideoRecord[];
+  feed?:'home'|'trending'|'subscriptions'|'channel'|'search'|'other';feedLabel?:string;contextVideos?:readonly VideoRecord[];contextLabel?:string;
   metadata?:{views?:string;date?:string;duration?:string};avatar?:Blob;signal?:AbortSignal;
 }
 function lines(context:CanvasRenderingContext2D,text:string,width:number,maxLines:number):string[]{
@@ -186,10 +186,10 @@ function viewport(context:CanvasRenderingContext2D,cards:PreviewCard[],avatar:De
   const grid=layout(width,cards.length,kind);
   context.save();context.translate(x,y);context.fillStyle=palette.background;context.fillRect(0,0,width,grid.height);
   context.fillStyle=palette.text;context.font='bold 19px sans-serif';context.fillText(label,18,32);
-  const feed=options.feed??'home',feedNames={home:'Página inicial',trending:'Em alta',subscriptions:'Inscrições',channel:`Canal: ${options.feedLabel||'Seu canal'}`,search:`Busca: ${options.feedLabel||'termo de exemplo'}`};
-  context.fillStyle=palette.muted;context.font='13px sans-serif';context.fillText(`${feedNames[feed]} · ${kind==='mobile'?'celular':kind==='list'?'lista':'desktop'} · ${dark?'escuro':'claro'}`,18,56,width-36);
+  const feed=options.feed??'home',feedNames={home:'Página inicial',trending:'Em alta',subscriptions:'Inscrições',channel:`Canal: ${options.feedLabel||'Seu canal'}`,search:`Busca: ${options.feedLabel||'termo de exemplo'}`,other:'Coleção / outro contexto observado'};
+  context.fillStyle=palette.muted;context.font='13px sans-serif';context.fillText(`${options.contextLabel??feedNames[feed]} · ${kind==='mobile'?'celular':kind==='list'?'lista':'desktop'} · ${dark?'escuro':'claro'}`,18,56,width-36);
   context.fillStyle=palette.surface;context.fillRect(16,75,width-32,38);context.fillStyle=palette.muted;context.fillText('Pesquisar vídeos',30,100);
-  const chips={home:['Tudo','Para você','Recentes'],trending:['Em alta','Música','Jogos'],subscriptions:['Inscritos','Hoje','Recentes'],channel:['Vídeos','Populares','Recentes'],search:['Relevância','Recentes','Filtros']}[feed];
+  const chips={home:['Tudo','Para você','Recentes'],trending:['Em alta','Música','Jogos'],subscriptions:['Inscritos','Hoje','Recentes'],channel:['Vídeos','Populares','Recentes'],search:['Relevância','Recentes','Filtros'],other:['Amostra','Local','Contexto']}[feed];
   for(const [index,text] of chips.entries()){context.fillStyle=index===0?'#7464da':palette.surface;context.fillRect(18+index*100,129,90,29);context.fillStyle=index===0?'#fff':palette.text;context.fillText(text,28+index*100,149);}
   if(kind==='desktop'){context.fillStyle=palette.surface;for(let row=0;row<5;row++)context.fillRect(16,195+row*48,22,23);}
   cards.forEach((card,index)=>{
@@ -218,7 +218,7 @@ function viewport(context:CanvasRenderingContext2D,cards:PreviewCard[],avatar:De
 /** Own Home-like cards made from user files; no platform changes or audience experiment. */
 export async function renderHomePreview(options:HomePreviewOptions):Promise<Blob>{
   const kind=options.context??'desktop',mode=options.mode??'gallery',theme=options.theme??'dark',position=options.position??'first';
-  if(!['home','trending','subscriptions','channel','search'].includes(options.feed??'home'))throw new Error('Contexto de feed inválido.');
+  if(!['home','trending','subscriptions','channel','search','other'].includes(options.feed??'home'))throw new Error('Contexto de feed inválido.');
   if(!['desktop','mobile','list'].includes(kind)||!['side-by-side','original','candidate','gallery'].includes(mode)||!['dark','light'].includes(theme)||!['first','random'].includes(position))throw new Error('Contexto ou comparação de prévia inválidos.');
   const versions=options.candidates?.length?options.candidates:[options.candidate];
   if(versions.length>24)throw new Error('Use no máximo 24 combinações de imagem e título por prévia.');
@@ -241,7 +241,7 @@ export async function renderHomePreview(options:HomePreviewOptions):Promise<Blob
     context.font='14px sans-serif';context.fillText('Composição ilustrativa. Sem teste A/B, CTR ou previsão de desempenho.',24,63);
     const totalWidth=panels.length*panelWidth+(panels.length-1)*gap,start=(width-totalWidth)/2;
     cards.forEach((items,index)=>viewport(context,items,options.avatar?cache.get(options.avatar):undefined,start+index*(panelWidth+gap),90,panelWidth,kind,mode==='side-by-side'?(index===0?'Original':'Candidata'):mode==='original'?'Original':mode==='candidate'?'Candidata':'Variações locais',options));
-    context.font='12px sans-serif';context.fillText(options.contextVideos?.some(video=>video.source!=='youtube-data-api')?'Contexto: amostra carregada, sem buscar imagens; não comprova o feed selecionado. Candidatas: arquivos e metadados do usuário.':'Contexto ilustrativo · arquivos e metadados de exemplo do usuário · nenhum envio',24,height-16,width-48);
+    context.font='12px sans-serif';context.fillText(options.contextVideos?.some(video=>video.source!=='youtube-data-api')?`Contexto: ${options.contextLabel??'amostra carregada, sem origem de feed comprovada'}; até 8 cards, sem buscar imagens. Candidatas: metadados ilustrativos do usuário.`:'Contexto ilustrativo · arquivos e metadados de exemplo do usuário · nenhum envio',24,height-16,width-48);
     return await controlled(encoded(canvas,'image/png'),options.signal,deadline);
   }finally{for(const image of cache.values())image.close();}
 }

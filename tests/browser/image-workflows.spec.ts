@@ -7,7 +7,7 @@ import type {compressToTarget,renderHomePreview} from '../../src/core/image-work
 interface FixtureWindow {__imageCore:{compressToTarget:typeof compressToTarget;renderHomePreview:typeof renderHomePreview};__drawnText:string[];}
 let browser:Browser,script:string,context:BrowserContext,page:Page;
 test.beforeAll(async()=>{
-  script=(await build({stdin:{contents:`import {initImageTools} from './src/ui/images';import {compressToTarget,renderHomePreview} from './src/core/image-workflows';Object.assign(window,{__imageCore:{compressToTarget,renderHomePreview}});initImageTools({contextVideos:()=>[{id:'observed',title:'Título observado real da amostra',url:'https://www.youtube.com/watch?v=abcdefghijk',channel:'Canal observado',views:123,publishedAt:'2026-10-01T00:00:00Z',durationSeconds:65,thumbnail:'https://i.ytimg.com/vi/abcdefghijk/default.jpg',source:'youtube-dom'},{id:'api',title:'NEVER_API_CONTEXT',url:'https://www.youtube.com/watch?v=aaaaaaaaaaa',views:999,source:'youtube-data-api'}]});`,resolveDir:process.cwd(),loader:'ts'},bundle:true,write:false,format:'iife',platform:'browser',target:'chrome120'})).outputFiles[0].text;
+  script=(await build({stdin:{contents:`import {initImageTools} from './src/ui/images';import {compressToTarget,renderHomePreview} from './src/core/image-workflows';Object.assign(window,{__imageCore:{compressToTarget,renderHomePreview}});initImageTools({contextVideos:()=>[{id:'abcdefghijk',title:'Título observado real da amostra',url:'https://www.youtube.com/watch?v=abcdefghijk',channel:'Canal observado',views:123,publishedAt:'2026-10-01T00:00:00Z',durationSeconds:65,thumbnail:'https://i.ytimg.com/vi/abcdefghijk/default.jpg',source:'youtube-dom'}]});`,resolveDir:process.cwd(),loader:'ts'},bundle:true,write:false,format:'iife',platform:'browser',target:'chrome120'})).outputFiles[0].text;
   browser=await chromium.launch({executablePath:process.env.PREVLEV_CHROMIUM_PATH??(existsSync('/usr/bin/chromium')?'/usr/bin/chromium':undefined),headless:true,args:['--no-sandbox']});
 });
 test.afterAll(async()=>{await browser?.close();});
@@ -38,6 +38,7 @@ test('real canvas renders cyclic variants, observed provenance, layouts, themes 
   await page.locator('#preview-title').fill('Título um');await page.locator('#preview-titles').fill('Título dois\nTítulo três');
   await page.locator('#preview-views').fill('999 views de exemplo');await page.locator('#preview-date').fill('Data escolhida');await page.locator('#preview-duration').fill('07:35');
   await page.locator('#preview-avatar').setInputFiles({name:'avatar.png',mimeType:'image/png',buffer:await png(32,32,'#f8c344')});
+  await page.locator('#preview-source').selectOption('loaded');await page.locator('#preview-load-context').click();await expect(page.locator('#preview-source-info')).toContainText('Coleção local congelada');
   await page.locator('#image-preview').click();await expect(page.locator('#image-output')).toBeVisible();await expect(page.locator('#image-variants button')).toHaveCount(3);
   await expect.poll(()=>page.locator('#image-output').evaluate((image:HTMLImageElement)=>image.naturalWidth)).toBe(1280);
   const text=await page.evaluate(()=>(window as unknown as FixtureWindow).__drawnText);
